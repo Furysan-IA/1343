@@ -417,8 +417,8 @@ export function QRGenerator({
                   }}>
                     {/* AR logo */}
                     <img
-                      src="/images/AR-Montserrat-Arabic.png"
-                      alt="AR"
+                      src="/images/AR-Monserrat-arabic.png"
+                      alt=""
                       style={{
                         height: '19px',
                         width: 'auto',
