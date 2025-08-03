@@ -373,62 +373,64 @@ export function QRGenerator({
               <div className="flex justify-center mb-4">
                 <div
                   ref={labelRef}
-                  className="bg-white"
                   style={{
                     width: '94px',
                     height: '113px',
-                    boxSizing: 'border-box',
-                    border: '1px solid black',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #000000',
                     borderRadius: '8px',
-                    padding: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxSizing: 'border-box'
                   }}
                 >
-                  {/* QR Code - centered in available space */}
-                  <div style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '100%'
-                  }}>
+                  {/* Código QR - 20mm × 20mm centrado con 2.5mm de margen superior */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '9.4px', // 2.5mm desde el borde
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: '75px', // 20mm
+                      height: '75px' // 20mm
+                    }}
+                  >
                     <img
                       src={qrDataUrl}
                       alt="Código QR"
                       style={{
-                        width: '75px',
-                        height: '75px',
-                        imageRendering: 'pixelated',
-                        display: 'block'
+                        width: '100%',
+                        height: '100%',
+                        display: 'block',
+                        imageRendering: 'pixelated'
                       }}
                     />
                   </div>
                   
-                  {/* AR logo with checkmarks - fixed at bottom */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '3px',
-                    paddingBottom: '2px'
-                  }}>
-                    {/* AR logo */}
+                  {/* AR + Tildes - En la parte inferior con 2.5mm de margen */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '9.4px', // 2.5mm desde el borde
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '3px'
+                    }}
+                  >
+                    {/* Logo AR */}
                     <img
                       src="/images/AR-Montserrat-Arabic.png"
                       alt=""
                       style={{
                         height: '19px',
                         width: 'auto',
-                        objectFit: 'contain',
-                        display: 'block',
-                        backgroundColor: 'transparent'
+                        display: 'block'
                       }}
                       onError={(e) => {
                         console.warn('AR image not found, using fallback');
-                        // Show fallback text if image fails to load
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
                         const fallback = document.createElement('span');
@@ -436,26 +438,31 @@ export function QRGenerator({
                         fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
                         target.parentNode?.insertBefore(fallback, target);
                       }}
+                      onLoad={() => {
+                        console.log('AR image loaded successfully');
+                      }}
                     />
                     
-                    {/* Checkmarks container */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0',
-                      height: '19px',
-                      width: '19px',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
+                    {/* Tildes */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0',
+                        height: '19px'
+                      }}
+                    >
                       <svg
                         width="19"
                         height="9.5"
                         viewBox="0 0 19 9.5"
                         fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
                         style={{ 
                           display: 'block',
-                          marginBottom: '-1px'
+                          marginBottom: '-0.5px'
                         }}
                       >
                         <path
@@ -471,9 +478,10 @@ export function QRGenerator({
                         height="9.5"
                         viewBox="0 0 19 9.5"
                         fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
                         style={{ 
                           display: 'block',
-                          marginTop: '-1px'
+                          marginTop: '-0.5px'
                         }}
                       >
                         <path
