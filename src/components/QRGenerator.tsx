@@ -1,9 +1,12 @@
 // QRGenerator.tsx - Versión actualizada
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { qrConfigService } from '../services/qrConfig.service';
 import { QRConfigModal } from './QRConfigModal';
 import QRCode from 'qrcode';
+import { saveAs } from 'file-saver';
+import { toPng, toBlob } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { 
   QrCode, Download, Eye, Copy, CheckCircle, Settings,
   TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw
@@ -36,6 +39,7 @@ export function QRGenerator({
   const [showTestModal, setShowTestModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [currentConfig, setCurrentConfig] = useState(qrConfigService.getConfig());
+  const labelRef = useRef<HTMLDivElement>(null);
   
   // Suscribirse a cambios de configuración
   useEffect(() => {
@@ -154,74 +158,84 @@ export function QRGenerator({
     link.click();
   };
 
-  const downloadLabel = () => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const downloadLabelPNG = async () => {
+    if (!labelRef.current) return;
 
-    // Tamaño de la etiqueta en alta resolución (300dpi)
-    canvas.width = 295;  // 25mm a 300dpi
-    canvas.height = 354; // 30mm a 300dpi
-
-    // Fondo blanco
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Borde negro
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(0, 0, canvas.width, canvas.height);
-
-    // Dibujar QR
-    const qrImage = new Image();
-    qrImage.onload = () => {
-      const qrSize = 225;
-      const qrX = (canvas.width - qrSize) / 2;
-      const qrY = 40;
-      ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
-
-      // Dibujar logo AR
-      const logoY = canvas.height - 80;
-      
-      // Texto "AR"
-      ctx.font = 'bold 60px Arial';
-      ctx.fillStyle = 'black';
-      ctx.textAlign = 'center';
-      ctx.fillText('AR', canvas.width / 2 - 40, logoY);
-
-      // Dibujar checkmarks
-      ctx.strokeStyle = '#73A8D8';
-      ctx.lineWidth = 7;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      // Primer checkmark
-      ctx.beginPath();
-      ctx.moveTo(190, logoY - 45);
-      ctx.lineTo(210, logoY - 25);
-      ctx.lineTo(250, logoY - 65);
-      ctx.stroke();
-      
-      // Segundo checkmark
-      ctx.beginPath();
-      ctx.moveTo(190, logoY - 15);
-      ctx.lineTo(210, logoY + 5);
-      ctx.lineTo(250, logoY - 35);
-      ctx.stroke();
-
-      // Descargar
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.download = `etiqueta-qr-${product.codificacion}.png`;
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
+    try {
+      const dataUrl = await toPng(labelRef.current, {
+        width: 94,
+        height: 113,
+        pixelRatio: 8,
+        quality: 1,
+        backgroundColor: '#ffffff',
+        canvasWidth: 752,
+        canvasHeight: 904,
+        skipAutoScale: true,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left'
         }
       });
-    };
-    qrImage.src = qrDataUrlHighRes;
+      
+      saveAs(dataUrl, `etiqueta-qr-${product.codificacion}.png`);
+      toast.success('Etiqueta PNG descargada exitosamente');
+    } catch (error) {
+      console.error('Error downloading PNG:', error);
+      toast.error('Error al descargar la etiqueta PNG');
+    }
+  };
+
+  const downloadLabelPDF = async () => {
+    if (!labelRef.current) return;
+
+    try {
+      const blob = await toBlob(labelRef.current, {
+        width: 94,
+        height: 113, 
+        pixelRatio: 8,
+        quality: 1,
+        backgroundColor: '#ffffff',
+        canvasWidth: 752,
+        canvasHeight: 904,
+        skipAutoScale: true,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left'
+        }
+      });
+
+      if (!blob) throw new Error('Error generating image');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [25, 30]
+      });
+
+      const imgData = URL.createObjectURL(blob);
+      pdf.addImage(imgData, 'PNG', 0, 0, 25, 30);
+      pdf.save(`etiqueta-qr-${product.codificacion}.pdf`);
+      
+      URL.revokeObjectURL(imgData);
+      toast.success('Etiqueta PDF descargada exitosamente');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Error al descargar la etiqueta PDF');
+    }
+  };
+
+  // Convert CMYK to RGB for checkmarks
+  const cmykToRgb = () => {
+    const c = 0.47;
+    const m = 0.22;
+    const y = 0;
+    const k = 0.14;
+    
+    const r = Math.round(255 * (1 - c) * (1 - k));
+    const g = Math.round(255 * (1 - m) * (1 - k));
+    const b = Math.round(255 * (1 - y) * (1 - k));
+    
+    return `rgb(${r}, ${g}, ${b})`;
   };
 
   const copyUrl = async () => {
@@ -357,22 +371,111 @@ export function QRGenerator({
                 Tamaño Real (25mm × 30mm)
               </h4>
               <div className="flex justify-center mb-4">
-                <div 
-                  className="bg-white border-2 border-black rounded-lg p-2"
-                  style={{ width: '94px', height: '113px' }}
+                <div
+                  ref={labelRef}
+                  className="bg-white"
+                  style={{
+                    width: '94px',
+                    height: '113px',
+                    boxSizing: 'border-box',
+                    border: '1px solid black',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
                 >
-                  <div className="h-full flex flex-col items-center justify-between">
-                    <div className="flex-1" />
-                    <img src={qrDataUrl} alt="QR Code" className="w-[75px] h-[75px]" />
-                    <div className="flex-1" />
-                    <div className="flex items-center gap-1">
-                      <span className="font-bold text-xl">AR</span>
-                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                        <path d="M3 12L9 18L21 6" stroke="#73A8D8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(0, -3)"/>
-                        <path d="M3 12L9 18L21 6" stroke="#73A8D8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(0, 4)"/>
+                  {/* QR Code - positioned in center */}
+                  <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%'
+                  }}>
+                    <img
+                      src={qrDataUrl}
+                      alt="Código QR"
+                      style={{
+                        width: '75px',
+                        height: '75px',
+                        imageRendering: 'pixelated',
+                        display: 'block'
+                      }}
+                    />
+                  </div>
+                  
+                  {/* AR logo with checkmarks - positioned at bottom */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '3px',
+                    marginTop: 'auto',
+                    paddingBottom: '2px'
+                  }}>
+                    {/* AR logo */}
+                    <img
+                      src="/images/AR-Monserrat-arabic.png"
+                      alt="AR"
+                      style={{
+                        height: '19px',
+                        width: 'auto',
+                        objectFit: 'contain',
+                        display: 'block'
+                      }}
+                    />
+                    
+                    {/* Checkmarks container */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0',
+                      height: '19px',
+                      width: '19px',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg
+                        width="19"
+                        height="9.5"
+                        viewBox="0 0 19 9.5"
+                        fill="none"
+                        style={{ 
+                          display: 'block',
+                          marginBottom: '-1px'
+                        }}
+                      >
+                        <path
+                          d="M3 5L6.5 8.5L16 1.5"
+                          stroke={cmykToRgb()}
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <svg
+                        width="19"
+                        height="9.5"
+                        viewBox="0 0 19 9.5"
+                        fill="none"
+                        style={{ 
+                          display: 'block',
+                          marginTop: '-1px'
+                        }}
+                      >
+                        <path
+                          d="M3 5L6.5 8.5L16 1.5"
+                          stroke={cmykToRgb()}
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     </div>
-                    <div className="flex-[0.5]" />
                   </div>
                 </div>
               </div>
@@ -438,11 +541,19 @@ export function QRGenerator({
             </button>
             
             <button
-              onClick={downloadLabel}
+              onClick={downloadLabelPNG}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
-              Descargar Etiqueta
+              Etiqueta PNG
+            </button>
+            
+            <button
+              onClick={downloadLabelPDF}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Etiqueta PDF
             </button>
             
             <button
