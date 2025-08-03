@@ -443,15 +443,15 @@ export function QRGenerator({
                       }}
                     />
                     
-                    {/* Tildes */}
+                    {/* Código QR - 20mm × 20mm */}
                     <div
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
+                        top: '3px',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '0',
-                        height: '19px'
+                        width: '75px',
+                        height: '75px'
                       }}
                     >
                       <svg
@@ -465,8 +465,8 @@ export function QRGenerator({
                           marginBottom: '-0.5px'
                         }}
                       >
-                        <path
-                          d="M3 5L6.5 8.5L16 1.5"
+                        bottom: '9px',
+                    {/* AR + Tildes */}
                           stroke={cmykToRgb()}
                           strokeWidth="2.2"
                           strokeLinecap="round"
@@ -476,7 +476,7 @@ export function QRGenerator({
                       <svg
                         width="19"
                         height="9.5"
-                        viewBox="0 0 19 9.5"
+                        src="/images/AR-Montserrat-Arabic.png"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ 
@@ -486,7 +486,7 @@ export function QRGenerator({
                       >
                         <path
                           d="M3 5L6.5 8.5L16 1.5"
-                          stroke={cmykToRgb()}
+                          height="10"
                           strokeWidth="2.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -505,7 +505,7 @@ export function QRGenerator({
                 <Smartphone className="w-5 h-5" />
                 Vista Previa Digital
               </h4>
-              <div className="flex justify-center mb-4">
+                          height="10"
                 <div className="bg-white p-4 rounded-lg shadow-md">
                   <img src={qrDataUrl} alt="QR Code Preview" className="w-32 h-32" />
                 </div>

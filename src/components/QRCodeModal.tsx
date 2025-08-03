@@ -202,15 +202,15 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                           boxSizing: 'border-box'
                         }}
                       >
-                        {/* Código QR - 20mm × 20mm centrado con 2.5mm de margen superior */}
+                        {/* Código QR - 20mm × 20mm */}
                         <div
                           style={{
                             position: 'absolute',
-                            top: '9.4px', // 2.5mm desde el borde
+                            top: '3px',
                             left: '50%',
                             transform: 'translateX(-50%)',
-                            width: '75px', // 20mm
-                            height: '75px' // 20mm
+                            width: '75px',
+                            height: '75px'
                           }}
                         >
                           <img
@@ -225,11 +225,11 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                           />
                         </div>
                         
-                        {/* AR + Tildes - En la parte inferior con 2.5mm de margen */}
+                        {/* AR + Tildes */}
                         <div
                           style={{
                             position: 'absolute',
-                            bottom: '9.4px', // 2.5mm desde el borde
+                            bottom: '9px',
                             left: '50%',
                             transform: 'translateX(-50%)',
                             display: 'flex',
@@ -266,18 +266,17 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             style={{
                               display: 'flex',
                               flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
                               gap: '0',
-                              height: '19px'
+                              height: '19px',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                           >
                             <svg
                               width="19"
-                              height="9.5"
+                              height="10"
                               viewBox="0 0 19 9.5"
                               fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
                                 marginBottom: '-0.5px'
@@ -293,10 +292,9 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             </svg>
                             <svg
                               width="19"
-                              height="9.5"
+                              height="10"
                               viewBox="0 0 19 9.5"
                               fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
                                 marginTop: '-0.5px'
