@@ -17,6 +17,7 @@ const translations = {
     informationValidation: 'Validación de Información',
     djcManagement: 'Gestión de DJC',
     logout: 'Cerrar Sesión',
+    generateDJC: 'Generar DJC',
     
     // Auth
     signIn: 'Iniciar Sesión',
@@ -101,6 +102,7 @@ const translations = {
     informationValidation: 'Information Validation',
     djcManagement: 'DJC Management',
     logout: 'Logout',
+    generateDJC: 'Generate DJC',
     
     // Auth
     signIn: 'Sign In',

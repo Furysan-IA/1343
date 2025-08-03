@@ -6,7 +6,8 @@ import {
   Users, 
   CheckCircle, 
   FileText,
-  Home
+  Home,
+  FileCheck
 } from 'lucide-react';
 
 const navigation = [
@@ -15,6 +16,7 @@ const navigation = [
   { name: 'clientManagement', href: '/clients', icon: Users },
   { name: 'informationValidation', href: '/validation', icon: CheckCircle },
   { name: 'djcManagement', href: '/djc', icon: FileText },
+  { name: 'Generar DJC', href: '/djc-generator', icon: FileCheck },
 ];
 
 export function Sidebar() {

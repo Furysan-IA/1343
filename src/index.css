@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Estilos para impresión */
+@media print {
+  .no-print { 
+    display: none !important; 
+  }
+  body { 
+    margin: 0; 
+  }
+  @page { 
+    size: A4; 
+    margin: 20mm; 
+  }
+}

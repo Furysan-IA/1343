@@ -8,6 +8,7 @@ import { ProductManagement } from './pages/ProductManagement';
 import { ClientManagement } from './pages/ClientManagement';
 import { InformationValidation } from './pages/InformationValidation';
 import { DJCManagement } from './pages/DJCManagement';
+import { DJCGenerator } from './components/DJC';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
@@ -36,6 +37,7 @@ function AppContent() {
         <Route path="/clients" element={<ClientManagement />} />
         <Route path="/validation" element={<InformationValidation />} />
         <Route path="/djc" element={<DJCManagement />} />
+        <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
     </Layout>
   );
