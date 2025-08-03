@@ -112,22 +112,22 @@ export function DJCManagement() {
   };
 
   const handleGenerateDJC = async (product: Product) => {
-    toast.info(`Generando DJC para producto ${product.codificacion}...`);
+    toast(`Generando DJC para producto ${product.codificacion}...`);
     // TODO: Implementar lógica de generación de DJC
   };
 
   const handleUploadCertificate = async (product: Product) => {
-    toast.info(`Subir certificado para producto ${product.codificacion}`);
+    toast(`Subir certificado para producto ${product.codificacion}`);
     // TODO: Implementar lógica de subida de certificado
   };
 
   const handleSignDJC = async (product: Product) => {
-    toast.info(`Firmar DJC para producto ${product.codificacion}`);
+    toast(`Firmar DJC para producto ${product.codificacion}`);
     // TODO: Implementar lógica de firma de DJC
   };
 
   const handleMarkAsSent = async (product: Product) => {
-    toast.info(`Marcar como enviado producto ${product.codificacion}`);
+    toast(`Marcar como enviado producto ${product.codificacion}`);
     // TODO: Implementar lógica para marcar como enviado
   };
 
