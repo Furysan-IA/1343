@@ -25,11 +25,13 @@ import {
   Calendar,
   FileText,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Plus,
+  Trash2,
+  CheckCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { formatCuit } from '../utils/formatters';
 
 interface Client {
   cuit: number;
@@ -38,379 +40,230 @@ interface Client {
   email: string;
   created_at: string;
   updated_at: string;
+  telefono: string | null;
+  contacto: string | null;
   estado?: 'completo' | 'incompleto';
   camposFaltantes?: string[];
   errores?: string[];
   product_count?: number;
 }
 
-interface Product {
-  codificacion: string;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  producto: string | null;
-  marca: string | null;
-  modelo: string | null;
-  caracteristicas_tecnicas: string | null;
-  normas_aplicacion: string | null;
-  informe_ensayo_nro: string | null;
-  laboratorio: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  fecha_emision_certificado_extranjero: string | null;
-  disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  vencimiento: string | null;
-  fecha_cancelacion: string | null;
-  motivo_cancelacion: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  qr_status: string | null;
-  qr_generated_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface SyncResult {
-  total: number;
-  nuevos: number;
-  actualizados: number;
-  conErrores: number;
-  sinCambios: number;
-}
-
 export function ClientManagement() {
   const { t } = useLanguage();
   const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'todos' | 'completos' | 'incompletos' | 'con_errores'>('todos');
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [editingClient, setEditingClient] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Client>>({});
-  const [clientProducts, setClientProducts] = useState<Record<number, Product[]>>({});
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState<Record<number, Partial<Client>>>({});
-  const [showSyncAlert, setShowSyncAlert] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  
+  // Estados del formulario
+  const [formData, setFormData] = useState({
+    razon_social: '',
+    cuit: '',
+    direccion: '',
+    telefono: '',
+    email: '',
+    contacto: ''
+  });
 
   useEffect(() => {
     fetchClients();
   }, []);
 
   useEffect(() => {
-    if (Object.keys(pendingChanges).length > 0) {
-      setHasUnsavedChanges(true);
-      setShowSyncAlert(true);
-    } else {
-      setHasUnsavedChanges(false);
-      setShowSyncAlert(false);
-    }
-  }, [pendingChanges]);
-
-  const validateClient = (client: Client): { 
-    estado: 'completo' | 'incompleto',
-    camposFaltantes: string[],
-    errores: string[]
-  } => {
-    const camposFaltantes: string[] = [];
-    
-    // Verificar campos faltantes
-    if (!client.razon_social || client.razon_social.trim() === '') {
-      camposFaltantes.push('Razón Social');
-    }
-    
-    if (!client.direccion || client.direccion.trim() === '') {
-      camposFaltantes.push('Dirección');
-    }
-    
-    if (!client.email || client.email.trim() === '') {
-      camposFaltantes.push('Email');
-    }
-    
-    const estado: 'completo' | 'incompleto' = camposFaltantes.length === 0 ? 'completo' : 'incompleto';
-    
-    return { estado, camposFaltantes, errores: [] };
-  };
+    filterClients();
+  }, [clients, searchQuery]);
 
   const fetchClients = async () => {
     try {
-      setLoading(true);
-      
       // Cargar clientes
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .order('razon_social', { ascending: true });
+        .order('razon_social');
 
       if (error) throw error;
       
       // Cargar productos para contar por cliente
-      const { data: productsData, error: productsError } = await supabase
+      const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('cuit')
-        .order('created_at', { ascending: false });
+        .select('cuit');
 
       if (productsError) throw productsError;
 
       // Contar productos por CUIT
       const productCounts: Record<number, number> = {};
-      (productsData || []).forEach(product => {
+      (products || []).forEach(product => {
         productCounts[product.cuit] = (productCounts[product.cuit] || 0) + 1;
       });
       
-      // Agregar validación a cada cliente
-      const clientsWithValidation = (data || []).map(client => {
-        const validation = validateClient(client);
+      // Agregar contador de productos a cada cliente
+      const clientsWithProductCount = (data || []).map(client => {
         return {
           ...client,
-          estado: validation.estado,
-          camposFaltantes: validation.camposFaltantes,
-          errores: validation.errores,
           product_count: productCounts[client.cuit] || 0
         };
       });
       
-      setClients(clientsWithValidation);
+      setClients(clientsWithProductCount);
+      setLastSync(new Date());
     } catch (error: any) {
-      toast.error(`Error al cargar clientes: ${error.message}`);
-      
-      // Log error
-      try {
-        await supabase.rpc('log_error', {
-          error_msg: `Failed to fetch clients: ${error.message}`,
-          error_context: { section: 'Client Management', action: 'Fetch Clients' }
-        });
-      } catch (logError) {
-        console.error('Failed to log error:', logError);
-      }
+      console.error('Error fetching clients:', error);
+      toast.error('Error al cargar los clientes');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchClientProducts = async (cuit: number) => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('cuit', cuit)
-        .order('producto', { ascending: true });
-
-      if (error) throw error;
-      
-      setClientProducts(prev => ({
-        ...prev,
-        [cuit]: data || []
-      }));
-    } catch (error: any) {
-      toast.error(`Error al cargar productos: ${error.message}`);
-    }
-  };
-
-  const handleSync = async () => {
-    if (hasUnsavedChanges) {
-      const confirmSync = window.confirm(
-        '¿Desea sincronizar con la base de datos? Se aplicarán todos los cambios pendientes.'
-      );
-      
-      if (!confirmSync) return;
-    }
-
+  const syncWithSupabase = async () => {
     setSyncing(true);
-    
     try {
-      // Aplicar cambios pendientes
-      for (const [cuit, changes] of Object.entries(pendingChanges)) {
-        const { error } = await supabase
-          .from('clients')
-          .update({
-            razon_social: changes.razon_social,
-            direccion: changes.direccion,
-            email: changes.email,
-            telefono: changes.telefono,
-            updated_at: new Date().toISOString()
-          })
-          .eq('cuit', Number(cuit));
-
-        if (error) {
-          toast.error(`Error al actualizar cliente ${cuit}: ${error.message}`);
-          console.error('Error updating client:', error);
-        }
-      }
-      
-      // Limpiar cambios pendientes
-      setPendingChanges({});
-      setHasUnsavedChanges(false);
-      setShowSyncAlert(false);
-      
-      // Recargar datos desde la base de datos
       await fetchClients();
-      
-      toast.success('Sincronización completada exitosamente');
-    } catch (error: any) {
-      toast.error(`Error al sincronizar: ${error.message}`);
-      console.error('Sync error:', error);
+      toast.success('Sincronización completada');
+    } catch (error) {
+      toast.error('Error al sincronizar');
     } finally {
       setSyncing(false);
     }
   };
 
-  const handleClientClick = async (client: Client) => {
-    setSelectedClient(client);
-    if (!clientProducts[client.cuit]) {
-      await fetchClientProducts(client.cuit);
+  const filterClients = () => {
+    if (!searchQuery) {
+      setFilteredClients(clients);
+      return;
     }
-    setShowClientModal(true);
+
+    const filtered = clients.filter(client => 
+      client.razon_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(client.cuit).includes(searchQuery) ||
+      client.email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    setFilteredClients(filtered);
+  };
+
+  const getClientStatus = (client: Client) => {
+    const requiredFields = ['razon_social', 'cuit', 'direccion', 'telefono', 'email'];
+    const missingFields: string[] = [];
+    
+    requiredFields.forEach(field => {
+      const value = client[field as keyof Client];
+      // Verificar que el campo existe y no está vacío
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        missingFields.push(field);
+      }
+    });
+    
+    if (missingFields.length === 0) {
+      return { 
+        status: 'Completado', 
+        color: 'text-green-600', 
+        bgColor: 'bg-green-50',
+        icon: CheckCircle,
+        missingFields: []
+      };
+    } else {
+      return { 
+        status: `Faltan ${missingFields.length} campos`, 
+        color: 'text-orange-600', 
+        bgColor: 'bg-orange-50',
+        icon: AlertCircle,
+        missingFields
+      };
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      if (editingClient) {
+        // Actualizar cliente existente
+        const { error } = await supabase
+          .from('clients')
+          .update({
+            razon_social: formData.razon_social,
+            cuit: Number(formData.cuit),
+            direccion: formData.direccion,
+            telefono: formData.telefono || null,
+            email: formData.email,
+            contacto: formData.contacto || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('cuit', editingClient.cuit);
+
+        if (error) throw error;
+        toast.success('Cliente actualizado correctamente');
+      } else {
+        // Crear nuevo cliente
+        const { error } = await supabase
+          .from('clients')
+          .insert({
+            razon_social: formData.razon_social,
+            cuit: Number(formData.cuit),
+            direccion: formData.direccion,
+            telefono: formData.telefono || null,
+            email: formData.email,
+            contacto: formData.contacto || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (error) throw error;
+        toast.success('Cliente creado correctamente');
+      }
+
+      // Cerrar modal y refrescar
+      setShowModal(false);
+      setEditingClient(null);
+      setFormData({
+        razon_social: '',
+        cuit: '',
+        direccion: '',
+        telefono: '',
+        email: '',
+        contacto: ''
+      });
+      await fetchClients();
+    } catch (error: any) {
+      console.error('Error saving client:', error);
+      toast.error(error.message || 'Error al guardar el cliente');
+    }
   };
 
   const handleEdit = (client: Client) => {
-    setEditingClient(client.cuit);
-    setEditForm({
+    setEditingClient(client);
+    setFormData({
       razon_social: client.razon_social,
+      cuit: String(client.cuit),
       direccion: client.direccion,
+      telefono: client.telefono || '',
       email: client.email,
-      telefono: client.telefono || ''
+      contacto: client.contacto || ''
     });
+    setShowModal(true);
   };
 
-  const handleSaveLocal = (cuit: number) => {
-    // Buscar el cliente actual
-    const currentClient = clients.find(c => c.cuit === cuit);
-    if (!currentClient) return;
-    
-    // Crear cliente actualizado con los cambios del formulario
-    const updatedClientData = {
-      ...currentClient,
-      ...editForm
-    };
-    
-    // Validar el cliente actualizado
-    const validation = validateClient(updatedClientData);
-    
-    // Guardar cambios pendientes
-    setPendingChanges(prev => ({
-      ...prev,
-      [cuit]: editForm
-    }));
-    
-    // Actualizar vista local con el cliente completo actualizado
-    setClients(prev => prev.map(client => {
-      if (client.cuit === cuit) {
-        return {
-          ...updatedClientData,
-          estado: validation.estado,
-          camposFaltantes: validation.camposFaltantes,
-          errores: validation.errores
-        };
-      }
-      return client;
-    }));
-    
-    // Si estaba viendo el detalle del cliente, actualizar también
-    if (selectedClient && selectedClient.cuit === cuit) {
-      setSelectedClient({
-        ...updatedClientData,
-        estado: validation.estado,
-        camposFaltantes: validation.camposFaltantes,
-        errores: validation.errores
-      });
+  const handleDelete = async (cuit: number) => {
+    if (!confirm('¿Está seguro de eliminar este cliente?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('cuit', cuit);
+
+      if (error) throw error;
+
+      toast.success('Cliente eliminado correctamente');
+      await fetchClients();
+    } catch (error: any) {
+      console.error('Error deleting client:', error);
+      toast.error('Error al eliminar el cliente');
     }
-    
-    setEditingClient(null);
-    setEditForm({});
-    toast.info('Cambios guardados localmente. Sincroniza para aplicar en la base de datos.');
-  };
-
-  const handleCancel = () => {
-    setEditingClient(null);
-    setEditForm({});
-  };
-
-  const filteredClients = clients.filter(client => {
-    // Filtro por tipo
-    if (filterType !== 'todos') {
-      if (filterType === 'completos' && client.estado !== 'completo') return false;
-      if (filterType === 'incompletos' && client.estado !== 'incompleto') return false;
-      if (filterType === 'con_errores' && client.estado !== 'con_errores') return false;
-    }
-    
-    // Filtro por búsqueda
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        client.razon_social.toLowerCase().includes(searchLower) ||
-        String(client.cuit).includes(searchTerm) ||
-        client.email.toLowerCase().includes(searchLower) ||
-        client.direccion.toLowerCase().includes(searchLower) ||
-        (client.telefono && client.telefono.toLowerCase().includes(searchLower))
-      );
-    }
-    
-    return true;
-  });
-
-  // Estadísticas
-  const stats = {
-    total: clients.length,
-    completos: clients.filter(c => c.estado === 'completo').length,
-    incompletos: clients.filter(c => c.estado === 'incompleto').length
-  };
-
-  const getCircularProgress = (value: number, total: number, color: string) => {
-    const percentage = total > 0 ? (value / total) * 100 : 0;
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-      <div className="relative">
-        <svg className="transform -rotate-90 w-24 h-24">
-          <circle
-            cx="48"
-            cy="48"
-            r={radius}
-            stroke="#e5e7eb"
-            strokeWidth="8"
-            fill="none"
-          />
-          <circle
-            cx="48"
-            cy="48"
-            r={radius}
-            stroke={color}
-            strokeWidth="8"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            className="transition-all duration-500"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-2xl font-bold">{value}</div>
-            <div className="text-xs text-gray-500">{Math.round(percentage)}%</div>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   if (loading) {
@@ -424,479 +277,296 @@ export function ClientManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="md:flex md:items-center md:justify-between">
-        <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-            {t('clientManagement')}
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Base de datos de clientes y sus productos asociados
-          </p>
-        </div>
-        <div className="mt-4 flex md:mt-0 md:ml-4 items-center space-x-4">
-          {showSyncAlert && (
-            <div className="flex items-center text-amber-600 text-sm">
-              <AlertCircle className="h-4 w-4 mr-1" />
-              Cambios pendientes
-            </div>
-          )}
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-              hasUnsavedChanges 
-                ? 'bg-amber-600 hover:bg-amber-700 animate-pulse' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {hasUnsavedChanges ? 'Sincronizar Cambios' : 'Sincronizar con Base'}
-          </button>
-        </div>
-      </div>
-
-      {/* Sync Alert Banner */}
-      {showSyncAlert && hasUnsavedChanges && (
-        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-amber-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-amber-700">
-                Tienes cambios pendientes de sincronizar. Los datos modificados solo se guardarán en la base de datos cuando presiones "Sincronizar Cambios".
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stats with Circular Progress */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Total Clientes</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
-            </div>
-            <Users className="h-10 w-10 text-gray-400" />
-          </div>
-        </div>
-        
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Completos</p>
-              {getCircularProgress(stats.completos, stats.total, '#10b981')}
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Incompletos</p>
-              {getCircularProgress(stats.incompletos, stats.total, '#f59e0b')}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters and Search */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
+        <div className="flex justify-between items-center">
           <div>
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-              Buscar Cliente
-            </label>
+            <h2 className="text-2xl font-bold mb-2">{t('clientManagement')}</h2>
+            <p className="opacity-90">Total de clientes: {clients.length}</p>
+          </div>
+          <Users className="w-12 h-12 opacity-80" />
+        </div>
+      </div>
+
+      {/* Controles */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Búsqueda */}
+          <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                id="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Buscar por cualquier campo..."
+                placeholder="Buscar por razón social, CUIT o email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
               />
             </div>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Filtrar por Estado
-            </label>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setFilterType('todos')}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  filterType === 'todos'
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setFilterType('completos')}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  filterType === 'completos'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Completos
-              </button>
-              <button
-                onClick={() => setFilterType('incompletos')}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  filterType === 'incompletos'
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Incompletos
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Clients Table */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        {filteredClients.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contacto
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredClients.map((client) => (
-                  <tr 
-                    key={client.cuit} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleClientClick(client)}
-                  >
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {client.razon_social}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          CUIT: {client.cuit}
-                        </div>
-                        {client.product_count && client.product_count > 0 && (
-                          <div className="text-xs text-purple-600 mt-1">
-                            {client.product_count} productos asociados
-                          </div>
-                        )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{client.email}</div>
-                      <div className="text-sm text-gray-500">
-                        {client.telefono || 'Sin teléfono'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {client.estado === 'completo' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Completado
-                        </span>
-                      )}
-                      {client.estado === 'incompleto' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          <AlertCircle className="w-3 h-3 mr-1" />
-                          Incompleto
-                        </span>
-                      )}
-                      {pendingChanges[client.cuit] && (
-                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Modificado
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(client);
-                        }}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        <Edit2 className="h-5 w-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <Users className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              No se encontraron clientes
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {filterType !== 'todos' 
-                ? 'Intenta cambiar los filtros aplicados' 
-                : 'Los clientes aparecerán aquí después de ser procesados'}
-            </p>
-          </div>
+          {/* Botones */}
+          <button
+            onClick={syncWithSupabase}
+            disabled={syncing}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar'}
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingClient(null);
+              setFormData({
+                razon_social: '',
+                cuit: '',
+                direccion: '',
+                telefono: '',
+                email: '',
+                contacto: ''
+              });
+              setShowModal(true);
+            }}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Cliente
+          </button>
+        </div>
+
+        {/* Indicador de última sincronización */}
+        {lastSync && (
+          <p className="mt-3 text-sm text-gray-500">
+            Última sincronización: {lastSync.toLocaleTimeString('es-AR')}
+          </p>
         )}
       </div>
 
-      {/* Client Detail Modal */}
-      <Transition appear show={showClientModal} as={Fragment}>
-        <Dialog as="div" className="relative z-10" onClose={() => setShowClientModal(false)}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-3xl transform overflow-hidden rounded-lg bg-white shadow-xl transition-all">
-                  {selectedClient && (
-                    <>
-                      <div className="bg-gray-50 px-6 py-4 border-b">
-                        <div className="flex items-center justify-between">
-                          <Dialog.Title className="text-lg font-medium text-gray-900">
-                            Detalle del Cliente
-                          </Dialog.Title>
-                          <button
-                            onClick={() => setShowClientModal(false)}
-                            className="text-gray-400 hover:text-gray-500"
-                          >
-                            <X className="h-6 w-6" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="px-6 py-4">
-                        {/* Client Info */}
-                        <div className="bg-white rounded-lg border p-6 mb-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <h3 className="text-xl font-semibold text-gray-900">
-                                {selectedClient.razon_social}
-                              </h3>
-                              <p className="text-sm text-gray-500 mt-1">
-                                CUIT: {selectedClient.cuit}
-                              </p>
-                            </div>
-                            {selectedClient.estado === 'completo' && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                <CheckCircle2 className="w-4 h-4 mr-1" />
-                                Completado
-                              </span>
-                            )}
-                            {selectedClient.estado === 'incompleto' && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                                <AlertCircle className="w-4 h-4 mr-1" />
-                                Incompleto
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <div className="flex items-center text-sm text-gray-600 mb-2">
-                                <Mail className="h-4 w-4 mr-2" />
-                                {selectedClient.email}
-                              </div>
-                              <div className="flex items-center text-sm text-gray-600 mb-2">
-                                <Phone className="h-4 w-4 mr-2" />
-                                {selectedClient.telefono || 'Sin teléfono'}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-start text-sm text-gray-600 mb-2">
-                                <MapPin className="h-4 w-4 mr-2 mt-0.5" />
-                                {selectedClient.direccion}
-                              </div>
-                              <div className="flex items-center text-sm text-gray-600">
-                                <Calendar className="h-4 w-4 mr-2" />
-                                Creado: {format(new Date(selectedClient.created_at), 'dd/MM/yyyy')}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Validation Details */}
-                          {selectedClient.camposFaltantes?.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900 mb-2">
-                                  Información faltante:
-                                </h4>
-                                <ul className="list-disc list-inside text-sm text-yellow-600">
-                                  {selectedClient.camposFaltantes.map((campo, index) => (
-                                    <li key={index}>{campo}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Products Section */}
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                            <Package className="h-5 w-5 mr-2" />
-                            Productos Asociados
-                          </h3>
-                          
-                          {clientProducts[selectedClient.cuit]?.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {clientProducts[selectedClient.cuit].map((product) => (
-                                <div key={product.codificacion} className="bg-gray-50 rounded-lg p-4 border">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h4 className="font-medium text-gray-900">
-                                        {product.producto || product.codificacion}
-                                      </h4>
-                                      {product.caracteristicas_tecnicas && (
-                                        <p className="text-sm text-gray-600 mt-1">
-                                          {product.caracteristicas_tecnicas}
-                                        </p>
-                                      )}
-                                      <p className="text-xs text-gray-500 mt-2">
-                                        Código: {product.codificacion}
-                                      </p>
-                                    </div>
-                                    <StatusBadge status={product.djc_status} type="djc" />
-                                  </div>
-                                  <div className="mt-3 text-xs text-gray-500">
-                                    Creado: {format(new Date(product.created_at), 'dd/MM/yyyy')}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 bg-gray-50 rounded-lg">
-                              <Package className="mx-auto h-12 w-12 text-gray-400" />
-                              <p className="mt-2 text-sm text-gray-500">
-                                No hay productos asociados a este cliente
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
-
-      {/* Edit Form Inline */}
-      {editingClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Editar Cliente
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+      {/* Tabla de clientes */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Razón Social
-                </label>
-                <input
-                  type="text"
-                  value={editForm.razon_social || ''}
-                  onChange={(e) => setEditForm({ ...editForm, razon_social: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  CUIT
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Email
-                </label>
-                <input
-                  type="email"
-                  value={editForm.email || ''}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dirección
-                </label>
-                <input
-                  type="text"
-                  value={editForm.direccion || ''}
-                  onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Teléfono
-                </label>
-                <input
-                  type="text"
-                  value={editForm.telefono || ''}
-                  onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Agregar teléfono"
-                />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estado
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredClients.map((client) => {
+                const status = getClientStatus(client);
+                const Icon = status.icon;
+                
+                return (
+                  <tr 
+                    key={client.cuit} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleEdit(client)}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {client.razon_social}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {client.contacto && (
+                          <span className="text-sm text-gray-500">{client.contacto}</span>
+                        )}
+                        {client.product_count && client.product_count > 0 && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                            {client.product_count} productos
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCuit(client.cuit)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {client.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {client.telefono || ''}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 ${status.color}`} />
+                        <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
+                          {status.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(client);
+                          }}
+                          className="text-purple-600 hover:text-purple-900"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(client.cuit);
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {filteredClients.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No se encontraron clientes</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal de Cliente */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h3 className="text-xl font-bold">
+                {editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingClient(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Razón Social *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.razon_social}
+                    onChange={(e) => setFormData(prev => ({ ...prev, razon_social: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    CUIT *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cuit}
+                    onChange={(e) => setFormData(prev => ({ ...prev, cuit: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    placeholder="20123456789"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dirección *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.direccion}
+                    onChange={(e) => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Teléfono *
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.telefono}
+                    onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contacto
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contacto}
+                    onChange={(e) => setFormData(prev => ({ ...prev, contacto: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
               </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleSaveLocal(editingClient)}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-              >
-                Guardar Cambios
-              </button>
-            </div>
+
+              <div className="flex justify-end gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditingClient(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  {editingClient ? 'Actualizar' : 'Crear'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
