@@ -1,22 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
+import { Dialog, Transition } from '@headlessui/react';
 import { 
-  Upload, 
   RefreshCw, 
   Search, 
-  Download,
-  Filter,
-  Plus,
   Users,
   AlertCircle,
   Edit2,
   Save,
   X,
-  ChevronDown,
-  ChevronUp,
   Package,
   Phone,
   Mail,
@@ -24,7 +19,13 @@ import {
   Building2,
   AlertTriangle,
   CheckCircle2,
-  Info
+  Info,
+  Eye,
+  Filter,
+  Calendar,
+  FileText,
+  Clock,
+  ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -39,6 +40,8 @@ export interface Client {
   created_at: string;
   updated_at: string;
   estado?: 'completo' | 'incompleto' | 'con_errores';
+  camposFaltantes?: string[];
+  errores?: string[];
 }
 
 export interface Product {
@@ -96,40 +99,69 @@ export function ClientManagement() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedClient, setExpandedClient] = useState<number | null>(null);
+  const [filterType, setFilterType] = useState<'todos' | 'completos' | 'incompletos' | 'con_errores'>('todos');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [showClientModal, setShowClientModal] = useState(false);
   const [editingClient, setEditingClient] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<Client>>({});
   const [clientProducts, setClientProducts] = useState<Record<number, Product[]>>({});
-  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
-  const [showSyncResult, setShowSyncResult] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Record<number, Partial<Client>>>({});
+  const [showSyncAlert, setShowSyncAlert] = useState(false);
 
   useEffect(() => {
     fetchClients();
   }, []);
 
-  const validateClient = (client: Client): 'completo' | 'incompleto' | 'con_errores' => {
+  useEffect(() => {
+    if (Object.keys(pendingChanges).length > 0) {
+      setHasUnsavedChanges(true);
+      setShowSyncAlert(true);
+    } else {
+      setHasUnsavedChanges(false);
+      setShowSyncAlert(false);
+    }
+  }, [pendingChanges]);
+
+  const validateClient = (client: Client): { 
+    estado: 'completo' | 'incompleto' | 'con_errores',
+    camposFaltantes: string[],
+    errores: string[]
+  } => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const camposFaltantes: string[] = [];
+    const errores: string[] = [];
     
-    // Verificar si hay errores críticos
+    // Verificar campos faltantes
+    if (!client.telefono || client.telefono.trim() === '') {
+      camposFaltantes.push('Teléfono');
+    }
+    
+    // Verificar errores
     if (!emailRegex.test(client.email)) {
-      return 'con_errores';
+      errores.push('Email inválido');
     }
     
     if (String(client.cuit).length !== 11) {
-      return 'con_errores';
+      errores.push('CUIT debe tener 11 dígitos');
     }
     
-    // Verificar si está incompleto
-    if (!client.telefono || client.telefono.trim() === '') {
-      return 'incompleto';
-    }
-    
-    // Si no es una razón social válida
     if (!client.razon_social || client.razon_social.trim().length < 3) {
-      return 'con_errores';
+      errores.push('Razón social muy corta');
     }
     
-    return 'completo';
+    if (!client.direccion || client.direccion.trim().length < 5) {
+      errores.push('Dirección incompleta');
+    }
+    
+    let estado: 'completo' | 'incompleto' | 'con_errores' = 'completo';
+    if (errores.length > 0) {
+      estado = 'con_errores';
+    } else if (camposFaltantes.length > 0) {
+      estado = 'incompleto';
+    }
+    
+    return { estado, camposFaltantes, errores };
   };
 
   const fetchClients = async () => {
@@ -142,13 +174,18 @@ export function ClientManagement() {
 
       if (error) throw error;
       
-      // Agregar estado a cada cliente basado en validación
-      const clientsWithStatus = (data || []).map(client => ({
-        ...client,
-        estado: validateClient(client)
-      }));
+      // Agregar validación a cada cliente
+      const clientsWithValidation = (data || []).map(client => {
+        const validation = validateClient(client);
+        return {
+          ...client,
+          estado: validation.estado,
+          camposFaltantes: validation.camposFaltantes,
+          errores: validation.errores
+        };
+      });
       
-      setClients(clientsWithStatus);
+      setClients(clientsWithValidation);
     } catch (error: any) {
       toast.error(`Error al cargar clientes: ${error.message}`);
       
@@ -186,45 +223,54 @@ export function ClientManagement() {
   };
 
   const handleSync = async () => {
+    if (hasUnsavedChanges) {
+      const confirmSync = window.confirm(
+        '¿Desea sincronizar con la base de datos? Se aplicarán todos los cambios pendientes.'
+      );
+      
+      if (!confirmSync) return;
+    }
+
     setSyncing(true);
-    setShowSyncResult(false);
     
     try {
-      // Simular sincronización con base de datos externa
-      // En producción, aquí se llamaría a la API o servicio externo
-      
-      const result: SyncResult = {
-        total: 0,
-        nuevos: 0,
-        actualizados: 0,
-        conErrores: 0,
-        sinCambios: 0
-      };
+      // Aplicar cambios pendientes
+      for (const [cuit, changes] of Object.entries(pendingChanges)) {
+        const { error } = await supabase
+          .from('clients')
+          .update({
+            ...changes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('cuit', Number(cuit));
 
-      // Aquí iría la lógica real de sincronización
-      // Por ahora solo refrescamos los datos
+        if (error) {
+          toast.error(`Error al actualizar cliente ${cuit}: ${error.message}`);
+        }
+      }
+      
+      // Limpiar cambios pendientes
+      setPendingChanges({});
+      setHasUnsavedChanges(false);
+      setShowSyncAlert(false);
+      
+      // Recargar datos
       await fetchClients();
       
-      // Simular resultado (en producción vendría del proceso real)
-      result.total = clients.length;
-      result.sinCambios = clients.filter(c => c.estado === 'completo').length;
-      result.conErrores = clients.filter(c => c.estado === 'con_errores').length;
-      
-      setLastSyncResult(result);
-      setShowSyncResult(true);
-      
-      toast.success('Sincronización completada');
-      
-      // Ocultar resultado después de 10 segundos
-      setTimeout(() => {
-        setShowSyncResult(false);
-      }, 10000);
-      
+      toast.success('Sincronización completada exitosamente');
     } catch (error: any) {
       toast.error(`Error al sincronizar: ${error.message}`);
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleClientClick = async (client: Client) => {
+    setSelectedClient(client);
+    if (!clientProducts[client.cuit]) {
+      await fetchClientProducts(client.cuit);
+    }
+    setShowClientModal(true);
   };
 
   const handleEdit = (client: Client) => {
@@ -237,24 +283,30 @@ export function ClientManagement() {
     });
   };
 
-  const handleSave = async (cuit: number) => {
-    try {
-      const { error } = await supabase
-        .from('clients')
-        .update({
-          ...editForm,
-          updated_at: new Date().toISOString()
-        })
-        .eq('cuit', cuit);
-
-      if (error) throw error;
-
-      toast.success('Cliente actualizado correctamente');
-      setEditingClient(null);
-      fetchClients();
-    } catch (error: any) {
-      toast.error(`Error al actualizar cliente: ${error.message}`);
-    }
+  const handleSaveLocal = (cuit: number) => {
+    // Guardar cambios localmente
+    setPendingChanges(prev => ({
+      ...prev,
+      [cuit]: editForm
+    }));
+    
+    // Actualizar vista local
+    setClients(prev => prev.map(client => {
+      if (client.cuit === cuit) {
+        const updatedClient = { ...client, ...editForm };
+        const validation = validateClient(updatedClient);
+        return {
+          ...updatedClient,
+          estado: validation.estado,
+          camposFaltantes: validation.camposFaltantes,
+          errores: validation.errores
+        };
+      }
+      return client;
+    }));
+    
+    setEditingClient(null);
+    toast.info('Cambios guardados localmente. Sincroniza para aplicar en la base de datos.');
   };
 
   const handleCancel = () => {
@@ -262,54 +314,25 @@ export function ClientManagement() {
     setEditForm({});
   };
 
-  const toggleClientExpansion = async (cuit: number) => {
-    if (expandedClient === cuit) {
-      setExpandedClient(null);
-    } else {
-      setExpandedClient(cuit);
-      if (!clientProducts[cuit]) {
-        await fetchClientProducts(cuit);
-      }
-    }
-  };
-
-  const getStatusBadge = (estado: 'completo' | 'incompleto' | 'con_errores' | undefined) => {
-    switch (estado) {
-      case 'completo':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <CheckCircle2 className="w-3 h-3 mr-1" />
-            Completo
-          </span>
-        );
-      case 'incompleto':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Falta información
-          </span>
-        );
-      case 'con_errores':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            Requiere revisión
-          </span>
-        );
-      default:
-        return null;
-    }
-  };
-
   const filteredClients = clients.filter(client => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      client.razon_social.toLowerCase().includes(searchLower) ||
-      String(client.cuit).includes(searchTerm) ||
-      client.email.toLowerCase().includes(searchLower) ||
-      client.direccion.toLowerCase().includes(searchLower) ||
-      (client.telefono && client.telefono.toLowerCase().includes(searchLower))
-    );
+    // Filtro por tipo
+    if (filterType !== 'todos') {
+      if (client.estado !== filterType) return false;
+    }
+    
+    // Filtro por búsqueda
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        client.razon_social.toLowerCase().includes(searchLower) ||
+        String(client.cuit).includes(searchTerm) ||
+        client.email.toLowerCase().includes(searchLower) ||
+        client.direccion.toLowerCase().includes(searchLower) ||
+        (client.telefono && client.telefono.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    return true;
   });
 
   // Estadísticas
@@ -318,6 +341,45 @@ export function ClientManagement() {
     completos: clients.filter(c => c.estado === 'completo').length,
     incompletos: clients.filter(c => c.estado === 'incompleto').length,
     conErrores: clients.filter(c => c.estado === 'con_errores').length
+  };
+
+  const getCircularProgress = (value: number, total: number, color: string) => {
+    const percentage = total > 0 ? (value / total) * 100 : 0;
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    return (
+      <div className="relative">
+        <svg className="transform -rotate-90 w-24 h-24">
+          <circle
+            cx="48"
+            cy="48"
+            r={radius}
+            stroke="#e5e7eb"
+            strokeWidth="8"
+            fill="none"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r={radius}
+            stroke={color}
+            strokeWidth="8"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-500"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl font-bold">{value}</div>
+            <div className="text-xs text-gray-500">{Math.round(percentage)}%</div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -340,310 +402,496 @@ export function ClientManagement() {
             Base de datos de clientes y sus productos asociados
           </p>
         </div>
-        <div className="mt-4 flex md:mt-0 md:ml-4">
+        <div className="mt-4 flex md:mt-0 md:ml-4 items-center space-x-4">
+          {showSyncAlert && (
+            <div className="flex items-center text-amber-600 text-sm">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              Cambios pendientes
+            </div>
+          )}
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+              hasUnsavedChanges 
+                ? 'bg-amber-600 hover:bg-amber-700 animate-pulse' 
+                : 'bg-blue-600 hover:bg-blue-700'
+            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            Sincronizar con Base
+            {hasUnsavedChanges ? 'Sincronizar Cambios' : 'Sincronizar con Base'}
           </button>
         </div>
       </div>
 
-      {/* Sync Result Alert */}
-      {showSyncResult && lastSyncResult && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex">
-            <Info className="h-5 w-5 text-blue-400 mt-0.5" />
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-blue-800">
-                Resultado de Sincronización
-              </h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <p>• Total procesados: {lastSyncResult.total}</p>
-                <p>• Nuevos clientes: {lastSyncResult.nuevos}</p>
-                <p>• Actualizados: {lastSyncResult.actualizados}</p>
-                <p>• Con errores: {lastSyncResult.conErrores}</p>
-                <p>• Sin cambios: {lastSyncResult.sinCambios}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowSyncResult(false)}
-              className="ml-3 text-blue-400 hover:text-blue-500"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Stats Cards */}
+      {/* Stats with Circular Progress */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center">
-            <Users className="h-8 w-8 text-gray-400" />
-            <div className="ml-4">
-              <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm text-gray-500">Total Clientes</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
             </div>
+            <Users className="h-10 w-10 text-gray-400" />
           </div>
         </div>
+        
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center">
-            <CheckCircle2 className="h-8 w-8 text-green-400" />
-            <div className="ml-4">
-              <p className="text-2xl font-semibold text-gray-900">{stats.completos}</p>
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm text-gray-500">Completos</p>
+              {getCircularProgress(stats.completos, stats.total, '#10b981')}
             </div>
           </div>
         </div>
+        
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertCircle className="h-8 w-8 text-yellow-400" />
-            <div className="ml-4">
-              <p className="text-2xl font-semibold text-gray-900">{stats.incompletos}</p>
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm text-gray-500">Incompletos</p>
+              {getCircularProgress(stats.incompletos, stats.total, '#f59e0b')}
             </div>
           </div>
         </div>
+        
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertTriangle className="h-8 w-8 text-red-400" />
-            <div className="ml-4">
-              <p className="text-2xl font-semibold text-gray-900">{stats.conErrores}</p>
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm text-gray-500">Con Errores</p>
+              {getCircularProgress(stats.conErrores, stats.total, '#ef4444')}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search */}
+      {/* Filters and Search */}
       <div className="bg-white shadow rounded-lg p-6">
-        <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-          Buscar Cliente
-        </label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            id="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Buscar por razón social, CUIT, email, dirección o teléfono..."
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+              Buscar Cliente
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                id="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Buscar por cualquier campo..."
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Filtrar por Estado
+            </label>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setFilterType('todos')}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  filterType === 'todos'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setFilterType('completos')}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  filterType === 'completos'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Completos
+              </button>
+              <button
+                onClick={() => setFilterType('incompletos')}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  filterType === 'incompletos'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Incompletos
+              </button>
+              <button
+                onClick={() => setFilterType('con_errores')}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  filterType === 'con_errores'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Con Errores
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Clients List */}
+      {/* Clients Table */}
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         {filteredClients.length > 0 ? (
-          <ul className="divide-y divide-gray-200">
-            {filteredClients.map((client) => (
-              <li key={client.cuit}>
-                <div className="px-4 py-4 sm:px-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center flex-1">
-                      <button
-                        onClick={() => toggleClientExpansion(client.cuit)}
-                        className="p-1 hover:bg-gray-100 rounded-full mr-3 transition-colors"
-                      >
-                        {expandedClient === client.cuit ? (
-                          <ChevronUp className="h-5 w-5 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-gray-400" />
-                        )}
-                      </button>
-                      
-                      <div className="flex-1">
-                        {editingClient === client.cuit ? (
-                          // Edit Mode
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Razón Social
-                              </label>
-                              <input
-                                type="text"
-                                value={editForm.razon_social || ''}
-                                onChange={(e) => setEditForm({ ...editForm, razon_social: e.target.value })}
-                                className="w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Email
-                              </label>
-                              <input
-                                type="email"
-                                value={editForm.email || ''}
-                                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                                className="w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Dirección
-                              </label>
-                              <input
-                                type="text"
-                                value={editForm.direccion || ''}
-                                onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })}
-                                className="w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Teléfono
-                              </label>
-                              <input
-                                type="text"
-                                value={editForm.telefono || ''}
-                                onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })}
-                                className="w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Agregar teléfono"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          // View Mode
-                          <div>
-                            <div className="flex items-center space-x-3">
-                              <p className="text-sm font-medium text-gray-900">
-                                {client.razon_social}
-                              </p>
-                              <span className="text-sm text-gray-500">
-                                CUIT: {client.cuit}
-                              </span>
-                              {getStatusBadge(client.estado)}
-                            </div>
-                            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-500">
-                              <div className="flex items-center">
-                                <Mail className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.email}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <MapPin className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.direccion}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <Phone className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">
-                                  {client.telefono || (
-                                    <span className="text-gray-400 italic">Sin teléfono</span>
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Cliente
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Contacto
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredClients.map((client) => (
+                  <tr key={client.cuit} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {client.razon_social}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          CUIT: {client.cuit}
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="ml-4 flex items-center space-x-2">
-                      {editingClient === client.cuit ? (
-                        <>
-                          <button
-                            onClick={() => handleSave(client.cuit)}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                            title="Guardar cambios"
-                          >
-                            <Save className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={handleCancel}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                            title="Cancelar"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleEdit(client)}
-                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-full transition-colors"
-                          title="Editar cliente"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Expanded Content - Products */}
-                  {expandedClient === client.cuit && (
-                    <div className="mt-4 pl-9">
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
-                          <Package className="h-4 w-4 mr-2" />
-                          Productos Asociados
-                        </h4>
-                        
-                        {clientProducts[client.cuit] && clientProducts[client.cuit].length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {clientProducts[client.cuit].map((product) => (
-                              <div key={product.codificacion} className="bg-white p-3 rounded border border-gray-200">
-                                <div className="flex items-center justify-between">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                      {product.producto || product.codificacion}
-                                    </p>
-                                    {product.caracteristicas_tecnicas && (
-                                      <p className="text-xs text-gray-500 mt-1 truncate">
-                                        {product.caracteristicas_tecnicas}
-                                      </p>
-                                    )}
-                                    <p className="text-xs text-gray-400 mt-1">
-                                      Código: {product.codificacion}
-                                    </p>
-                                  </div>
-                                  <div className="ml-2 flex-shrink-0">
-                                    <StatusBadge status={product.djc_status} type="djc" />
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">
-                            No hay productos asociados a este cliente
-                          </p>
-                        )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">{client.email}</div>
+                      <div className="text-sm text-gray-500">
+                        {client.telefono || 'Sin teléfono'}
                       </div>
-                      
-                      {/* Client Timestamps */}
-                      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                        <span>
-                          Creado: {format(new Date(client.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                    </td>
+                    <td className="px-6 py-4">
+                      {client.estado === 'completo' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Completo
                         </span>
-                        {client.updated_at !== client.created_at && (
-                          <span>
-                            Última actualización: {format(new Date(client.updated_at), 'dd/MM/yyyy HH:mm', { locale: es })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                      )}
+                      {client.estado === 'incompleto' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          Incompleto
+                        </span>
+                      )}
+                      {client.estado === 'con_errores' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          Con errores
+                        </span>
+                      )}
+                      {pendingChanges[client.cuit] && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          <Clock className="w-3 h-3 mr-1" />
+                          Modificado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleClientClick(client)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
+                        <Eye className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(client)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        <Edit2 className="h-5 w-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="text-center py-12">
             <Users className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">
-              {searchTerm ? 'No se encontraron clientes' : 'No hay clientes en la base de datos'}
+              No se encontraron clientes
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm 
-                ? 'Intenta con otros términos de búsqueda' 
-                : 'Los clientes aparecerán aquí después de ser procesados y validados'}
+              {filterType !== 'todos' 
+                ? 'Intenta cambiar los filtros aplicados' 
+                : 'Los clientes aparecerán aquí después de ser procesados'}
             </p>
           </div>
         )}
       </div>
+
+      {/* Client Detail Modal */}
+      <Transition appear show={showClientModal} as={Fragment}>
+        <Dialog as="div" className="relative z-10" onClose={() => setShowClientModal(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-3xl transform overflow-hidden rounded-lg bg-white shadow-xl transition-all">
+                  {selectedClient && (
+                    <>
+                      <div className="bg-gray-50 px-6 py-4 border-b">
+                        <div className="flex items-center justify-between">
+                          <Dialog.Title className="text-lg font-medium text-gray-900">
+                            Detalle del Cliente
+                          </Dialog.Title>
+                          <button
+                            onClick={() => setShowClientModal(false)}
+                            className="text-gray-400 hover:text-gray-500"
+                          >
+                            <X className="h-6 w-6" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="px-6 py-4">
+                        {/* Client Info */}
+                        <div className="bg-white rounded-lg border p-6 mb-6">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <h3 className="text-xl font-semibold text-gray-900">
+                                {selectedClient.razon_social}
+                              </h3>
+                              <p className="text-sm text-gray-500 mt-1">
+                                CUIT: {selectedClient.cuit}
+                              </p>
+                            </div>
+                            {selectedClient.estado === 'completo' && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                <CheckCircle2 className="w-4 h-4 mr-1" />
+                                Completo
+                              </span>
+                            )}
+                            {selectedClient.estado === 'incompleto' && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                                <AlertCircle className="w-4 h-4 mr-1" />
+                                Incompleto
+                              </span>
+                            )}
+                            {selectedClient.estado === 'con_errores' && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                                <AlertTriangle className="w-4 h-4 mr-1" />
+                                Con errores
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Mail className="h-4 w-4 mr-2" />
+                                {selectedClient.email}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Phone className="h-4 w-4 mr-2" />
+                                {selectedClient.telefono || 'Sin teléfono'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-start text-sm text-gray-600 mb-2">
+                                <MapPin className="h-4 w-4 mr-2 mt-0.5" />
+                                {selectedClient.direccion}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Creado: {format(new Date(selectedClient.created_at), 'dd/MM/yyyy')}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Validation Details */}
+                          {(selectedClient.camposFaltantes?.length > 0 || selectedClient.errores?.length > 0) && (
+                            <div className="mt-4 pt-4 border-t">
+                              {selectedClient.camposFaltantes?.length > 0 && (
+                                <div className="mb-3">
+                                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                                    Información faltante:
+                                  </h4>
+                                  <ul className="list-disc list-inside text-sm text-yellow-600">
+                                    {selectedClient.camposFaltantes.map((campo, index) => (
+                                      <li key={index}>{campo}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              
+                              {selectedClient.errores?.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                                    Errores detectados:
+                                  </h4>
+                                  <ul className="list-disc list-inside text-sm text-red-600">
+                                    {selectedClient.errores.map((error, index) => (
+                                      <li key={index}>{error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Products Section */}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                            <Package className="h-5 w-5 mr-2" />
+                            Productos Asociados
+                          </h3>
+                          
+                          {clientProducts[selectedClient.cuit]?.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {clientProducts[selectedClient.cuit].map((product) => (
+                                <div key={product.codificacion} className="bg-gray-50 rounded-lg p-4 border">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h4 className="font-medium text-gray-900">
+                                        {product.producto || product.codificacion}
+                                      </h4>
+                                      {product.caracteristicas_tecnicas && (
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          {product.caracteristicas_tecnicas}
+                                        </p>
+                                      )}
+                                      <p className="text-xs text-gray-500 mt-2">
+                                        Código: {product.codificacion}
+                                      </p>
+                                    </div>
+                                    <StatusBadge status={product.djc_status} type="djc" />
+                                  </div>
+                                  <div className="mt-3 text-xs text-gray-500">
+                                    Creado: {format(new Date(product.created_at), 'dd/MM/yyyy')}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 bg-gray-50 rounded-lg">
+                              <Package className="mx-auto h-12 w-12 text-gray-400" />
+                              <p className="mt-2 text-sm text-gray-500">
+                                No hay productos asociados a este cliente
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Edit Form Inline */}
+      {editingClient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Editar Cliente
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Razón Social
+                </label>
+                <input
+                  type="text"
+                  value={editForm.razon_social || ''}
+                  onChange={(e) => setEditForm({ ...editForm, razon_social: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email || ''}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dirección
+                </label>
+                <input
+                  type="text"
+                  value={editForm.direccion || ''}
+                  onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Teléfono
+                </label>
+                <input
+                  type="text"
+                  value={editForm.telefono || ''}
+                  onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Agregar teléfono"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleSaveLocal(editingClient)}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
