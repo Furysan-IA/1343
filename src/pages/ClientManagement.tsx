@@ -239,13 +239,17 @@ export function ClientManagement() {
         const { error } = await supabase
           .from('clients')
           .update({
-            ...changes,
+            razon_social: changes.razon_social,
+            direccion: changes.direccion,
+            email: changes.email,
+            telefono: changes.telefono,
             updated_at: new Date().toISOString()
           })
           .eq('cuit', Number(cuit));
 
         if (error) {
           toast.error(`Error al actualizar cliente ${cuit}: ${error.message}`);
+          console.error('Error updating client:', error);
         }
       }
       
@@ -254,12 +258,13 @@ export function ClientManagement() {
       setHasUnsavedChanges(false);
       setShowSyncAlert(false);
       
-      // Recargar datos
+      // Recargar datos desde la base de datos
       await fetchClients();
       
       toast.success('Sincronización completada exitosamente');
     } catch (error: any) {
       toast.error(`Error al sincronizar: ${error.message}`);
+      console.error('Sync error:', error);
     } finally {
       setSyncing(false);
     }
@@ -284,19 +289,30 @@ export function ClientManagement() {
   };
 
   const handleSaveLocal = (cuit: number) => {
-    // Guardar cambios localmente
+    // Buscar el cliente actual
+    const currentClient = clients.find(c => c.cuit === cuit);
+    if (!currentClient) return;
+    
+    // Crear cliente actualizado con los cambios del formulario
+    const updatedClientData = {
+      ...currentClient,
+      ...editForm
+    };
+    
+    // Validar el cliente actualizado
+    const validation = validateClient(updatedClientData);
+    
+    // Guardar cambios pendientes
     setPendingChanges(prev => ({
       ...prev,
       [cuit]: editForm
     }));
     
-    // Actualizar vista local
+    // Actualizar vista local con el cliente completo actualizado
     setClients(prev => prev.map(client => {
       if (client.cuit === cuit) {
-        const updatedClient = { ...client, ...editForm };
-        const validation = validateClient(updatedClient);
         return {
-          ...updatedClient,
+          ...updatedClientData,
           estado: validation.estado,
           camposFaltantes: validation.camposFaltantes,
           errores: validation.errores
@@ -305,7 +321,18 @@ export function ClientManagement() {
       return client;
     }));
     
+    // Si estaba viendo el detalle del cliente, actualizar también
+    if (selectedClient && selectedClient.cuit === cuit) {
+      setSelectedClient({
+        ...updatedClientData,
+        estado: validation.estado,
+        camposFaltantes: validation.camposFaltantes,
+        errores: validation.errores
+      });
+    }
+    
     setEditingClient(null);
+    setEditForm({});
     toast.info('Cambios guardados localmente. Sincroniza para aplicar en la base de datos.');
   };
 
@@ -317,7 +344,9 @@ export function ClientManagement() {
   const filteredClients = clients.filter(client => {
     // Filtro por tipo
     if (filterType !== 'todos') {
-      if (client.estado !== filterType) return false;
+      if (filterType === 'completos' && client.estado !== 'completo') return false;
+      if (filterType === 'incompletos' && client.estado !== 'incompleto') return false;
+      if (filterType === 'con_errores' && client.estado !== 'con_errores') return false;
     }
     
     // Filtro por búsqueda
@@ -423,6 +452,22 @@ export function ClientManagement() {
           </button>
         </div>
       </div>
+
+      {/* Sync Alert Banner */}
+      {showSyncAlert && hasUnsavedChanges && (
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-amber-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-amber-700">
+                Tienes cambios pendientes de sincronizar. Los datos modificados solo se guardarán en la base de datos cuando presiones "Sincronizar Cambios".
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats with Circular Progress */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
