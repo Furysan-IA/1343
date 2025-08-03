@@ -1,10 +1,3 @@
-// Función para formatear CUIT
-export const formatCuit = (cuit) => {
-  if (!cuit) return 'CAMPO NO ENCONTRADO';
-  const str = cuit.toString();
-  return `${str.slice(0, 2)}-${str.slice(2, 10)}-${str.slice(10)}`;
-};
-
 // Función para generar número de DJC
 export const generateDJCNumber = () => {
   return `DJC-2025-${Date.now().toString().slice(-6)}`;
