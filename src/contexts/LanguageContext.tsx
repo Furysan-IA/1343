@@ -46,6 +46,7 @@ const translations = {
     pendingDJCs: 'DJCs Pendientes',
     errorLogs: 'Logs de Errores',
     recentActivity: 'Actividad Reciente',
+    welcome: 'Bienvenido al Dashboard',
     
     // Products
     products: 'Productos',

@@ -1,215 +1,460 @@
+// Dashboard.tsx - Actualizado con datos reales y estadísticas mejoradas
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { supabase } from '../lib/supabase';
-import { LoadingSpinner } from '../components/Common/LoadingSpinner';
+import { supabase, Database } from '../lib/supabase';
 import { 
-  BarChart3, 
-  Package, 
-  Users, 
-  FileText,
-  AlertTriangle,
-  TrendingUp,
-  Calendar,
-  Activity
+  Package, Users, CheckCircle, AlertCircle, 
+  FileText, QrCode, Calendar, TrendingUp,
+  Activity, Shield, Award, Clock
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+
+// Usar el tipo de la base de datos para consistencia
+type Product = Database['public']['Tables']['products']['Row'];
+type Client = Database['public']['Tables']['clients']['Row'];
 
 interface DashboardStats {
-  totalProducts: number;
   totalClients: number;
-  pendingDJCs: number;
-  errorLogs: number;
-  expiringProducts: number;
+  totalProducts: number;
+  activeProducts: number;
   expiredProducts: number;
+  expiringProducts: number;
+  productsWithQR: number;
+  productsWithoutQR: number;
+  productsWithDJC: number;
+  productsWithoutDJC: number;
+  productsByStatus: {
+    vigente: number;
+    vencido: number;
+    pendiente: number;
+  };
+  recentProducts: Product[];
+  expiringProductsList: Product[];
 }
 
 export function Dashboard() {
   const { t } = useLanguage();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProducts: 0,
-    totalClients: 0,
-    pendingDJCs: 0,
-    errorLogs: 0,
-    expiringProducts: 0,
-    expiredProducts: 0,
-  });
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalClients: 0,
+    totalProducts: 0,
+    activeProducts: 0,
+    expiredProducts: 0,
+    expiringProducts: 0,
+    productsWithQR: 0,
+    productsWithoutQR: 0,
+    productsWithDJC: 0,
+    productsWithoutDJC: 0,
+    productsByStatus: {
+      vigente: 0,
+      vencido: 0,
+      pendiente: 0
+    },
+    recentProducts: [],
+    expiringProductsList: []
+  });
 
   useEffect(() => {
-    fetchDashboardStats();
+    fetchDashboardData();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     try {
-      setLoading(true);
-
-      // Get total products
-      const { count: productsCount } = await supabase
+      // Obtener todos los productos
+      const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('codificacion', { count: 'exact' });
+        .select('*');
 
-      // Get total clients
-      const { count: clientsCount } = await supabase
+      if (productsError) throw productsError;
+
+      // Obtener clientes
+      const { data: clients, error: clientsError } = await supabase
         .from('clients')
-        .select('cuit', { count: 'exact' });
+        .select('*');
 
-      // Get pending DJCs
-      const { count: pendingDJCsCount } = await supabase
-        .from('products')
-        .select('codificacion', { count: 'exact' })
-        .eq('djc_status', 'No Generada');
+      if (clientsError) throw clientsError;
 
-      // Get error logs from last 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const { count: errorLogsCount } = await supabase
-        .from('logs')
-        .select('id', { count: 'exact' })
-        .gte('timestamp', sevenDaysAgo.toISOString());
+      // Calcular estadísticas
+      const now = new Date();
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-      // Get expiring products (next 30 days)
-      const { count: expiringCount } = await supabase
-        .from('products')
-        .select('codificacion', { count: 'exact' })
-        .gte('dias_para_vencer', 0)
-        .lte('dias_para_vencer', 30);
+      const stats: DashboardStats = {
+        totalClients: clients?.length || 0,
+        totalProducts: products?.length || 0,
+        activeProducts: 0,
+        expiredProducts: 0,
+        expiringProducts: 0,
+        productsWithQR: 0,
+        productsWithoutQR: 0,
+        productsWithDJC: 0,
+        productsWithoutDJC: 0,
+        productsByStatus: {
+          vigente: 0,
+          vencido: 0,
+          pendiente: 0
+        },
+        recentProducts: [],
+        expiringProductsList: []
+      };
 
-      // Get expired products
-      const { count: expiredCount } = await supabase
-        .from('products')
-        .select('codificacion', { count: 'exact' })
-        .lt('dias_para_vencer', 0);
+      // Procesar productos
+      products?.forEach(product => {
+        // QR
+        if (product.qr_path) {
+          stats.productsWithQR++;
+        } else {
+          stats.productsWithoutQR++;
+        }
 
-      setStats({
-        totalProducts: productsCount || 0,
-        totalClients: clientsCount || 0,
-        pendingDJCs: pendingDJCsCount || 0,
-        errorLogs: errorLogsCount || 0,
-        expiringProducts: expiringCount || 0,
-        expiredProducts: expiredCount || 0,
+        // DJC
+        if (product.djc_path) {
+          stats.productsWithDJC++;
+        } else {
+          stats.productsWithoutDJC++;
+        }
+
+        // Estado de vencimiento
+        if (!product.vencimiento) {
+          stats.productsByStatus.pendiente++;
+        } else {
+          const vencimiento = new Date(product.vencimiento);
+          if (vencimiento < now) {
+            stats.expiredProducts++;
+            stats.productsByStatus.vencido++;
+          } else {
+            stats.activeProducts++;
+            stats.productsByStatus.vigente++;
+            
+            // Productos próximos a vencer (30 días)
+            if (vencimiento <= thirtyDaysFromNow) {
+              stats.expiringProducts++;
+              stats.expiringProductsList.push(product);
+            }
+          }
+        }
       });
-    } catch (error: any) {
-      console.error('Error fetching dashboard stats:', error);
+
+      // Productos recientes (últimos 5)
+      stats.recentProducts = products
+        ?.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5) || [];
+
+      // Ordenar productos próximos a vencer
+      stats.expiringProductsList.sort((a, b) => 
+        new Date(a.vencimiento!).getTime() - new Date(b.vencimiento!).getTime()
+      );
+
+      setStats(stats);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Error al cargar los datos del dashboard');
     } finally {
       setLoading(false);
     }
   };
 
+  const StatCard = ({ 
+    title, 
+    value, 
+    icon: Icon, 
+    color, 
+    onClick,
+    subtitle 
+  }: { 
+    title: string; 
+    value: number; 
+    icon: any; 
+    color: string;
+    onClick?: () => void;
+    subtitle?: string;
+  }) => (
+    <div 
+      className={`bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow ${
+        onClick ? 'cursor-pointer' : ''
+      }`}
+      onClick={onClick}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600">{title}</p>
+          <p className="text-3xl font-bold mt-2">{value}</p>
+          {subtitle && (
+            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+          )}
+        </div>
+        <div className={`p-3 rounded-lg ${color}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
       </div>
     );
   }
 
-  const statCards = [
-    {
-      name: t('totalProducts'),
-      value: stats.totalProducts,
-      icon: Package,
-      color: 'bg-blue-500',
-      bgColor: 'bg-blue-50',
-      textColor: 'text-blue-600',
-    },
-    {
-      name: t('totalClients'),
-      value: stats.totalClients,
-      icon: Users,
-      color: 'bg-green-500',
-      bgColor: 'bg-green-50',
-      textColor: 'text-green-600',
-    },
-    {
-      name: t('pendingDJCs'),
-      value: stats.pendingDJCs,
-      icon: FileText,
-      color: 'bg-yellow-500',
-      bgColor: 'bg-yellow-50',
-      textColor: 'text-yellow-600',
-    },
-    {
-      name: t('errorLogs'),
-      value: stats.errorLogs,
-      icon: AlertTriangle,
-      color: 'bg-red-500',
-      bgColor: 'bg-red-50',
-      textColor: 'text-red-600',
-    },
-    {
-      name: 'Próximos a Vencer',
-      value: stats.expiringProducts,
-      icon: Calendar,
-      color: 'bg-orange-500',
-      bgColor: 'bg-orange-50',
-      textColor: 'text-orange-600',
-    },
-    {
-      name: 'Productos Vencidos',
-      value: stats.expiredProducts,
-      icon: TrendingUp,
-      color: 'bg-purple-500',
-      bgColor: 'bg-purple-50',
-      textColor: 'text-purple-600',
-    },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
-          {t('dashboard')}
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Resumen general del sistema de gestión de certificados y DJC
-        </p>
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
+        <h1 className="text-2xl font-bold mb-2">{t('welcome')}</h1>
+        <p className="opacity-90">Resumen de tu sistema de gestión</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {statCards.map((stat) => (
-          <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className={`p-3 rounded-md ${stat.bgColor}`}>
-                    <stat.icon className={`h-6 w-6 ${stat.textColor}`} />
+      {/* Estadísticas principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Clientes"
+          value={stats.totalClients}
+          icon={Users}
+          color="bg-blue-500"
+          onClick={() => navigate('/clients')}
+        />
+        <StatCard
+          title="Total Productos"
+          value={stats.totalProducts}
+          icon={Package}
+          color="bg-purple-500"
+          onClick={() => navigate('/products')}
+        />
+        <StatCard
+          title="Productos Vigentes"
+          value={stats.activeProducts}
+          icon={CheckCircle}
+          color="bg-green-500"
+          onClick={() => navigate('/products')}
+        />
+        <StatCard
+          title="Productos Vencidos"
+          value={stats.expiredProducts}
+          icon={AlertCircle}
+          color="bg-red-500"
+          onClick={() => navigate('/products')}
+        />
+      </div>
+
+      {/* Segunda fila de estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Productos con QR"
+          value={stats.productsWithQR}
+          icon={QrCode}
+          color="bg-indigo-500"
+          subtitle={`${stats.productsWithoutQR} sin QR`}
+        />
+        <StatCard
+          title="Productos con DJC"
+          value={stats.productsWithDJC}
+          icon={FileText}
+          color="bg-orange-500"
+          subtitle={`${stats.productsWithoutDJC} sin DJC`}
+        />
+        <StatCard
+          title="Por vencer (30 días)"
+          value={stats.expiringProducts}
+          icon={Clock}
+          color="bg-yellow-500"
+        />
+        <StatCard
+          title="Sin vencimiento"
+          value={stats.productsByStatus.pendiente}
+          icon={Calendar}
+          color="bg-gray-500"
+        />
+      </div>
+
+      {/* Contenido en dos columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Productos próximos a vencer */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-orange-500" />
+            Productos Próximos a Vencer
+          </h2>
+          {stats.expiringProductsList.length > 0 ? (
+            <div className="space-y-3">
+              {stats.expiringProductsList.slice(0, 5).map((product) => {
+                const daysToExpire = Math.ceil(
+                  (new Date(product.vencimiento!).getTime() - new Date().getTime()) / 
+                  (1000 * 60 * 60 * 24)
+                );
+                
+                return (
+                  <div
+                    key={product.codificacion}
+                    className="flex items-center justify-between p-3 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100"
+                    onClick={() => navigate('/products')}
+                  >
+                    <div>
+                      <p className="font-medium">{product.producto || 'Sin nombre'}</p>
+                      <p className="text-sm text-gray-600">
+                        {product.marca} - {product.codificacion}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-orange-600">
+                        {daysToExpire} días
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(product.vencimiento!).toLocaleDateString('es-AR')}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              {stats.expiringProductsList.length > 5 && (
+                <button
+                  onClick={() => navigate('/products')}
+                  className="w-full text-center text-sm text-purple-600 hover:text-purple-800 mt-2"
+                >
+                  Ver todos ({stats.expiringProductsList.length})
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">
+              No hay productos próximos a vencer
+            </p>
+          )}
+        </div>
+
+        {/* Productos recientes */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-blue-500" />
+            Productos Agregados Recientemente
+          </h2>
+          {stats.recentProducts.length > 0 ? (
+            <div className="space-y-3">
+              {stats.recentProducts.map((product) => (
+                <div
+                  key={product.codificacion}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                  onClick={() => navigate('/products')}
+                >
+                  <div>
+                    <p className="font-medium">{product.producto || 'Sin nombre'}</p>
+                    <p className="text-sm text-gray-600">
+                      {product.marca} - {product.codificacion}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">
+                      {new Date(product.created_at).toLocaleDateString('es-AR')}
+                    </p>
+                    <div className="flex gap-1 mt-1">
+                      {product.qr_path && (
+                        <QrCode className="w-4 h-4 text-green-500" title="Con QR" />
+                      )}
+                      {product.djc_path && (
+                        <FileText className="w-4 h-4 text-blue-500" title="Con DJC" />
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      {stat.name}
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stat.value.toLocaleString()}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
-        ))}
+          ) : (
+            <p className="text-gray-500 text-center py-8">
+              No hay productos recientes
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <div className="flex items-center mb-4">
-            <Activity className="h-5 w-5 text-gray-400 mr-2" />
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              {t('recentActivity')}
-            </h3>
+      {/* Gráfico de distribución */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-lg font-semibold mb-4">Distribución de Productos</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center">
+            <div className="relative mx-auto w-32 h-32">
+              <svg className="w-32 h-32 transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#e5e7eb"
+                  strokeWidth="16"
+                  fill="none"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#10b981"
+                  strokeWidth="16"
+                  fill="none"
+                  strokeDasharray={`${stats.totalProducts > 0 ? (stats.productsByStatus.vigente / stats.totalProducts) * 352 : 0} 352`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-bold">{stats.productsByStatus.vigente}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">Vigentes</p>
           </div>
-          <div className="text-center py-8">
-            <Activity className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              Actividad reciente
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Aquí se mostrará la actividad reciente del sistema.
-            </p>
+          
+          <div className="text-center">
+            <div className="relative mx-auto w-32 h-32">
+              <svg className="w-32 h-32 transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#e5e7eb"
+                  strokeWidth="16"
+                  fill="none"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#ef4444"
+                  strokeWidth="16"
+                  fill="none"
+                  strokeDasharray={`${stats.totalProducts > 0 ? (stats.productsByStatus.vencido / stats.totalProducts) * 352 : 0} 352`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-bold">{stats.productsByStatus.vencido}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">Vencidos</p>
+          </div>
+          
+          <div className="text-center">
+            <div className="relative mx-auto w-32 h-32">
+              <svg className="w-32 h-32 transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#e5e7eb"
+                  strokeWidth="16"
+                  fill="none"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#f59e0b"
+                  strokeWidth="16"
+                  fill="none"
+                  strokeDasharray={`${stats.totalProducts > 0 ? (stats.productsByStatus.pendiente / stats.totalProducts) * 352 : 0} 352`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-bold">{stats.productsByStatus.pendiente}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">Sin Vencimiento</p>
           </div>
         </div>
       </div>

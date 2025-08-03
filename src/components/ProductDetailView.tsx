@@ -1,4 +1,4 @@
-// ProductDetailView.tsx - Versión con mejoras QR aplicadas
+// ProductDetailView.tsx - Versión actualizada con esquema de base de datos
 import { useState, useEffect } from 'react';
 import { supabase, Database } from '../lib/supabase';
 import { QRGenerator } from './QRGenerator';

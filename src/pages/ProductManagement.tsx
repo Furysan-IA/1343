@@ -1,4 +1,4 @@
-// ProductManagement.tsx - Versión con funcionalidades de sincronización
+// ProductManagement.tsx - Versión con paginación y estadísticas mejoradas
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase, Database } from '../lib/supabase';
@@ -35,7 +35,9 @@ export function ProductManagement() {
     pendientes: 0,
     conQR: 0,
     sinQR: 0,
-    pendientesRegeneracion: 0
+    pendientesRegeneracion: 0,
+    sinDJC: 0,
+    conDatosFaltantes: 0
   });
 
   useEffect(() => {
@@ -65,15 +67,43 @@ export function ProductManagement() {
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+
+      // Obtener el total de productos primero
+      const { count } = await supabase
         .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact', head: true });
 
-      if (error) throw error;
+      if (!count) {
+        setProducts([]);
+        setLastSync(new Date());
+        return;
+      }
 
-      setProducts(data || []);
+      // Obtener todos los productos en lotes de 1000
+      const allProducts: Product[] = [];
+      const batchSize = 1000;
+      const totalBatches = Math.ceil(count / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const start = i * batchSize;
+        const end = start + batchSize - 1;
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(start, end);
+
+        if (error) throw error;
+        if (data) allProducts.push(...data);
+      }
+
+      setProducts(allProducts);
       setLastSync(new Date());
+      
+      // Mostrar cuántos productos se cargaron
+      toast.success(`${allProducts.length} productos cargados exitosamente`);
     } catch (error: any) {
       console.error('Error fetching products:', error);
       toast.error('Error al cargar los productos');
@@ -97,7 +127,9 @@ export function ProductManagement() {
     const pendientes = products.filter(p => !p.vencimiento).length;
     const conQR = products.filter(p => p.qr_path).length;
     const sinQR = products.filter(p => !p.qr_path).length;
-    const pendientesRegeneracion = products.filter(p => p.qr_link && !p.qr_path).length;
+    const pendientesRegeneracion = products.filter(p => p.qr_status === 'Pendiente regeneración').length;
+    const sinDJC = products.filter(p => !p.djc_path).length;
+    const conDatosFaltantes = products.filter(p => !hasAllRequiredData(p)).length;
 
     setStats({
       total: products.length,
@@ -106,7 +138,9 @@ export function ProductManagement() {
       pendientes,
       conQR,
       sinQR,
-      pendientesRegeneracion
+      pendientesRegeneracion,
+      sinDJC,
+      conDatosFaltantes
     });
   };
 
@@ -139,7 +173,10 @@ export function ProductManagement() {
         filtered = filtered.filter(p => !hasAllRequiredData(p));
         break;
       case 'qr_pendiente':
-        filtered = filtered.filter(p => p.qr_link && !p.qr_path);
+        filtered = filtered.filter(p => p.qr_status === 'Pendiente regeneración');
+        break;
+      case 'sin_djc':
+        filtered = filtered.filter(p => !p.djc_path);
         break;
     }
 
@@ -181,7 +218,7 @@ export function ProductManagement() {
       return { status: 'No generado', color: 'text-gray-600', icon: XCircle };
     }
     
-    if (product.qr_link && !product.qr_path) {
+    if (product.qr_status === 'Pendiente regeneración') {
       return { status: 'Pendiente regeneración', color: 'text-orange-600', icon: AlertCircle };
     }
     
@@ -240,7 +277,7 @@ export function ProductManagement() {
       <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
         <h2 className="text-2xl font-bold mb-4">{t('productManagement')}</h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-sm opacity-90">Total</p>
             <p className="text-2xl font-bold">{stats.total}</p>
@@ -251,12 +288,20 @@ export function ProductManagement() {
           </div>
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-sm opacity-90">Vencidos</p>
-            <p className="text-2xl font-bold">{stats.vencidos}</p>
+            <p className="text-2xl font-bold text-red-200">{stats.vencidos}</p>
           </div>
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-sm opacity-90">Con QR</p>
             <p className="text-2xl font-bold">{stats.conQR}</p>
           </div>
+          <div className="bg-white/20 rounded-lg p-3">
+            <p className="text-sm opacity-90">Sin DJC</p>
+            <p className="text-2xl font-bold text-orange-200">{stats.sinDJC}</p>
+          </div>
+        </div>
+        
+        {/* Segunda fila de estadísticas */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-4">
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-sm opacity-90">Sin QR</p>
             <p className="text-2xl font-bold">{stats.sinQR}</p>
@@ -264,6 +309,20 @@ export function ProductManagement() {
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-sm opacity-90">QR Pendiente</p>
             <p className="text-2xl font-bold">{stats.pendientesRegeneracion}</p>
+          </div>
+          <div className="bg-white/20 rounded-lg p-3">
+            <p className="text-sm opacity-90">Sin Vencimiento</p>
+            <p className="text-2xl font-bold">{stats.pendientes}</p>
+          </div>
+          <div className="bg-white/20 rounded-lg p-3">
+            <p className="text-sm opacity-90">Datos Faltantes</p>
+            <p className="text-2xl font-bold text-yellow-200">{stats.conDatosFaltantes}</p>
+          </div>
+          <div className="bg-white/20 rounded-lg p-3">
+            <p className="text-sm opacity-90">Completos</p>
+            <p className="text-2xl font-bold text-green-200">
+              {stats.total - stats.conDatosFaltantes}
+            </p>
           </div>
         </div>
       </div>
@@ -297,6 +356,7 @@ export function ProductManagement() {
             <option value="pendiente">Sin vencimiento</option>
             <option value="datos_faltantes">Datos faltantes</option>
             <option value="qr_pendiente">QR pendiente regeneración</option>
+            <option value="sin_djc">Sin DJC</option>
           </select>
 
           {/* Sincronizar */}
