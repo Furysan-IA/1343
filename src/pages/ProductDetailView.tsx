@@ -385,6 +385,21 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CUIT
+                </label>
+                <input
+                  type="number"
+                  value={editedProduct.cuit || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, cuit: Number(e.target.value) }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
+                />
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Características Técnicas
