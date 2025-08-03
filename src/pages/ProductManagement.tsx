@@ -24,17 +24,30 @@ interface Product {
   fabricante: string | null;
   planta_fabricacion: string | null;
   origen: string | null;
+  cuit: number;
+  titular: string | null;
+  tipo_certificacion: string | null;
+  estado: string | null;
+  en_proceso_renovacion: string | null;
+  direccion_legal_empresa: string | null;
+  fabricante: string | null;
+  planta_fabricacion: string | null;
+  origen: string | null;
   producto: string | null;
   marca: string | null;
   modelo: string | null;
-  caracteristicas_tecnicas: string | null;
-  normas_aplicacion: string | null;
+  ocp_extranjero: string | null;
+  n_certificado_extranjero: string | null;
   informe_ensayo_nro: string | null;
   laboratorio: string | null;
   ocp_extranjero: string | null;
   n_certificado_extranjero: string | null;
   fecha_emision_certificado_extranjero: string | null;
   disposicion_convenio: string | null;
+  cod_rubro: number | null;
+  cod_subrubro: number | null;
+  nombre_subrubro: string | null;
+  fecha_emision: string | null;
   cod_rubro: number | null;
   cod_subrubro: number | null;
   nombre_subrubro: string | null;
@@ -52,8 +65,8 @@ interface Product {
   qr_link: string | null;
   qr_status: string | null;
   qr_generated_at: string | null;
-  created_at: string;
-  updated_at: string;
+  dias_para_vencer: number | null;
+  djc_status: string;
 }
 
 export function ProductManagement() {
@@ -94,13 +107,9 @@ export function ProductManagement() {
   useEffect(() => {
     filterProducts();
     calculateStats();
-  }, [products, searchQuery, statusFilter]);
-
-  const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -180,7 +189,7 @@ export function ProductManagement() {
 
   const hasAllRequiredData = (product: Product): boolean => {
     const requiredFields = [
-      'producto', 'marca', 'origen', 'fabricante', 
+      'producto', 'marca', 'origen', 'fabricante',
       'normas_aplicacion', 'vencimiento', 'titular'
     ];
     
@@ -232,11 +241,8 @@ export function ProductManagement() {
 
     setUploading(true);
     try {
-      const { data: parsedData } = await parseExcelFile(selectedFile);
-      const parsedProducts = parsedData.map(row => parseProductData(row, parsedData[0]));
-      const validProducts = parsedProducts.filter(p => {
-        const validation = validateProductData(p);
-        return validation.isValid;
+      const { headers, data } = await parseExcelFile(selectedFile);
+      const parsedProducts = data.map(row => parseProductData(row));
       });
 
       if (validProducts.length === 0) {
@@ -247,7 +253,8 @@ export function ProductManagement() {
       const productsToInsert = validProducts.map(product => ({
         ...product,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        djc_status: 'No Generada',
+        certificado_status: 'Pendiente Subida',
         djc_status: 'No Generada',
         certificado_status: 'Pendiente Subida',
         enviado_cliente: 'Pendiente',

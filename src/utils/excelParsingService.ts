@@ -253,3 +253,23 @@ export function validateProductData(product: any): { isValid: boolean; issues: s
     issues
   };
 }
+
+export function parseProductData(row: any): any {
+  // Esta función mapea los datos del Excel a la estructura de la base de datos
+  return {
+    codificacion: row.codificacion || row.codigo || '',
+    producto: row.producto || row.nombre_producto || '',
+    marca: row.marca || '',
+    modelo: row.modelo || '',
+    origen: row.origen || '',
+    fabricante: row.fabricante || '',
+    planta_fabricacion: row.planta_fabricacion || row.lugar_fabricacion || '',
+    caracteristicas_tecnicas: row.caracteristicas_tecnicas || row.descripcion || '',
+    normas_aplicacion: row.normas_aplicacion || row.normas || '',
+    informe_ensayo_nro: row.informe_ensayo_nro || row.informe_verificacion || '',
+    fecha_emision: row.fecha_emision || row.fecha_informe || '',
+    vencimiento: row.vencimiento || '',
+    titular: row.titular || '',
+    cuit: row.cuit || null
+  };
+}
