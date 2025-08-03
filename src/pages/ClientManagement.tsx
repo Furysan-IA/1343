@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { supabase } from '../lib/supabase';
+import { supabase, Database } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
 import { Dialog, Transition } from '@headlessui/react';
@@ -31,59 +31,14 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export interface Client {
-  cuit: number;
-  razon_social: string;
-  direccion: string;
-  email: string;
-  telefono?: string;
-  created_at: string;
-  updated_at: string;
-  estado?: 'completo' | 'incompleto' | 'con_errores';
+// Use database types for consistency
+type Client = Database['public']['Tables']['clients']['Row'] & {
+  estado?: 'completo' | 'incompleto';
   camposFaltantes?: string[];
   errores?: string[];
-}
+};
 
-export interface Product {
-  codificacion: string;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  producto: string | null;
-  marca: string | null;
-  modelo: string | null;
-  caracteristicas_tecnicas: string | null;
-  normas_aplicacion: string | null;
-  informe_ensayo_nro: string | null;
-  laboratorio: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  fecha_emision_certificado_extranjero: string | null;
-  disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  vencimiento: string | null;
-  fecha_cancelacion: string | null;
-  motivo_cancelacion: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  created_at: string;
-  updated_at: string;
-}
+type Product = Database['public']['Tables']['products']['Row'];
 
 interface SyncResult {
   total: number;
@@ -124,44 +79,28 @@ export function ClientManagement() {
   }, [pendingChanges]);
 
   const validateClient = (client: Client): { 
-    estado: 'completo' | 'incompleto' | 'con_errores',
+    estado: 'completo' | 'incompleto',
     camposFaltantes: string[],
     errores: string[]
   } => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const camposFaltantes: string[] = [];
-    const errores: string[] = [];
     
     // Verificar campos faltantes
-    if (!client.telefono || client.telefono.trim() === '') {
-      camposFaltantes.push('Teléfono');
+    if (!client.razon_social || client.razon_social.trim() === '') {
+      camposFaltantes.push('Razón Social');
     }
     
-    // Verificar errores
-    if (!emailRegex.test(client.email)) {
-      errores.push('Email inválido');
+    if (!client.direccion || client.direccion.trim() === '') {
+      camposFaltantes.push('Dirección');
     }
     
-    if (String(client.cuit).length !== 11) {
-      errores.push('CUIT debe tener 11 dígitos');
+    if (!client.email || client.email.trim() === '') {
+      camposFaltantes.push('Email');
     }
     
-    if (!client.razon_social || client.razon_social.trim().length < 3) {
-      errores.push('Razón social muy corta');
-    }
+    const estado: 'completo' | 'incompleto' = camposFaltantes.length === 0 ? 'completo' : 'incompleto';
     
-    if (!client.direccion || client.direccion.trim().length < 5) {
-      errores.push('Dirección incompleta');
-    }
-    
-    let estado: 'completo' | 'incompleto' | 'con_errores' = 'completo';
-    if (errores.length > 0) {
-      estado = 'con_errores';
-    } else if (camposFaltantes.length > 0) {
-      estado = 'incompleto';
-    }
-    
-    return { estado, camposFaltantes, errores };
+    return { estado, camposFaltantes, errores: [] };
   };
 
   const fetchClients = async () => {
@@ -368,8 +307,7 @@ export function ClientManagement() {
   const stats = {
     total: clients.length,
     completos: clients.filter(c => c.estado === 'completo').length,
-    incompletos: clients.filter(c => c.estado === 'incompleto').length,
-    conErrores: clients.filter(c => c.estado === 'con_errores').length
+    incompletos: clients.filter(c => c.estado === 'incompleto').length
   };
 
   const getCircularProgress = (value: number, total: number, color: string) => {
@@ -498,15 +436,6 @@ export function ClientManagement() {
             </div>
           </div>
         </div>
-        
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Con Errores</p>
-              {getCircularProgress(stats.conErrores, stats.total, '#ef4444')}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Filters and Search */}
@@ -564,16 +493,6 @@ export function ClientManagement() {
               >
                 Incompletos
               </button>
-              <button
-                onClick={() => setFilterType('con_errores')}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  filterType === 'con_errores'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Con Errores
-              </button>
             </div>
           </div>
         </div>
@@ -602,7 +521,11 @@ export function ClientManagement() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredClients.map((client) => (
-                  <tr key={client.cuit} className="hover:bg-gray-50">
+                  <tr 
+                    key={client.cuit} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleClientClick(client)}
+                  >
                     <td className="px-6 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
@@ -623,19 +546,13 @@ export function ClientManagement() {
                       {client.estado === 'completo' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Completo
+                          Completado
                         </span>
                       )}
                       {client.estado === 'incompleto' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                           <AlertCircle className="w-3 h-3 mr-1" />
                           Incompleto
-                        </span>
-                      )}
-                      {client.estado === 'con_errores' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          Con errores
                         </span>
                       )}
                       {pendingChanges[client.cuit] && (
@@ -647,13 +564,10 @@ export function ClientManagement() {
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-medium">
                       <button
-                        onClick={() => handleClientClick(client)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        <Eye className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(client)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(client);
+                        }}
                         className="text-gray-600 hover:text-gray-900"
                       >
                         <Edit2 className="h-5 w-5" />
@@ -737,19 +651,13 @@ export function ClientManagement() {
                             {selectedClient.estado === 'completo' && (
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                                 <CheckCircle2 className="w-4 h-4 mr-1" />
-                                Completo
+                                Completado
                               </span>
                             )}
                             {selectedClient.estado === 'incompleto' && (
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
                                 <AlertCircle className="w-4 h-4 mr-1" />
                                 Incompleto
-                              </span>
-                            )}
-                            {selectedClient.estado === 'con_errores' && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-                                <AlertTriangle className="w-4 h-4 mr-1" />
-                                Con errores
                               </span>
                             )}
                           </div>
@@ -778,33 +686,18 @@ export function ClientManagement() {
                           </div>
 
                           {/* Validation Details */}
-                          {(selectedClient.camposFaltantes?.length > 0 || selectedClient.errores?.length > 0) && (
+                          {selectedClient.camposFaltantes?.length > 0 && (
                             <div className="mt-4 pt-4 border-t">
-                              {selectedClient.camposFaltantes?.length > 0 && (
-                                <div className="mb-3">
-                                  <h4 className="text-sm font-medium text-gray-900 mb-2">
-                                    Información faltante:
-                                  </h4>
-                                  <ul className="list-disc list-inside text-sm text-yellow-600">
-                                    {selectedClient.camposFaltantes.map((campo, index) => (
-                                      <li key={index}>{campo}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              
-                              {selectedClient.errores?.length > 0 && (
-                                <div>
-                                  <h4 className="text-sm font-medium text-gray-900 mb-2">
-                                    Errores detectados:
-                                  </h4>
-                                  <ul className="list-disc list-inside text-sm text-red-600">
-                                    {selectedClient.errores.map((error, index) => (
-                                      <li key={index}>{error}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                                  Información faltante:
+                                </h4>
+                                <ul className="list-disc list-inside text-sm text-yellow-600">
+                                  {selectedClient.camposFaltantes.map((campo, index) => (
+                                    <li key={index}>{campo}</li>
+                                  ))}
+                                </ul>
+                              </div>
                             </div>
                           )}
                         </div>

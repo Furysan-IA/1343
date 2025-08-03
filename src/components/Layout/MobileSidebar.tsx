@@ -19,7 +19,7 @@ const navigation = [
   { name: 'clientManagement', href: '/clients', icon: Users },
   { name: 'informationValidation', href: '/validation', icon: CheckCircle },
   { name: 'djcManagement', href: '/djc', icon: FileText },
-  { name: 'Generar DJC', href: '/djc-generator', icon: FileCheck },
+  { name: 'generateDJC', href: '/djc-generator', icon: FileCheck },
 ];
 
 interface MobileSidebarProps {
