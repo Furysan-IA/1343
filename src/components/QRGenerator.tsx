@@ -427,12 +427,14 @@ export function QRGenerator({
                         backgroundColor: 'transparent'
                       }}
                       onError={(e) => {
-                        console.error('Error loading AR image:', e);
-                        // Fallback: hide the image if it fails to load
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                      onLoad={() => {
-                        console.log('AR image loaded successfully');
+                        console.warn('AR image not found, using fallback');
+                        // Show fallback text if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = document.createElement('span');
+                        fallback.textContent = 'AR';
+                        fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
+                        target.parentNode?.insertBefore(fallback, target);
                       }}
                     />
                     
