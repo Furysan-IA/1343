@@ -70,7 +70,8 @@ export function ProductManagement() {
       const { count } = await supabase
         .from('products')
         .select('*', { count: 'exact', head: true });
-        .select('*', { count: 'exact', head: true });
+
+      if (!count) {
         setProducts([]);
         setLastSync(new Date());
         return;
@@ -87,6 +88,7 @@ export function ProductManagement() {
 
         const { data, error } = await supabase
           .from('products')
+          .select('*')
           .order('created_at', { ascending: false })
           .range(start, end);
 
@@ -428,58 +430,6 @@ export function ProductManagement() {
                 const missingData = !hasAllRequiredData(product);
                 
                 return (
-                  <tr key={product.codificacion} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.codificacion}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {product.producto || <span className="text-gray-400">Sin nombre</span>}
-                        {missingData && (
-                          <AlertCircle className="w-4 h-4 text-orange-500" title="Datos faltantes" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.marca || <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
-                        {status.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <qrStatus.icon className={`w-4 h-4 ${qrStatus.color}`} />
-                        <span className={`text-sm ${qrStatus.color}`}>
-                          {qrStatus.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.vencimiento 
-                        ? new Date(product.vencimiento).toLocaleDateString('es-AR')
-                        : <span className="text-gray-400">-</span>
-                      }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProduct(product);
-                        }}
-                        className="text-purple-600 hover:text-purple-900 flex items-center gap-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Ver Ficha
-                        {missingData && (
-                          <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
-                            !
-                          </span>
-                        )}
-                      </button>
-                    </td>
-                  </tr>
                   <tr 
                     key={product.codificacion} 
                     className="hover:bg-gray-50 cursor-pointer"
@@ -532,5 +482,26 @@ export function ProductManagement() {
                   </tr>
                 );
               })}
-// Use database type for consistency
-type Product = Database['public']['Tables']['products']['Row'];
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal de detalle del producto */}
+      {selectedProduct && (
+        <ProductDetailView
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onUpdate={fetchProducts}
+        />
+      )}
+
+      {/* Modal de configuración QR */}
+      {showConfigModal && (
+        <QRConfigModal
+          onClose={() => setShowConfigModal(false)}
+        />
+      )}
+    </div>
+  );
+}
