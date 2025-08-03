@@ -9,9 +9,55 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Use database types for consistency
-type Client = Database['public']['Tables']['clients']['Row'];
-type Product = Database['public']['Tables']['products']['Row'];
+interface Client {
+  cuit: number;
+  razon_social: string;
+  direccion: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Product {
+  codificacion: string;
+  cuit: number;
+  titular: string | null;
+  tipo_certificacion: string | null;
+  estado: string | null;
+  en_proceso_renovacion: string | null;
+  direccion_legal_empresa: string | null;
+  fabricante: string | null;
+  planta_fabricacion: string | null;
+  origen: string | null;
+  producto: string | null;
+  marca: string | null;
+  modelo: string | null;
+  caracteristicas_tecnicas: string | null;
+  normas_aplicacion: string | null;
+  informe_ensayo_nro: string | null;
+  laboratorio: string | null;
+  ocp_extranjero: string | null;
+  n_certificado_extranjero: string | null;
+  fecha_emision_certificado_extranjero: string | null;
+  disposicion_convenio: string | null;
+  cod_rubro: number | null;
+  cod_subrubro: number | null;
+  nombre_subrubro: string | null;
+  fecha_emision: string | null;
+  vencimiento: string | null;
+  fecha_cancelacion: string | null;
+  motivo_cancelacion: string | null;
+  dias_para_vencer: number | null;
+  djc_status: string;
+  certificado_status: string;
+  enviado_cliente: string;
+  certificado_path: string | null;
+  djc_path: string | null;
+  qr_path: string | null;
+  qr_link: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface DJCData {
   resolucion: string;
@@ -41,6 +87,7 @@ const RESOLUCIONES = [
 export default function DJCGenerator() {
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -60,11 +107,10 @@ export default function DJCGenerator() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchProduct, showProductsWithoutDJC]);
+  }, [allProducts, searchProduct, showProductsWithoutDJC, selectedClient]);
 
   const fetchData = async () => {
     try {
-      // Cargar clientes
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
@@ -73,14 +119,14 @@ export default function DJCGenerator() {
       if (clientsError) throw clientsError;
       setClients(clientsData || []);
 
-      // Cargar productos
+      // Cargar TODOS los productos
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
         .order('producto');
 
       if (productsError) throw productsError;
-      setProducts(productsData || []);
+      setAllProducts(productsData || []);
 
       // Filtrar productos sin DJC
       const withoutDJC = (productsData || []).filter(p => !p.djc_path);
@@ -95,7 +141,14 @@ export default function DJCGenerator() {
   };
 
   const filterProducts = () => {
-    let filtered = [...products];
+    let filtered = [...allProducts];
+
+    // Filtrar por cliente seleccionado usando CUIT
+    if (selectedClient && selectedClient.cuit) {
+      filtered = filtered.filter(product => 
+        product.cuit === selectedClient.cuit
+      );
+    }
 
     // Filtrar por búsqueda
     if (searchProduct) {
@@ -112,6 +165,7 @@ export default function DJCGenerator() {
     }
 
     setFilteredProducts(filtered);
+    setProducts(filtered);
   };
 
   const generateDJC = () => {
@@ -334,7 +388,7 @@ export default function DJCGenerator() {
               />
             </div>
             <select
-              value={selectedClient?.cuit || ''}
+              value={selectedClient?.cuit.toString() || ''}
               onChange={(e) => {
                 const client = clients.find(c => c.cuit.toString() === e.target.value);
                 setSelectedClient(client || null);
@@ -348,7 +402,7 @@ export default function DJCGenerator() {
                   client.razon_social.toLowerCase().includes(searchClient.toLowerCase())
                 )
                 .map(client => (
-                  <option key={client.cuit} value={client.cuit}>
+                  <option key={client.cuit} value={client.cuit.toString()}>
                     {client.razon_social} - {formatCuit(client.cuit)}
                   </option>
                 ))}
@@ -373,7 +427,7 @@ export default function DJCGenerator() {
             <select
               value={selectedProduct?.codificacion || ''}
               onChange={(e) => {
-                const product = products.find(p => p.codificacion === e.target.value);
+                const product = filteredProducts.find(p => p.codificacion === e.target.value);
                 setSelectedProduct(product || null);
               }}
               className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
@@ -407,6 +461,18 @@ export default function DJCGenerator() {
             </select>
           </div>
         </div>
+
+        {/* Información del cliente seleccionado */}
+        {selectedClient && (
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-2">Cliente Seleccionado</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+              <p><span className="font-medium">Razón Social:</span> {selectedClient.razon_social}</p>
+              <p><span className="font-medium">CUIT:</span> {formatCuit(selectedClient.cuit)}</p>
+              <p><span className="font-medium">Productos asociados:</span> {products.length}</p>
+            </div>
+          </div>
+        )}
 
         {/* Información del producto seleccionado */}
         {selectedProduct && (

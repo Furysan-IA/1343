@@ -31,14 +31,61 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// Use database types for consistency
-type Client = Database['public']['Tables']['clients']['Row'] & {
+interface Client {
+  cuit: number;
+  razon_social: string;
+  direccion: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
   estado?: 'completo' | 'incompleto';
   camposFaltantes?: string[];
   errores?: string[];
-};
+  product_count?: number;
+}
 
-type Product = Database['public']['Tables']['products']['Row'];
+interface Product {
+  codificacion: string;
+  cuit: number;
+  titular: string | null;
+  tipo_certificacion: string | null;
+  estado: string | null;
+  en_proceso_renovacion: string | null;
+  direccion_legal_empresa: string | null;
+  fabricante: string | null;
+  planta_fabricacion: string | null;
+  origen: string | null;
+  producto: string | null;
+  marca: string | null;
+  modelo: string | null;
+  caracteristicas_tecnicas: string | null;
+  normas_aplicacion: string | null;
+  informe_ensayo_nro: string | null;
+  laboratorio: string | null;
+  ocp_extranjero: string | null;
+  n_certificado_extranjero: string | null;
+  fecha_emision_certificado_extranjero: string | null;
+  disposicion_convenio: string | null;
+  cod_rubro: number | null;
+  cod_subrubro: number | null;
+  nombre_subrubro: string | null;
+  fecha_emision: string | null;
+  vencimiento: string | null;
+  fecha_cancelacion: string | null;
+  motivo_cancelacion: string | null;
+  dias_para_vencer: number | null;
+  djc_status: string;
+  certificado_status: string;
+  enviado_cliente: string;
+  certificado_path: string | null;
+  djc_path: string | null;
+  qr_path: string | null;
+  qr_link: string | null;
+  qr_status: string | null;
+  qr_generated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface SyncResult {
   total: number;
@@ -106,12 +153,28 @@ export function ClientManagement() {
   const fetchClients = async () => {
     try {
       setLoading(true);
+      
+      // Cargar clientes
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .order('razon_social', { ascending: true });
 
       if (error) throw error;
+      
+      // Cargar productos para contar por cliente
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('cuit')
+        .order('created_at', { ascending: false });
+
+      if (productsError) throw productsError;
+
+      // Contar productos por CUIT
+      const productCounts: Record<number, number> = {};
+      (productsData || []).forEach(product => {
+        productCounts[product.cuit] = (productCounts[product.cuit] || 0) + 1;
+      });
       
       // Agregar validación a cada cliente
       const clientsWithValidation = (data || []).map(client => {
@@ -120,7 +183,8 @@ export function ClientManagement() {
           ...client,
           estado: validation.estado,
           camposFaltantes: validation.camposFaltantes,
-          errores: validation.errores
+          errores: validation.errores,
+          product_count: productCounts[client.cuit] || 0
         };
       });
       
@@ -533,6 +597,12 @@ export function ClientManagement() {
                         </div>
                         <div className="text-sm text-gray-500">
                           CUIT: {client.cuit}
+                        </div>
+                        {client.product_count && client.product_count > 0 && (
+                          <div className="text-xs text-purple-600 mt-1">
+                            {client.product_count} productos asociados
+                          </div>
+                        )}
                         </div>
                       </div>
                     </td>
