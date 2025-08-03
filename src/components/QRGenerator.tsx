@@ -381,14 +381,13 @@ export function QRGenerator({
                     border: '1px solid black',
                     borderRadius: '8px',
                     padding: '8px',
-                    position: 'relative',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}
                 >
-                  {/* QR Code - positioned in center */}
+                  {/* QR Code - centered in available space */}
                   <div style={{
                     flex: 1,
                     display: 'flex',
@@ -408,13 +407,12 @@ export function QRGenerator({
                     />
                   </div>
                   
-                  {/* AR logo with checkmarks - positioned at bottom */}
+                  {/* AR logo with checkmarks - fixed at bottom */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '3px',
-                    marginTop: 'auto',
                     paddingBottom: '2px'
                   }}>
                     {/* AR logo */}
