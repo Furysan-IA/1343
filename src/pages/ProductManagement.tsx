@@ -114,9 +114,6 @@ export function ProductManagement() {
       if (!count) {
         setProducts([]);
         setLastSync(new Date());
-        return;
-      }
-
       // Obtener todos los productos en lotes de 1000
       const allProducts: Product[] = [];
       const batchSize = 1000;
@@ -128,7 +125,6 @@ export function ProductManagement() {
 
         const { data, error } = await supabase
           .from('products')
-          .select('*')
           .order('created_at', { ascending: false })
           .range(start, end);
 

@@ -1,7 +1,7 @@
 // Utility functions for formatting data
 
 export const formatCuit = (cuit: string | number): string => {
-  if (!cuit) return 'CAMPO NO ENCONTRADO';
+  if (!cuit) return '';
   const str = cuit.toString();
   if (str.length !== 11) return str;
   return `${str.slice(0, 2)}-${str.slice(2, 10)}-${str.slice(10)}`;

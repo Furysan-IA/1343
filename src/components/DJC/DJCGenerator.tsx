@@ -16,6 +16,8 @@ interface Client {
   email: string;
   created_at: string;
   updated_at: string;
+  telefono: string | null;
+  contacto: string | null;
 }
 
 interface Product {
@@ -120,16 +122,38 @@ export default function DJCGenerator() {
       setClients(clientsData || []);
 
       // Cargar TODOS los productos
-      const { data: productsData, error: productsError } = await supabase
+      const { count } = await supabase
         .from('products')
-        .select('*')
-        .order('producto');
+        .select('*', { count: 'exact', head: true });
 
-      if (productsError) throw productsError;
-      setAllProducts(productsData || []);
+      if (!count) {
+        setAllProducts([]);
+        setProductsWithoutDJC([]);
+        return;
+      }
+
+      // Cargar productos en lotes para evitar problemas de memoria
+      const batchSize = 1000;
+      let allProductsData: Product[] = [];
+
+      for (let i = 0; i < count; i += batchSize) {
+        const start = i;
+        const end = Math.min(i + batchSize - 1, count - 1);
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('produto')
+          .range(start, end);
+
+        if (error) throw error;
+        if (data) allProductsData = [...allProductsData, ...data];
+      }
+
+      setAllProducts(allProductsData);
 
       // Filtrar productos sin DJC
-      const withoutDJC = (productsData || []).filter(p => !p.djc_path);
+      const withoutDJC = allProductsData.filter(p => !p.djc_path);
       setProductsWithoutDJC(withoutDJC);
 
     } catch (error: any) {
@@ -153,7 +177,7 @@ export default function DJCGenerator() {
     // Filtrar por búsqueda
     if (searchProduct) {
       filtered = filtered.filter(product => 
-        product.producto?.toLowerCase().includes(searchProduct.toLowerCase()) ||
+        product.produto?.toLowerCase().includes(searchProduct.toLowerCase()) ||
         product.marca?.toLowerCase().includes(searchProduct.toLowerCase()) ||
         product.codificacion?.toLowerCase().includes(searchProduct.toLowerCase())
       );
@@ -193,7 +217,7 @@ export default function DJCGenerator() {
       razon_social: selectedClient.razon_social || 'CAMPO NO ENCONTRADO',
       cuit: formatCuit(selectedClient.cuit),
       domicilio_legal: selectedClient.direccion || 'CAMPO NO ENCONTRADO',
-      telefono: 'CAMPO NO ENCONTRADO', // No existe en el esquema actual
+      telefono: selectedClient.telefono || '',
       email: selectedClient.email || 'CAMPO NO ENCONTRADO',
       nombre_comercial: selectedProduct.marca || 'CAMPO NO ENCONTRADO',
       codigo_identificacion: selectedProduct.codificacion || 'CAMPO NO ENCONTRADO',
@@ -202,7 +226,7 @@ export default function DJCGenerator() {
         : selectedProduct.fabricante || 'CAMPO NO ENCONTRADO',
       identificacion_producto: [
         selectedProduct.marca,
-        selectedProduct.producto,
+        selectedProduct.produto,
         selectedProduct.caracteristicas_tecnicas
       ].filter(Boolean).join(' - ') || 'CAMPO NO ENCONTRADO',
       normas_tecnicas: selectedProduct.normas_aplicacion || 'CAMPO NO ENCONTRADO',
@@ -435,7 +459,7 @@ export default function DJCGenerator() {
               <option value="">Seleccione un producto</option>
               {filteredProducts.map(product => (
                 <option key={product.codificacion} value={product.codificacion}>
-                  {product.producto} - {product.marca} ({product.codificacion})
+                  {product.produto} - {product.marca} ({product.codificacion})
                   {!product.djc_path && ' ⚠️ Sin DJC'}
                 </option>
               ))}
