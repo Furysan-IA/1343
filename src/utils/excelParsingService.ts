@@ -232,3 +232,24 @@ export function validateProductHeaders(headers: string[]): HeaderValidationResul
     issues
   };
 }
+
+export function validateProductData(product: any): { isValid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  
+  if (!product.codificacion) {
+    issues.push('Codificación es requerida');
+  }
+  
+  if (!product.producto) {
+    issues.push('Nombre del producto es requerido');
+  }
+  
+  if (!product.marca) {
+    issues.push('Marca es requerida');
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues
+  };
+}
