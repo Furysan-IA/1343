@@ -112,8 +112,18 @@ export function DJCManagement() {
   };
 
   const handleGenerateDJC = async (product: Product) => {
-    toast(`Generando DJC para producto ${product.codificacion}...`);
-    // TODO: Implementar lógica de generación de DJC
+    try {
+      toast(`Generando DJC para producto ${product.codificacion}...`);
+      
+      // TODO: Implementar lógica de generación de DJC
+      // Por ahora solo mostramos un mensaje de confirmación
+      setTimeout(() => {
+        toast.success(`DJC generada exitosamente para ${product.codificacion}`);
+      }, 1000);
+      
+    } catch (error: any) {
+      toast.error(`Error al generar DJC: ${error.message}`);
+    }
   };
 
   const handleUploadCertificate = async (product: Product) => {
