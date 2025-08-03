@@ -1,0 +1,54 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { Layout } from './components/Layout/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { ProductManagement } from './pages/ProductManagement';
+import { ClientManagement } from './pages/ClientManagement';
+import { InformationValidation } from './pages/InformationValidation';
+import { LoginForm } from './components/Auth/LoginForm';
+import { useAuth } from './contexts/AuthContext';
+import { LoadingSpinner } from './components/Common/LoadingSpinner';
+
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginForm />;
+  }
+
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/products" element={<ProductManagement />} />
+        <Route path="/clients" element={<ClientManagement />} />
+        <Route path="/validation" element={<InformationValidation />} />
+      </Routes>
+    </Layout>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <LanguageProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </LanguageProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;
