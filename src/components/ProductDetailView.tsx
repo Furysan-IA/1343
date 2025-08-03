@@ -1,6 +1,6 @@
 // ProductDetailView.tsx - Versión con mejoras QR aplicadas
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, Database } from '../lib/supabase';
 import { QRGenerator } from './QRGenerator';
 import { qrConfigService } from '../services/qrConfig.service';
 import { 
@@ -10,48 +10,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface Product {
-  codificacion: string;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  producto: string | null;
-  marca: string | null;
-  modelo: string | null;
-  caracteristicas_tecnicas: string | null;
-  normas_aplicacion: string | null;
-  informe_ensayo_nro: string | null;
-  laboratorio: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  fecha_emision_certificado_extranjero: string | null;
-  disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  vencimiento: string | null;
-  fecha_cancelacion: string | null;
-  motivo_cancelacion: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  qr_status: string | null;
-  qr_generated_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+// Usar el tipo de la base de datos para consistencia
+type Product = Database['public']['Tables']['products']['Row'];
 
 interface ProductDetailViewProps {
   product: Product;

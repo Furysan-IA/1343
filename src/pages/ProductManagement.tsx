@@ -1,95 +1,31 @@
-// ProductManagement.tsx - Versión con mejoras QR aplicadas
+// ProductManagement.tsx - Versión con funcionalidades de sincronización
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { supabase } from '../lib/supabase';
-import { parseExcelFile, parseProductData, validateProductData } from '../utils/excelParsingService';
+import { supabase, Database } from '../lib/supabase';
 import { ProductDetailView } from '../components/ProductDetailView';
 import { qrConfigService } from '../services/qrConfig.service';
 import { QRConfigModal } from '../components/QRConfigModal';
 import { 
-  Package, FileSpreadsheet, AlertCircle, CheckCircle, 
-  Upload, Search, Filter, Calendar, X, Eye, ChevronDown,
-  Download, Plus, Clock, XCircle, Settings, QrCode
+  Package, AlertCircle, CheckCircle, Search, Calendar, 
+  X, Eye, Download, Clock, XCircle, Settings, QrCode,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface Product {
-  codificacion: string;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  producto: string | null;
-  marca: string | null;
-  modelo: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  informe_ensayo_nro: string | null;
-  laboratorio: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  fecha_emision_certificado_extranjero: string | null;
-  disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  vencimiento: string | null;
-  fecha_cancelacion: string | null;
-  motivo_cancelacion: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  qr_status: string | null;
-  qr_generated_at: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  qr_status: string | null;
-  qr_generated_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+// Usar el tipo de la base de datos para consistencia
+type Product = Database['public']['Tables']['products']['Row'];
 
 export function ProductManagement() {
   const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
   // Estadísticas
   const [stats, setStats] = useState({
@@ -111,7 +47,15 @@ export function ProductManagement() {
       fetchProducts();
     });
 
-    return unsubscribe;
+    // Configurar auto-sincronización cada 5 minutos
+    const syncInterval = setInterval(() => {
+      syncWithSupabase();
+    }, 5 * 60 * 1000); // 5 minutos
+
+    return () => {
+      unsubscribe();
+      clearInterval(syncInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -123,11 +67,13 @@ export function ProductManagement() {
     try {
       const { data, error } = await supabase
         .from('products')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       setProducts(data || []);
+      setLastSync(new Date());
     } catch (error: any) {
       console.error('Error fetching products:', error);
       toast.error('Error al cargar los productos');
@@ -151,7 +97,7 @@ export function ProductManagement() {
     const pendientes = products.filter(p => !p.vencimiento).length;
     const conQR = products.filter(p => p.qr_path).length;
     const sinQR = products.filter(p => !p.qr_path).length;
-    const pendientesRegeneracion = products.filter(p => p.qr_status === 'Pendiente regeneración').length;
+    const pendientesRegeneracion = products.filter(p => p.qr_link && !p.qr_path).length;
 
     setStats({
       total: products.length,
@@ -193,7 +139,7 @@ export function ProductManagement() {
         filtered = filtered.filter(p => !hasAllRequiredData(p));
         break;
       case 'qr_pendiente':
-        filtered = filtered.filter(p => p.qr_status === 'Pendiente regeneración');
+        filtered = filtered.filter(p => p.qr_link && !p.qr_path);
         break;
     }
 
@@ -235,58 +181,22 @@ export function ProductManagement() {
       return { status: 'No generado', color: 'text-gray-600', icon: XCircle };
     }
     
-    if (product.qr_status === 'Pendiente regeneración') {
+    if (product.qr_link && !product.qr_path) {
       return { status: 'Pendiente regeneración', color: 'text-orange-600', icon: AlertCircle };
     }
     
     return { status: 'Generado', color: 'text-green-600', icon: CheckCircle };
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleFileUpload = async () => {
-    if (!selectedFile) return;
-
-    setUploading(true);
+  const syncWithSupabase = async () => {
+    setSyncing(true);
     try {
-      const results = await parseExcelFile(selectedFile);
-      const parsedProducts = results.map(row => parseProductData(row));
-      const validProducts = parsedProducts.filter(p => {
-        const validation = validateProductData(p);
-        return validation.isValid;
-      });
-
-      if (validProducts.length === 0) {
-        throw new Error('No se encontraron productos válidos en el archivo');
-      }
-
-      // Insertar productos en la base de datos
-      const productsToInsert = validProducts.map(product => ({
-        ...product,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase
-        .from('products')
-        .upsert(productsToInsert, { onConflict: 'codificacion' });
-
-      if (error) throw error;
-
-      toast.success(`${validProducts.length} productos importados exitosamente`);
-      setSelectedFile(null);
       await fetchProducts();
-      
-    } catch (error: any) {
-      console.error('Error uploading file:', error);
-      toast.error(error.message || 'Error al procesar el archivo');
+      toast.success('Sincronización completada exitosamente');
+    } catch (error) {
+      toast.error('Error al sincronizar con la base de datos');
     } finally {
-      setUploading(false);
+      setSyncing(false);
     }
   };
 
@@ -310,7 +220,7 @@ export function ProductManagement() {
 
       // Aquí implementarías la exportación real a Excel
       console.log('Exportando:', dataToExport);
-      toast.success('Exportación iniciada');
+      toast.success('Función de exportación en desarrollo');
     } catch (error) {
       toast.error('Error al exportar');
     }
@@ -389,6 +299,16 @@ export function ProductManagement() {
             <option value="qr_pendiente">QR pendiente regeneración</option>
           </select>
 
+          {/* Sincronizar */}
+          <button
+            onClick={syncWithSupabase}
+            disabled={syncing}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar'}
+          </button>
+
           {/* Configuración QR */}
           <button
             onClick={() => setShowConfigModal(true)}
@@ -408,36 +328,13 @@ export function ProductManagement() {
           </button>
         </div>
 
-        {/* Importar archivo */}
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-4">
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileSelect}
-              className="flex-1"
-            />
-            {selectedFile && (
-              <button
-                onClick={handleFileUpload}
-                disabled={uploading}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {uploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    Importando...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    Importar
-                  </>
-                )}
-              </button>
-            )}
+        {/* Indicador de última sincronización */}
+        {lastSync && (
+          <div className="mt-3 text-sm text-gray-500 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            Última sincronización: {lastSync.toLocaleTimeString('es-AR')}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Tabla de productos */}
