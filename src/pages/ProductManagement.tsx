@@ -106,6 +106,7 @@ export function ProductManagement() {
   }, [products, searchQuery, statusFilter]);
 
   const fetchProducts = async () => {
+    try {
       const { count } = await supabase
         .from('products')
         .select('*', { count: 'exact', head: true });
