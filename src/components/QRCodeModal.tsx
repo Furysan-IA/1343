@@ -235,7 +235,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                         }}>
                           {/* AR logo */}
                           <img
-                            src="/images/AR-Monserrat-arabic.png"
+                           src="/images/AR-Montserrat-Arabic.png"
                             alt="AR"
                             style={{
                               height: '19px',
