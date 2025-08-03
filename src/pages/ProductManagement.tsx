@@ -77,6 +77,16 @@ interface Product {
   qr_generated_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export function ProductManagement() {
+  const { t } = useLanguage();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -107,6 +117,9 @@ interface Product {
   useEffect(() => {
     filterProducts();
     calculateStats();
+  }, [products, searchQuery, statusFilter]);
+
+  const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -238,6 +251,9 @@ interface Product {
 
   const handleFileUpload = async () => {
     if (!selectedFile) return;
+
+    setUploading(true);
+    try {
       const results = await parseExcelFile(selectedFile);
       const parsedProducts = results.map(row => parseProductData(row));
       const validProducts = parsedProducts.filter(p => {
