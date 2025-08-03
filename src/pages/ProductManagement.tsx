@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { parseExcelFile, parseProductData, validateProductData } from '../utils/excelParsingService';
-import { ProductDetailView } from './ProductDetailView';
+// import { parseExcelFile, parseProductData, validateProductData } from '../utils/excelParsingService';
+import { ProductDetailView } from '../components/ProductDetailView';
 import { qrConfigService } from '../services/qrConfig.service';
 import { QRConfigModal } from '../components/QRConfigModal';
 import { 
@@ -24,30 +24,17 @@ interface Product {
   fabricante: string | null;
   planta_fabricacion: string | null;
   origen: string | null;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
   producto: string | null;
   marca: string | null;
   modelo: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
+  caracteristicas_tecnicas: string | null;
+  normas_aplicacion: string | null;
   informe_ensayo_nro: string | null;
   laboratorio: string | null;
   ocp_extranjero: string | null;
   n_certificado_extranjero: string | null;
   fecha_emision_certificado_extranjero: string | null;
   disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
   cod_rubro: number | null;
   cod_subrubro: number | null;
   nombre_subrubro: string | null;
@@ -65,8 +52,8 @@ interface Product {
   qr_link: string | null;
   qr_status: string | null;
   qr_generated_at: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export function ProductManagement() {
@@ -107,9 +94,13 @@ export function ProductManagement() {
   useEffect(() => {
     filterProducts();
     calculateStats();
+  }, [products, searchQuery, statusFilter]);
+
+  const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
         .from('products')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -189,7 +180,7 @@ export function ProductManagement() {
 
   const hasAllRequiredData = (product: Product): boolean => {
     const requiredFields = [
-      'producto', 'marca', 'origen', 'fabricante',
+      'producto', 'marca', 'origen', 'fabricante', 
       'normas_aplicacion', 'vencimiento', 'titular'
     ];
     
@@ -241,35 +232,11 @@ export function ProductManagement() {
 
     setUploading(true);
     try {
-      const { headers, data } = await parseExcelFile(selectedFile);
-      const parsedProducts = data.map(row => parseProductData(row));
-      });
-
-      if (validProducts.length === 0) {
-        throw new Error('No se encontraron productos válidos en el archivo');
-      }
-
-      // Insertar productos en la base de datos
-      const productsToInsert = validProducts.map(product => ({
-        ...product,
-        created_at: new Date().toISOString(),
-        djc_status: 'No Generada',
-        certificado_status: 'Pendiente Subida',
-        djc_status: 'No Generada',
-        certificado_status: 'Pendiente Subida',
-        enviado_cliente: 'Pendiente',
-        qr_status: 'No generado'
-      }));
-
-      const { error } = await supabase
-        .from('products')
-        .upsert(productsToInsert, { onConflict: 'codificacion' });
-
-      if (error) throw error;
-
-      toast.success(`${validProducts.length} productos importados exitosamente`);
+      // Por ahora mostrar mensaje de que esta función está en desarrollo
+      toast.error('La importación desde Excel está temporalmente deshabilitada');
+      
+      // TODO: Implementar parseador de Excel o remover esta funcionalidad
       setSelectedFile(null);
-      await fetchProducts();
     } catch (error: any) {
       console.error('Error uploading file:', error);
       toast.error(error.message || 'Error al procesar el archivo');
@@ -289,7 +256,7 @@ export function ProductManagement() {
         'Fabricante': product.fabricante || '',
         'Planta': product.planta_fabricacion || '',
         'Normas': product.normas_aplicacion || '',
-        'Fecha Informe': product.fecha_emision || '',
+        'Fecha Emisión': product.fecha_emision || '',
         'Vencimiento': product.vencimiento || '',
         'Estado': getProductStatus(product).status,
         'QR': getQRStatus(product).status,
@@ -396,8 +363,8 @@ export function ProductManagement() {
           </button>
         </div>
 
-        {/* Importar archivo */}
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+        {/* Importar archivo - OPCIONAL, puedes comentar o eliminar esta sección */}
+        {/* <div className="mt-4 p-4 bg-gray-50 rounded-lg">
           <div className="flex items-center gap-4">
             <input
               type="file"
@@ -425,7 +392,7 @@ export function ProductManagement() {
               </button>
             )}
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Tabla de productos */}
