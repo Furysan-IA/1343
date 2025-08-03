@@ -417,13 +417,22 @@ export function QRGenerator({
                   }}>
                     {/* AR logo */}
                     <img
-                      src="/images/AR-Monserrat-arabic.png"
+                      src="/images/AR-Montserrat-Arabic.png"
                       alt=""
                       style={{
                         height: '19px',
                         width: 'auto',
                         objectFit: 'contain',
-                        display: 'block'
+                        display: 'block',
+                        backgroundColor: 'transparent'
+                      }}
+                      onError={(e) => {
+                        console.error('Error loading AR image:', e);
+                        // Fallback: hide the image if it fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        console.log('AR image loaded successfully');
                       }}
                     />
                     
