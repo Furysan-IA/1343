@@ -67,7 +67,7 @@ class QRConfigService {
   // Generar URL para un producto
   generateProductUrl(codificacion: string): string {
     const config = this.getConfig();
-    return `${config.baseUrl}/products/${codificacion}`;
+    return `${config.baseUrl}/qr/${codificacion}`;
   }
 
   // Suscribirse a cambios de configuración

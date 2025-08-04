@@ -9,6 +9,8 @@ import { ClientManagement } from './pages/ClientManagement';
 import { InformationValidation } from './pages/InformationValidation';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
+import { QRLanding } from './pages/QRLanding';
+import { ProductPassport } from './pages/ProductPassport';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
@@ -50,7 +52,14 @@ function App() {
     <AuthProvider>
       <LanguageProvider>
         <Router>
-          <AppContent />
+          <Routes>
+            {/* Rutas públicas (sin autenticación) */}
+            <Route path="/qr/:uuid" element={<QRLanding />} />
+            <Route path="/products/:uuid" element={<ProductPassport />} />
+            
+            {/* Rutas privadas (con autenticación) */}
+            <Route path="/*" element={<AppContent />} />
+          </Routes>
         </Router>
       </LanguageProvider>
     </AuthProvider>
