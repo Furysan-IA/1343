@@ -104,17 +104,6 @@ export function LoginForm() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
-            >
-              {isLogin 
-                ? '¿No tienes cuenta? Regístrate aquí'
-                : '¿Ya tienes cuenta? Inicia sesión aquí'
-              }
-            </button>
-          </div>
         </div>
       </div>
     </div>
