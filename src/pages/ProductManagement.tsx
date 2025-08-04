@@ -8,7 +8,7 @@ import { QRConfigModal } from '../components/QRConfigModal';
 import { 
   Package, AlertCircle, CheckCircle, Search, Calendar, 
   X, Eye, Download, Clock, XCircle, Settings, QrCode,
-  RefreshCw
+  RefreshCw, Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -331,6 +331,26 @@ export function ProductManagement() {
     }
   };
 
+  const handleDeleteProduct = async (product: Product) => {
+    if (!confirm(`¿Está seguro de eliminar el producto "${product.producto || product.codificacion}"?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('codificacion', product.codificacion);
+
+      if (error) throw error;
+
+      toast.success('Producto eliminado correctamente');
+      await fetchProducts();
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      toast.error(`Error al eliminar el producto: ${error.message}`);
+    }
+  };
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -540,14 +560,27 @@ export function ProductManagement() {
                       }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-1 text-purple-600">
-                        <Eye className="w-4 h-4" />
-                        Ver Ficha
-                        {missingData && (
-                          <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
-                            !
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProduct(product);
+                          }}
+                          className="text-purple-600 hover:text-purple-800 p-1"
+                          title="Ver ficha del producto"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProduct(product);
+                          }}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
