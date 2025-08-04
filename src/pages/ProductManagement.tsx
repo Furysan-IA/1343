@@ -1,4 +1,4 @@
-// ProductManagement.tsx - Versión corregida con todas las implementaciones
+// ProductManagement.tsx - Versión con personalización de columnas
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -8,7 +8,7 @@ import { QRConfigModal } from '../components/QRConfigModal';
 import { 
   Package, AlertCircle, CheckCircle, Search, Calendar, 
   X, Eye, Download, Clock, XCircle, Settings, QrCode,
-  RefreshCw, Trash2
+  RefreshCw, Trash2, GripVertical, EyeOff, RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -56,8 +56,197 @@ interface Product {
   updated_at: string;
 }
 
+interface ColumnConfig {
+  id: string;
+  label: string;
+  accessor: (product: Product) => any;
+  isVisible: boolean;
+  align: 'left' | 'right' | 'center';
+  isDraggable: boolean;
+  width?: string;
+  render?: (product: Product) => React.ReactNode;
+}
+
 export function ProductManagement() {
   const { t } = useLanguage();
+  
+  // Configuración por defecto de las columnas
+  const defaultColumns: ColumnConfig[] = [
+    {
+      id: 'codificacion',
+      label: 'Codificación',
+      accessor: (p) => p.codificacion,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32'
+    },
+    {
+      id: 'producto',
+      label: 'Producto',
+      accessor: (p) => p.producto || 'Sin nombre',
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-48',
+      render: (product) => (
+        <div className="flex items-center gap-2">
+          <span>{product.producto || <span className="text-gray-400">Sin nombre</span>}</span>
+          {!hasAllRequiredData(product) && (
+            <AlertCircle className="w-4 h-4 text-orange-500" title="Datos faltantes" />
+          )}
+        </div>
+      )
+    },
+    {
+      id: 'marca',
+      label: 'Marca',
+      accessor: (p) => p.marca || '-',
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32'
+    },
+    {
+      id: 'modelo',
+      label: 'Modelo',
+      accessor: (p) => p.modelo || '-',
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32'
+    },
+    {
+      id: 'titular',
+      label: 'Titular',
+      accessor: (p) => p.titular || '-',
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-40'
+    },
+    {
+      id: 'estado',
+      label: 'Estado',
+      accessor: (p) => p.vencimiento,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => {
+        const status = getProductStatus(product);
+        return (
+          <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
+            {status.status}
+          </span>
+        );
+      }
+    },
+    {
+      id: 'qr',
+      label: 'QR',
+      accessor: (p) => p.qr_path,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-24',
+      render: (product) => {
+        const qrStatus = getQRStatus(product);
+        return (
+          <div className="flex items-center justify-center gap-1">
+            <qrStatus.icon className={`w-4 h-4 ${qrStatus.color}`} />
+            <span className={`text-xs ${qrStatus.color}`}>
+              {qrStatus.status === 'Generado' ? 'Sí' : 
+               qrStatus.status === 'Pendiente regeneración' ? 'Pend.' : 'No'}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'vencimiento',
+      label: 'Vencimiento',
+      accessor: (p) => p.vencimiento,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => (
+        <span>
+          {product.vencimiento 
+            ? new Date(product.vencimiento).toLocaleDateString('es-AR')
+            : <span className="text-gray-400">-</span>
+          }
+        </span>
+      )
+    },
+    {
+      id: 'fabricante',
+      label: 'Fabricante',
+      accessor: (p) => p.fabricante || '-',
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-40'
+    },
+    {
+      id: 'origen',
+      label: 'Origen',
+      accessor: (p) => p.origen || '-',
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32'
+    },
+    {
+      id: 'djc_status',
+      label: 'DJC',
+      accessor: (p) => p.djc_path,
+      isVisible: false,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-20',
+      render: (product) => (
+        <span className={`text-xs ${product.djc_path ? 'text-green-600' : 'text-gray-400'}`}>
+          {product.djc_path ? 'Sí' : 'No'}
+        </span>
+      )
+    },
+    {
+      id: 'acciones',
+      label: 'Acciones',
+      accessor: () => null,
+      isVisible: true,
+      align: 'center',
+      isDraggable: false,
+      width: 'w-24',
+      render: (product) => (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedProduct(product);
+            }}
+            className="text-purple-600 hover:text-purple-800 p-1"
+            title="Ver ficha del producto"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteProduct(product);
+            }}
+            className="text-red-600 hover:text-red-800 p-1"
+            title="Eliminar producto"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +256,17 @@ export function ProductManagement() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [showColumnConfig, setShowColumnConfig] = useState(false);
+
+  // Estado para la configuración de columnas
+  const [columnOrder, setColumnOrder] = useState<ColumnConfig[]>(() => {
+    const savedOrder = localStorage.getItem('productManagementColumnOrder');
+    return savedOrder ? JSON.parse(savedOrder) : defaultColumns;
+  });
+
+  // Estado para drag and drop
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
 
   // Estadísticas
   const [stats, setStats] = useState({
@@ -81,19 +281,23 @@ export function ProductManagement() {
     conDatosFaltantes: 0
   });
 
+  // Guardar configuración de columnas en localStorage
+  useEffect(() => {
+    localStorage.setItem('productManagementColumnOrder', JSON.stringify(columnOrder));
+  }, [columnOrder]);
+
   useEffect(() => {
     fetchProducts();
 
     // Suscribirse a cambios de configuración QR
     const unsubscribe = qrConfigService.subscribe(() => {
-      // Actualizar vista si cambia la configuración
       fetchProducts();
     });
 
     // Configurar auto-sincronización cada 5 minutos
     const syncInterval = setInterval(() => {
       syncWithSupabase();
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 60 * 1000);
 
     return () => {
       unsubscribe();
@@ -105,6 +309,80 @@ export function ProductManagement() {
     filterProducts();
     calculateStats();
   }, [products, searchQuery, statusFilter]);
+
+  // Funciones de drag and drop
+  const onDragStart = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    setDraggedColumnId(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', columnId);
+    
+    // Añadir clase visual al elemento arrastrado
+    e.currentTarget.style.opacity = '0.5';
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const onDragEnter = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    e.preventDefault();
+    setDragOverColumnId(columnId);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    setDragOverColumnId(null);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLTableCellElement>, targetColumnId: string) => {
+    e.preventDefault();
+    
+    if (!draggedColumnId || draggedColumnId === targetColumnId) {
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    const newColumnOrder = [...columnOrder];
+    const draggedIndex = newColumnOrder.findIndex(col => col.id === draggedColumnId);
+    const targetIndex = newColumnOrder.findIndex(col => col.id === targetColumnId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Mover el elemento arrastrado a la nueva posición
+    const [removed] = newColumnOrder.splice(draggedIndex, 1);
+    newColumnOrder.splice(targetIndex, 0, removed);
+
+    setColumnOrder(newColumnOrder);
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+    
+    toast.success('Columna reordenada');
+  };
+
+  const onDragEnd = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.currentTarget.style.opacity = '1';
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+  };
+
+  // Función para alternar visibilidad de columna
+  const toggleColumnVisibility = (columnId: string) => {
+    const newColumnOrder = columnOrder.map(col => 
+      col.id === columnId ? { ...col, isVisible: !col.isVisible } : col
+    );
+    setColumnOrder(newColumnOrder);
+    toast.success(`Columna ${newColumnOrder.find(c => c.id === columnId)?.isVisible ? 'mostrada' : 'ocultada'}`);
+  };
+
+  // Función para resetear columnas a configuración por defecto
+  const resetColumns = () => {
+    if (confirm('¿Está seguro de resetear la configuración de columnas?')) {
+      setColumnOrder(defaultColumns);
+      toast.success('Configuración de columnas restablecida');
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -141,7 +419,6 @@ export function ProductManagement() {
       setProducts(allProducts);
       setLastSync(new Date());
 
-      // Mostrar cuántos productos se cargaron
       toast.success(`${allProducts.length} productos cargados exitosamente`);
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -282,25 +559,15 @@ export function ProductManagement() {
 
   const exportToExcel = async () => {
     try {
-      const dataToExport = filteredProducts.map(product => ({
-        'Codificación': product.codificacion,
-        'CUIT': product.cuit,
-        'Titular': product.titular || '',
-        'Producto': product.producto || '',
-        'Marca': product.marca || '',
-        'Modelo': product.modelo || '',
-        'Origen': product.origen || '',
-        'Fabricante': product.fabricante || '',
-        'Planta': product.planta_fabricacion || '',
-        'Normas': product.normas_aplicacion || '',
-        'N° Informe': product.informe_ensayo_nro || '',
-        'Fecha Emisión': product.fecha_emision || '',
-        'Vencimiento': product.vencimiento || '',
-        'Estado': getProductStatus(product).status,
-        'QR': getQRStatus(product).status,
-        'DJC': product.djc_path ? 'Sí' : 'No',
-        'Certificado': product.certificado_path ? 'Sí' : 'No'
-      }));
+      const visibleColumns = columnOrder.filter(col => col.isVisible && col.id !== 'acciones');
+      
+      const dataToExport = filteredProducts.map(product => {
+        const row: Record<string, any> = {};
+        visibleColumns.forEach(col => {
+          row[col.label] = col.accessor(product) || '';
+        });
+        return row;
+      });
 
       // Convertir a CSV
       const headers = Object.keys(dataToExport[0]);
@@ -308,8 +575,7 @@ export function ProductManagement() {
         headers.join(','),
         ...dataToExport.map(row => 
           headers.map(header => {
-            const value = row[header as keyof typeof row];
-            // Escapar comas y comillas
+            const value = row[header];
             return typeof value === 'string' && value.includes(',') 
               ? `"${value.replace(/"/g, '""')}"` 
               : value;
@@ -351,6 +617,7 @@ export function ProductManagement() {
       toast.error(`Error al eliminar el producto: ${error.message}`);
     }
   };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -447,6 +714,15 @@ export function ProductManagement() {
             <option value="sin_djc">Sin DJC</option>
           </select>
 
+          {/* Configurar Columnas */}
+          <button
+            onClick={() => setShowColumnConfig(!showColumnConfig)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Columnas
+          </button>
+
           {/* Sincronizar */}
           <button
             onClick={syncWithSupabase}
@@ -485,107 +761,126 @@ export function ProductManagement() {
         )}
       </div>
 
-      {/* Tabla de productos */}
+      {/* Panel de configuración de columnas */}
+      {showColumnConfig && (
+        <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-indigo-500">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Configurar Columnas</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={resetColumns}
+                className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 flex items-center gap-1"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Resetear
+              </button>
+              <button
+                onClick={() => setShowColumnConfig(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {columnOrder.map((column) => (
+              <div
+                key={column.id}
+                className={`p-3 border rounded-lg transition-all ${
+                  column.isVisible ? 'border-indigo-200 bg-indigo-50' : 'border-gray-200 bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {column.isDraggable && (
+                      <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
+                    )}
+                    <span className={`text-sm font-medium ${
+                      column.isVisible ? 'text-indigo-900' : 'text-gray-600'
+                    }`}>
+                      {column.label}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => toggleColumnVisibility(column.id)}
+                    className={`p-1 rounded hover:bg-white/50 ${
+                      column.isVisible ? 'text-indigo-600' : 'text-gray-400'
+                    }`}
+                    title={column.isVisible ? 'Ocultar columna' : 'Mostrar columna'}
+                  >
+                    {column.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <p className="text-xs text-gray-500 mt-3">
+            💡 Arrastra los encabezados de la tabla para reordenar las columnas. 
+            Usa los botones de ojo para mostrar/ocultar columnas.
+          </p>
+        </div>
+      )}
+
+      {/* Tabla de productos con columnas personalizables */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Codificación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Producto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Marca
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  QR
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vencimiento
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
+                {columnOrder.filter(col => col.isVisible).map(column => (
+                  <th
+                    key={column.id}
+                    className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none transition-all ${
+                      column.align === 'left' ? 'text-left' :
+                      column.align === 'right' ? 'text-right' : 'text-center'
+                    } ${
+                      draggedColumnId === column.id ? 'opacity-50' : ''
+                    } ${
+                      dragOverColumnId === column.id ? 'bg-indigo-100' : ''
+                    } ${
+                      column.isDraggable ? 'hover:bg-gray-100' : ''
+                    }`}
+                    draggable={column.isDraggable}
+                    onDragStart={(e) => column.isDraggable && onDragStart(e, column.id)}
+                    onDragOver={onDragOver}
+                    onDragEnter={(e) => onDragEnter(e, column.id)}
+                    onDragLeave={onDragLeave}
+                    onDrop={(e) => onDrop(e, column.id)}
+                    onDragEnd={onDragEnd}
+                    title={column.isDraggable ? 'Arrastra para reordenar' : ''}
+                  >
+                    <div className="flex items-center gap-1 justify-center">
+                      {column.isDraggable && (
+                        <GripVertical className="w-3 h-3 text-gray-400" />
+                      )}
+                      <span>{column.label}</span>
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((product) => {
-                const status = getProductStatus(product);
-                const qrStatus = getQRStatus(product);
-                const missingData = !hasAllRequiredData(product);
-
-                return (
-                  <tr 
-                    key={product.codificacion} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedProduct(product)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.codificacion}
+              {filteredProducts.map((product) => (
+                <tr 
+                  key={product.codificacion} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => setSelectedProduct(product)}
+                >
+                  {columnOrder.filter(col => col.isVisible).map(column => (
+                    <td
+                      key={`${product.codificacion}-${column.id}`}
+                      className={`px-6 py-4 whitespace-nowrap text-sm ${
+                        column.align === 'left' ? 'text-left' :
+                        column.align === 'right' ? 'text-right' : 'text-center'
+                      } ${column.id === 'acciones' ? '' : 'text-gray-900'}`}
+                    >
+                      {column.render ? column.render(product) : column.accessor(product)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {product.producto || <span className="text-gray-400">Sin nombre</span>}
-                        {missingData && (
-                          <AlertCircle className="w-4 h-4 text-orange-500" title="Datos faltantes" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.marca || <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
-                        {status.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <qrStatus.icon className={`w-4 h-4 ${qrStatus.color}`} />
-                        <span className={`text-sm ${qrStatus.color}`}>
-                          {qrStatus.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.vencimiento 
-                        ? new Date(product.vencimiento).toLocaleDateString('es-AR')
-                        : <span className="text-gray-400">-</span>
-                      }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProduct(product);
-                          }}
-                          className="text-purple-600 hover:text-purple-800 p-1"
-                          title="Ver ficha del producto"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteProduct(product);
-                          }}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Eliminar producto"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
 
