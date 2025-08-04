@@ -1,3 +1,4 @@
+// ClientManagement.tsx - Versión con personalización de columnas
 import { useState, useEffect, Fragment } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase, Database } from '../lib/supabase';
@@ -28,7 +29,9 @@ import {
   ExternalLink,
   Plus,
   Trash2,
-  CheckCircle
+  CheckCircle,
+  GripVertical,
+  RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCuit } from '../utils/formatters';
@@ -48,6 +51,17 @@ interface Client {
   product_count?: number;
 }
 
+interface ColumnConfig {
+  id: string;
+  label: string;
+  accessor: (client: Client) => any;
+  isVisible: boolean;
+  align?: 'left' | 'right' | 'center';
+  isDraggable: boolean;
+  width?: string;
+  render: (client: Client) => React.ReactNode;
+}
+
 export function ClientManagement() {
   const { t } = useLanguage();
   const [clients, setClients] = useState<Client[]>([]);
@@ -59,6 +73,10 @@ export function ClientManagement() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   
+  // Estados para personalización de columnas
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+  
   // Estados del formulario
   const [formData, setFormData] = useState({
     razon_social: '',
@@ -69,6 +87,285 @@ export function ClientManagement() {
     contacto: ''
   });
 
+  // Configuración por defecto de columnas
+  const defaultColumns: ColumnConfig[] = [
+    {
+      id: 'razon_social',
+      label: 'Razón Social',
+      accessor: (client) => client.razon_social,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-64',
+      render: (client) => (
+        <div className="min-w-0">
+          <div 
+            className="text-sm font-medium text-gray-900 break-words"
+            title={client.razon_social}
+          >
+            {client.razon_social}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            {client.contacto && (
+              <span 
+                className="text-sm text-gray-500 break-words"
+                title={`Contacto: ${client.contacto}`}
+              >
+                {client.contacto}
+              </span>
+            )}
+            {client.product_count && client.product_count > 0 && (
+              <span 
+                className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"
+                title={`${client.product_count} productos asociados`}
+              >
+                {client.product_count} productos
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'cuit',
+      label: 'CUIT',
+      accessor: (client) => client.cuit,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (client) => (
+        <span 
+          className="text-sm text-gray-900 font-mono break-words"
+          title={`CUIT: ${formatCuit(client.cuit)}`}
+        >
+          {formatCuit(client.cuit)}
+        </span>
+      )
+    },
+    {
+      id: 'email',
+      label: 'Email',
+      accessor: (client) => client.email,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-48',
+      render: (client) => (
+        <div className="flex items-center gap-2">
+          <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <span 
+            className="text-sm text-gray-900 break-words"
+            title={client.email}
+          >
+            {client.email}
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'telefono',
+      label: 'Teléfono',
+      accessor: (client) => client.telefono,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (client) => (
+        <div className="flex items-center gap-2">
+          <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <span 
+            className="text-sm text-gray-900 break-words"
+            title={client.telefono || 'Sin teléfono'}
+          >
+            {client.telefono || <span className="text-gray-400 italic">-</span>}
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'direccion',
+      label: 'Dirección',
+      accessor: (client) => client.direccion,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-64',
+      render: (client) => (
+        <div className="flex items-start gap-2">
+          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+          <span 
+            className="text-sm text-gray-900 break-words"
+            title={client.direccion}
+          >
+            {client.direccion.length > 50 
+              ? `${client.direccion.substring(0, 50)}...`
+              : client.direccion
+            }
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'contacto',
+      label: 'Contacto',
+      accessor: (client) => client.contacto,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-40',
+      render: (client) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={client.contacto || 'Sin contacto especificado'}
+        >
+          {client.contacto || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'estado',
+      label: 'Estado',
+      accessor: (client) => getClientStatus(client).status,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-36',
+      render: (client) => {
+        const status = getClientStatus(client);
+        const Icon = status.icon;
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <Icon className={`w-4 h-4 ${status.color}`} />
+            <span 
+              className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color} break-words`}
+              title={`Estado: ${status.status}${status.missingFields.length > 0 ? ` - Faltan: ${status.missingFields.join(', ')}` : ''}`}
+            >
+              {status.status}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'productos',
+      label: 'Productos',
+      accessor: (client) => client.product_count || 0,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-24',
+      render: (client) => (
+        <div className="flex items-center justify-center gap-2">
+          <Package className="w-4 h-4 text-gray-400" />
+          <span 
+            className="text-sm font-medium text-gray-900"
+            title={`${client.product_count || 0} productos asociados`}
+          >
+            {client.product_count || 0}
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'fechas',
+      label: 'Fechas',
+      accessor: (client) => client.created_at,
+      isVisible: false,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-32',
+      render: (client) => (
+        <div className="text-xs text-gray-500">
+          <div 
+            className="flex items-center gap-1"
+            title={`Creado: ${new Date(client.created_at).toLocaleString('es-AR')}`}
+          >
+            <Calendar className="w-3 h-3" />
+            {new Date(client.created_at).toLocaleDateString('es-AR')}
+          </div>
+          {client.updated_at !== client.created_at && (
+            <div 
+              className="flex items-center gap-1 mt-1"
+              title={`Actualizado: ${new Date(client.updated_at).toLocaleString('es-AR')}`}
+            >
+              <Clock className="w-3 h-3" />
+              {new Date(client.updated_at).toLocaleDateString('es-AR')}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      id: 'acciones',
+      label: 'Acciones',
+      accessor: () => null,
+      isVisible: true,
+      align: 'center',
+      isDraggable: false,
+      width: 'w-24',
+      render: (client) => (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(client);
+            }}
+            className="text-purple-600 hover:text-purple-800 p-1 rounded hover:bg-purple-50 transition-colors"
+            title="Editar cliente"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(client.cuit);
+            }}
+            className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition-colors"
+            title="Eliminar cliente"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  // Estado de configuración de columnas
+  const [columnOrder, setColumnOrder] = useState<ColumnConfig[]>(() => {
+    const savedOrder = localStorage.getItem('clientManagementColumnOrder');
+    if (savedOrder) {
+      try {
+        const parsed = JSON.parse(savedOrder);
+        // Verificar que la configuración guardada tenga la estructura correcta
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
+          // Combinar configuración guardada con configuración por defecto para nuevas columnas
+          const mergedColumns = defaultColumns.map(defaultCol => {
+            const savedCol = parsed.find((col: any) => col.id === defaultCol.id);
+            return savedCol ? { ...defaultCol, ...savedCol, render: defaultCol.render } : defaultCol;
+          });
+          return mergedColumns;
+        }
+      } catch (error) {
+        console.error('Error parsing saved column order:', error);
+      }
+    }
+    return defaultColumns;
+  });
+
+  // Guardar configuración de columnas en localStorage
+  useEffect(() => {
+    const configToSave = columnOrder.map(col => ({
+      id: col.id,
+      label: col.label,
+      isVisible: col.isVisible,
+      align: col.align,
+      isDraggable: col.isDraggable,
+      width: col.width
+    }));
+    localStorage.setItem('clientManagementColumnOrder', JSON.stringify(configToSave));
+  }, [columnOrder]);
+
   useEffect(() => {
     fetchClients();
   }, []);
@@ -76,6 +373,80 @@ export function ClientManagement() {
   useEffect(() => {
     filterClients();
   }, [clients, searchQuery]);
+
+  // Funciones de drag and drop para columnas
+  const onDragStart = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    setDraggedColumnId(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', columnId);
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const onDragEnter = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    e.preventDefault();
+    setDragOverColumnId(columnId);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    setDragOverColumnId(null);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLTableCellElement>, targetColumnId: string) => {
+    e.preventDefault();
+    
+    if (!draggedColumnId || draggedColumnId === targetColumnId) {
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    const newColumnOrder = [...columnOrder];
+    const draggedIndex = newColumnOrder.findIndex(col => col.id === draggedColumnId);
+    const targetIndex = newColumnOrder.findIndex(col => col.id === targetColumnId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    // Mover el elemento arrastrado a la nueva posición
+    const [removed] = newColumnOrder.splice(draggedIndex, 1);
+    newColumnOrder.splice(targetIndex, 0, removed);
+
+    setColumnOrder(newColumnOrder);
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+    
+    toast.success('Orden de columnas actualizado');
+  };
+
+  const onDragEnd = () => {
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+  };
+
+  // Función para alternar visibilidad de columna
+  const toggleColumnVisibility = (columnId: string) => {
+    setColumnOrder(prev => 
+      prev.map(col => 
+        col.id === columnId 
+          ? { ...col, isVisible: !col.isVisible }
+          : col
+      )
+    );
+  };
+
+  // Función para resetear configuración de columnas
+  const resetColumnOrder = () => {
+    setColumnOrder(defaultColumns);
+    toast.success('Configuración de columnas restablecida');
+  };
 
   const fetchClients = async () => {
     try {
@@ -139,7 +510,9 @@ export function ClientManagement() {
     const filtered = clients.filter(client => 
       client.razon_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(client.cuit).includes(searchQuery) ||
-      client.email.toLowerCase().includes(searchQuery.toLowerCase())
+      client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (client.contacto && client.contacto.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (client.telefono && client.telefono.includes(searchQuery))
     );
     
     setFilteredClients(filtered);
@@ -274,6 +647,8 @@ export function ClientManagement() {
     );
   }
 
+  const visibleColumns = columnOrder.filter(col => col.isVisible);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -296,7 +671,7 @@ export function ClientManagement() {
               <Search className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Buscar por razón social, CUIT o email..."
+                placeholder="Buscar por razón social, CUIT, email, contacto o teléfono..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
@@ -336,10 +711,49 @@ export function ClientManagement() {
 
         {/* Indicador de última sincronización */}
         {lastSync && (
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-gray-500 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
             Última sincronización: {lastSync.toLocaleTimeString('es-AR')}
           </p>
         )}
+      </div>
+
+      {/* Configuración de columnas */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Configuración de Columnas</h3>
+          <button
+            onClick={resetColumnOrder}
+            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 text-sm"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Restablecer
+          </button>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {columnOrder.map((column) => (
+            <label
+              key={column.id}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={column.isVisible}
+                onChange={() => toggleColumnVisibility(column.id)}
+                className="w-4 h-4 text-purple-600 rounded"
+              />
+              <span className="text-sm text-gray-700">{column.label}</span>
+              {column.isDraggable && (
+                <GripVertical className="w-4 h-4 text-gray-400" />
+              )}
+            </label>
+          ))}
+        </div>
+        
+        <p className="text-xs text-gray-500 mt-2">
+          Arrastra los encabezados de las columnas para reordenarlas. Usa las casillas para mostrar/ocultar columnas.
+        </p>
       </div>
 
       {/* Tabla de clientes */}
@@ -348,101 +762,76 @@ export function ClientManagement() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Razón Social
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  CUIT
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Teléfono
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
+                {visibleColumns.map((column) => (
+                  <th
+                    key={column.id}
+                    className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-move select-none transition-colors ${
+                      column.align === 'center' ? 'text-center' :
+                      column.align === 'right' ? 'text-right' : 'text-left'
+                    } ${column.width || 'w-auto'} ${
+                      draggedColumnId === column.id ? 'opacity-50' : ''
+                    } ${
+                      dragOverColumnId === column.id ? 'bg-purple-100' : ''
+                    }`}
+                    draggable={column.isDraggable}
+                    onDragStart={(e) => column.isDraggable && onDragStart(e, column.id)}
+                    onDragOver={onDragOver}
+                    onDragEnter={(e) => onDragEnter(e, column.id)}
+                    onDragLeave={onDragLeave}
+                    onDrop={(e) => onDrop(e, column.id)}
+                    onDragEnd={onDragEnd}
+                    title={column.isDraggable ? `Arrastra para reordenar: ${column.label}` : column.label}
+                  >
+                    <div className="flex items-center gap-1">
+                      {column.isDraggable && (
+                        <GripVertical className="w-3 h-3 text-gray-400" />
+                      )}
+                      {column.label}
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredClients.map((client) => {
-                const status = getClientStatus(client);
-                const Icon = status.icon;
-                
-                return (
-                  <tr 
-                    key={client.cuit} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleEdit(client)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {client.razon_social}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {client.contacto && (
-                          <span className="text-sm text-gray-500">{client.contacto}</span>
-                        )}
-                        {client.product_count && client.product_count > 0 && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                            {client.product_count} productos
-                          </span>
-                        )}
-                      </div>
+              {filteredClients.map((client) => (
+                <tr 
+                  key={client.cuit} 
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleEdit(client)}
+                >
+                  {visibleColumns.map((column) => (
+                    <td
+                      key={`${client.cuit}-${column.id}`}
+                      className={`px-4 py-4 text-sm ${
+                        column.align === 'center' ? 'text-center' :
+                        column.align === 'right' ? 'text-right' : 'text-left'
+                      } ${column.width || 'w-auto'} max-w-xs`}
+                    >
+                      {column.render(client)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCuit(client.cuit)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {client.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {client.telefono || ''}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${status.color}`} />
-                        <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
-                          {status.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(client);
-                          }}
-                          className="text-purple-600 hover:text-purple-900"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(client.cuit);
-                          }}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
 
           {filteredClients.length === 0 && (
             <div className="text-center py-12">
               <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No se encontraron clientes</p>
+              <p className="text-gray-500">
+                {searchQuery 
+                  ? 'No se encontraron clientes con los filtros aplicados'
+                  : 'No hay clientes para mostrar'
+                }
+              </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="mt-2 text-purple-600 hover:text-purple-800 text-sm"
+                >
+                  Limpiar filtros
+                </button>
+              )}
             </div>
           )}
         </div>
