@@ -1,235 +1,210 @@
-// services/qrConfig.service.ts - Versión completa mejorada con auto-detección
-import { supabase } from '../lib/supabase';
-
-export interface QRConfig {
-  baseUrl: string;
-  environment: 'development' | 'production';
-  lastUpdated: string;
-}
-
+// services/qrConfig.service.ts - Servicio actualizado con soporte para argqr.com
 class QRConfigService {
-  private config: QRConfig | null = null;
-  private listeners: ((config: QRConfig) => void)[] = [];
-  private readonly STORAGE_KEY = 'qr_config';
-  private readonly ENV_CONFIGS_KEY = 'qr_env_configs';
+  private readonly STORAGE_KEY = 'qr-base-url';
+  private readonly DEFAULT_PROD_URL = 'https://argqr.com';
+  private readonly DEFAULT_DEV_URL = 'http://localhost:5173';
+  private listeners: ((config: any) => void)[] = [];
 
   constructor() {
-    this.loadConfig();
-    // Auto-detectar y actualizar si es necesario al iniciar
-    this.autoDetectAndUpdateIfNeeded();
+    // Intentar detectar y configurar la URL base inicial
+    this.initializeBaseUrl();
   }
 
-  // Cargar configuración desde localStorage o usar default
-  private loadConfig() {
-    const saved = localStorage.getItem(this.STORAGE_KEY);
-    if (saved) {
-      try {
-        this.config = JSON.parse(saved);
-      } catch (error) {
-        console.error('Error parsing QR config:', error);
-        this.setDefaultConfig();
-      }
-    } else {
-      this.setDefaultConfig();
+  private initializeBaseUrl(): void {
+    const stored = localStorage.getItem(this.STORAGE_KEY);
+    if (!stored) {
+      // Si no hay configuración guardada, detectar automáticamente
+      const detectedUrl = this.autoDetectBaseUrl();
+      this.updateConfig(detectedUrl);
     }
   }
 
-  // Establecer configuración por defecto
-  private setDefaultConfig() {
-    const baseUrl = this.getProductionBaseUrl();
-    const isDevelopment = this.isDevEnvironment(baseUrl);
+  getConfig(): { baseUrl: string; environment: 'development' | 'production' } {
+    const baseUrl = localStorage.getItem(this.STORAGE_KEY) || this.autoDetectBaseUrl();
+    const environment = this.detectEnvironment(baseUrl);
     
-    this.config = {
+    return {
       baseUrl,
-      environment: isDevelopment ? 'development' : 'production',
-      lastUpdated: new Date().toISOString()
+      environment
     };
-    
-    this.saveConfig();
   }
 
-  // Obtener URL base para producción
-  private getProductionBaseUrl(): string {
-    const currentUrl = window.location.origin;
+  updateConfig(baseUrl: string): void {
+    // Normalizar URL (quitar trailing slash)
+    const normalizedUrl = baseUrl.replace(/\/$/, '');
     
-    // Si estamos en un entorno de desarrollo, usar auto-detección
-    if (this.isDevEnvironment(currentUrl)) {
-      return currentUrl;
-    }
+    localStorage.setItem(this.STORAGE_KEY, normalizedUrl);
     
-    // Para producción, usar siempre argqr.com
-    return 'https://argqr.com';
-  }
-
-  // Auto-detectar la URL base actual
-  autoDetectBaseUrl(): string {
-    return this.getProductionBaseUrl();
-  }
-
-  // Detectar si es un entorno de desarrollo
-  private isDevEnvironment(url: string): boolean {
-    return url.includes('localhost') || 
-           url.includes('127.0.0.1') ||
-           url.includes('webcontainer-api.io') ||
-           url.includes('stackblitz.io') ||
-           url.includes('codesandbox.io') ||
-           url.includes('5173'); // Puerto común de Vite
-  }
-
-  // Auto-detectar y actualizar si es necesario
-  private autoDetectAndUpdateIfNeeded() {
-    if (!this.config) return;
-    
-    const currentUrl = window.location.origin;
-    
-    // Solo actualizar automáticamente si:
-    // 1. Estamos en desarrollo
-    // 2. La URL guardada también es de desarrollo
-    // 3. La URL cambió (ej: nuevo WebContainer)
-    const expectedUrl = this.getProductionBaseUrl();
-    if (this.config.baseUrl !== expectedUrl) {
-      
-      console.log(`[QRConfig] Auto-actualizando URL de ${this.config.baseUrl} a ${expectedUrl}`);
-      this.updateConfig(expectedUrl);
-    }
-  }
-
-  // Obtener configuración actual
-  getConfig(): QRConfig {
-    if (!this.config) {
-      this.loadConfig();
-    }
-    return this.config!;
-  }
-
-  // Actualizar configuración
-  updateConfig(baseUrl: string) {
-    // Limpiar URL
-    baseUrl = baseUrl.trim();
-    if (baseUrl.endsWith('/')) {
-      baseUrl = baseUrl.slice(0, -1);
-    }
-
-    const isDevelopment = this.isDevEnvironment(baseUrl);
-    
-    this.config = {
-      baseUrl,
-      environment: isDevelopment ? 'development' : 'production',
-      lastUpdated: new Date().toISOString()
-    };
-    
-    this.saveConfig();
-    this.saveEnvironmentConfig(this.config.environment, baseUrl);
+    // Notificar a los listeners
     this.notifyListeners();
   }
 
-  // Guardar en localStorage
-  private saveConfig() {
-    if (this.config) {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.config));
+  generateProductUrl(productUuid: string): string {
+    const { baseUrl } = this.getConfig();
+    return `${baseUrl}/products/${productUuid}`;
+  }
+
+  autoDetectBaseUrl(): string {
+    const currentUrl = window.location.origin;
+    
+    // Detectar entornos conocidos
+    if (currentUrl.includes('localhost') || currentUrl.includes('127.0.0.1')) {
+      return this.DEFAULT_DEV_URL;
     }
+    
+    if (currentUrl.includes('webcontainer-api.io') || currentUrl.includes('stackblitz.io')) {
+      // En WebContainer, usar la URL actual
+      return currentUrl;
+    }
+    
+    if (currentUrl.includes('argqr.com')) {
+      return this.DEFAULT_PROD_URL;
+    }
+    
+    // Si es un dominio de producción desconocido, usar ese dominio
+    if (!currentUrl.includes('localhost') && !currentUrl.includes('127.0.0.1')) {
+      return currentUrl;
+    }
+    
+    // Fallback
+    return currentUrl;
   }
 
-  // Guardar configuración por entorno
-  private saveEnvironmentConfig(environment: string, baseUrl: string) {
-    const configs = this.getEnvironmentConfigs();
-    configs[environment] = baseUrl;
-    localStorage.setItem(this.ENV_CONFIGS_KEY, JSON.stringify(configs));
+  detectEnvironment(url: string): 'development' | 'production' {
+    if (
+      url.includes('localhost') || 
+      url.includes('127.0.0.1') ||
+      url.includes('webcontainer') ||
+      url.includes('stackblitz') ||
+      url.includes('5173')
+    ) {
+      return 'development';
+    }
+    
+    return 'production';
   }
 
-  // Obtener configuraciones guardadas por entorno
-  getEnvironmentConfigs(): Record<string, string> {
-    const stored = localStorage.getItem(this.ENV_CONFIGS_KEY);
-    return stored ? JSON.parse(stored) : {
-      development: 'http://localhost:5173',
-      production: 'https://argqr.com'
-    };
-  }
-
-  // Generar URL para un producto
-  generateProductUrl(uuid: string): string {
-    const config = this.getConfig();
-    // Usar UUID directamente sin codificación ya que es seguro para URLs
-    return `${config.baseUrl}/products/${uuid}`;
-  }
-
-  // Agregar nueva función para generar URL por codificación (uso interno)
-  generateProductUrlByCodificacion(codificacion: string): string {
-    console.warn('⚠️ Usando codificación en lugar de UUID. Considera migrar a UUID.');
-    const config = this.getConfig();
-    const encodedCode = encodeURIComponent(codificacion);
-    return `${config.baseUrl}/products/code/${encodedCode}`;
-  }
-
-  // Obtener sugerencias de URL
   getUrlSuggestions(): Array<{
     name: string;
     url: string;
     description: string;
-    isRecommended?: boolean;
     isAutoDetected?: boolean;
+    isRecommended?: boolean;
   }> {
     const currentUrl = window.location.origin;
     const suggestions = [];
     
-    // Siempre agregar la URL actual como primera opción
+    // URL de producción principal (argqr.com)
     suggestions.push({
-      name: 'URL Actual (Auto-detectada)',
-      url: currentUrl,
-      description: 'URL detectada automáticamente del entorno actual',
-      isRecommended: true,
-      isAutoDetected: true
+      name: 'Producción - argqr.com',
+      url: this.DEFAULT_PROD_URL,
+      description: 'URL de producción oficial',
+      isRecommended: true
     });
     
-    const envConfigs = this.getEnvironmentConfigs();
-    
-    // Agregar configuraciones guardadas si son diferentes
-    const productionUrl = 'https://argqr.com';
-    if (productionUrl !== currentUrl) {
+    // URL actual si es diferente
+    if (currentUrl !== this.DEFAULT_PROD_URL && currentUrl !== this.DEFAULT_DEV_URL) {
       suggestions.push({
-        name: 'Producción',
-        url: productionUrl,
-        description: 'URL de producción (argqr.com)'
+        name: 'URL Actual',
+        url: currentUrl,
+        description: 'URL detectada del navegador actual',
+        isAutoDetected: true
       });
     }
     
-    if (envConfigs.development && envConfigs.development !== currentUrl && !currentUrl.includes('localhost')) {
+    // Desarrollo local
+    suggestions.push({
+      name: 'Desarrollo Local',
+      url: this.DEFAULT_DEV_URL,
+      description: 'Para pruebas en localhost'
+    });
+    
+    // WebContainer si estamos en ese entorno
+    if (currentUrl.includes('webcontainer-api.io')) {
       suggestions.push({
-        name: 'Desarrollo Local',
-        url: envConfigs.development,
-        description: 'URL de desarrollo local'
+        name: 'WebContainer Actual',
+        url: currentUrl,
+        description: 'URL temporal de WebContainer',
+        isAutoDetected: true
       });
     }
+    
+    // URLs alternativas comunes
+    suggestions.push({
+      name: 'Desarrollo - IP Local',
+      url: 'http://127.0.0.1:5173',
+      description: 'Alternativa para desarrollo local'
+    });
     
     return suggestions;
   }
 
-  // Verificar si una URL es válida
   isValidUrl(url: string): boolean {
     try {
-      new URL(url);
-      return true;
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
     } catch {
       return false;
     }
   }
 
-  // Suscribirse a cambios de configuración
-  subscribe(listener: (config: QRConfig) => void) {
+  subscribe(listener: (config: any) => void): () => void {
     this.listeners.push(listener);
+    
+    // Retornar función para desuscribirse
     return () => {
       this.listeners = this.listeners.filter(l => l !== listener);
     };
   }
 
-  // Notificar cambios
-  private notifyListeners() {
-    if (this.config) {
-      this.listeners.forEach(listener => listener(this.config!));
-    }
+  private notifyListeners(): void {
+    const config = this.getConfig();
+    this.listeners.forEach(listener => listener(config));
   }
 
-  // Regenerar QR cuando cambia un producto
+  // Método para migrar QRs existentes a nueva URL
+  async migrateExistingQRs(oldBaseUrl: string, newBaseUrl: string): Promise<{
+    total: number;
+    migrated: number;
+    failed: number;
+  }> {
+    // Este método sería usado para actualizar QRs en la base de datos
+    // Por ahora solo retorna un placeholder
+    console.log(`Migración de QRs: ${oldBaseUrl} → ${newBaseUrl}`);
+    
+    return {
+      total: 0,
+      migrated: 0,
+      failed: 0
+    };
+  }
+
+  // Método para verificar si un QR necesita actualización
+  needsUpdate(existingQrUrl: string): boolean {
+    const { baseUrl } = this.getConfig();
+    return !existingQrUrl.startsWith(baseUrl);
+  }
+
+  // Obtener información de deployment
+  getDeploymentInfo(): {
+    isProduction: boolean;
+    isPrimaryDomain: boolean;
+    currentDomain: string;
+    recommendedUrl: string;
+  } {
+    const currentUrl = window.location.origin;
+    const isProduction = this.detectEnvironment(currentUrl) === 'production';
+    const isPrimaryDomain = currentUrl === this.DEFAULT_PROD_URL;
+    
+    return {
+      isProduction,
+      isPrimaryDomain,
+      currentDomain: currentUrl,
+      recommendedUrl: isProduction ? this.DEFAULT_PROD_URL : currentUrl
+    };
+  }
+
+  // Método para regenerar QR cuando cambia un producto
   async regenerateQRIfNeeded(product: any, oldProduct: any) {
     // Verificar si cambiaron datos relevantes para el QR
     const relevantFields = ['titular', 'producto', 'marca', 'modelo'];
@@ -276,8 +251,7 @@ class QRConfigService {
   // Reset configuración
   reset() {
     localStorage.removeItem(this.STORAGE_KEY);
-    localStorage.removeItem(this.ENV_CONFIGS_KEY);
-    this.loadConfig();
+    this.initializeBaseUrl();
     this.notifyListeners();
   }
 }

@@ -1,4 +1,4 @@
-// QRGenerator.tsx - Versión completa con vista previa de URL
+// QRGenerator.tsx - Versión mejorada con QR optimizados para escaneo móvil
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { qrConfigService } from '../services/qrConfig.service';
@@ -11,7 +11,7 @@ import { getQRModConfig } from '../utils/qrModConfig';
 import { 
   QrCode, Download, Eye, Copy, CheckCircle, Settings,
   TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw,
-  Globe, Link, AlertTriangle, Info
+  Globe, Link, AlertTriangle, Info, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -44,6 +44,7 @@ export function QRGenerator({
   const [currentConfig, setCurrentConfig] = useState(qrConfigService.getConfig());
   const [showUrlPreview, setShowUrlPreview] = useState(false);
   const [isTestingUrl, setIsTestingUrl] = useState(false);
+  const [qrQuality, setQrQuality] = useState<'L' | 'M' | 'Q' | 'H'>('M'); // Cambio de H a M por defecto
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
   
@@ -71,11 +72,15 @@ export function QRGenerator({
 
   const generateNormalFromHighRes = async (highResData: string) => {
     try {
-      // Crear versión de tamaño normal desde el QR de alta resolución
+      // IMPORTANTE: Regenerar el QR con parámetros optimizados para escaneo
       const qrDataNormal = await QRCode.toDataURL((product as any).qr_link || '', {
-        width: 75,
-        margin: 0,
-        errorCorrectionLevel: 'H'
+        width: 200, // Aumentado de 75 a 200 para mejor calidad
+        margin: 2, // Margen de 2 módulos para mejor detección
+        errorCorrectionLevel: 'M', // Cambiado de H a M para mejor balance
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
       });
       setQrDataUrl(qrDataNormal);
     } catch (error) {
@@ -178,27 +183,32 @@ export function QRGenerator({
       const productUrl = qrConfigService.generateProductUrl((product as any).uuid);
       setQrUrl(productUrl);
 
-      // Generar QR tamaño normal (75x75px para etiqueta de 25x30mm)
-      const qrDataNormal = await QRCode.toDataURL(productUrl, {
-        width: 75,
-        margin: 0,
-        errorCorrectionLevel: 'H',
+      // IMPORTANTE: Configuración optimizada para escaneo móvil
+      const qrOptions = {
+        errorCorrectionLevel: qrQuality, // Usar nivel seleccionado
+        type: 'image/png' as const,
+        quality: 1,
+        margin: 2, // Margen de 2 módulos para mejor detección
         color: {
           dark: '#000000',
           light: '#FFFFFF'
+        },
+        rendererOpts: {
+          quality: 1
         }
+      };
+
+      // Generar QR para visualización (200x200px)
+      const qrDataNormal = await QRCode.toDataURL(productUrl, {
+        ...qrOptions,
+        width: 200 // Tamaño óptimo para visualización y escaneo
       });
       setQrDataUrl(qrDataNormal);
 
-      // Generar QR alta resolución (225x225px para impresión a 300dpi)
+      // Generar QR alta resolución para impresión (600x600px)
       const qrDataHigh = await QRCode.toDataURL(productUrl, {
-        width: 225,
-        margin: 0,
-        errorCorrectionLevel: 'H',
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
+        ...qrOptions,
+        width: 600 // Alta resolución para impresión
       });
       setQrDataUrlHighRes(qrDataHigh);
 
@@ -217,6 +227,19 @@ export function QRGenerator({
       if (error) throw error;
 
       toast.success('Código QR generado exitosamente');
+      
+      // Mostrar información sobre escaneo
+      toast((t) => (
+        <div>
+          <p className="font-medium">QR generado correctamente</p>
+          <p className="text-sm mt-1">
+            Optimizado para escaneo móvil con corrección de errores nivel {qrQuality}
+          </p>
+        </div>
+      ), {
+        duration: 4000,
+        icon: '✅'
+      });
       
       if (onQRGenerated) {
         onQRGenerated(productUrl);
@@ -244,11 +267,11 @@ export function QRGenerator({
       const dataUrl = await toPng(labelRef.current, {
         width: 94,
         height: 113,
-        pixelRatio: 8,
+        pixelRatio: 12, // Aumentado de 8 a 12 para mejor calidad
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 752,
-        canvasHeight: 904,
+        canvasWidth: 1128, // 94 * 12
+        canvasHeight: 1356, // 113 * 12
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -271,11 +294,11 @@ export function QRGenerator({
       const blob = await toBlob(labelRef.current, {
         width: 94,
         height: 113, 
-        pixelRatio: 8,
+        pixelRatio: 12, // Aumentado para mejor calidad
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 752,
-        canvasHeight: 904,
+        canvasWidth: 1128,
+        canvasHeight: 1356,
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -365,21 +388,56 @@ export function QRGenerator({
   return (
     <div className="space-y-6">
       {/* Barra de configuración */}
-      <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <div>
-            <p className="text-sm font-medium text-gray-900">Configuración de URL</p>
-            <p className="text-xs text-gray-600">Base: {currentConfig.baseUrl}</p>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Settings className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">Configuración de URL</p>
+              <p className="text-xs text-gray-600">Base: {currentConfig.baseUrl}</p>
+              {currentConfig.baseUrl === 'https://argqr.com' && (
+                <p className="text-xs text-green-600 font-medium">✓ Modo producción activo</p>
+              )}
+            </div>
           </div>
+          <button
+            onClick={() => setShowConfigModal(true)}
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm"
+          >
+            <Settings className="w-4 h-4" />
+            Configurar
+          </button>
         </div>
-        <button
-          onClick={() => setShowConfigModal(true)}
-          className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm"
-        >
-          <Settings className="w-4 h-4" />
-          Configurar
-        </button>
+      </div>
+
+      {/* Selector de calidad del QR */}
+      <div className="bg-blue-50 rounded-lg p-4">
+        <h4 className="text-sm font-medium text-blue-900 mb-3">Calidad del Código QR</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            { value: 'L', label: 'Baja (7%)', desc: 'Menor tamaño' },
+            { value: 'M', label: 'Media (15%)', desc: 'Recomendado' },
+            { value: 'Q', label: 'Alta (25%)', desc: 'Más resistente' },
+            { value: 'H', label: 'Máxima (30%)', desc: 'Máxima protección' }
+          ].map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setQrQuality(option.value as any)}
+              className={`p-2 rounded-lg border-2 transition-all ${
+                qrQuality === option.value
+                  ? 'border-blue-500 bg-blue-100'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="text-sm font-medium">{option.label}</div>
+              <div className="text-xs text-gray-600">{option.desc}</div>
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-blue-700 mt-2">
+          <Info className="w-3 h-3 inline mr-1" />
+          Nivel de corrección de errores. Para etiquetas pequeñas se recomienda usar nivel Medio.
+        </p>
       </div>
 
       {/* Alerta de URL desactualizada */}
@@ -553,7 +611,7 @@ export function QRGenerator({
                     boxSizing: 'border-box'
                   }}
                 >
-                  {/* Código QR - 20mm × 20mm */}
+                  {/* Código QR - Optimizado para escaneo */}
                   <div
                     style={{
                       position: 'absolute',
@@ -561,7 +619,9 @@ export function QRGenerator({
                       left: '50%',
                       transform: 'translateX(-50%)',
                       width: '75px',
-                      height: '75px'
+                      height: '75px',
+                      backgroundColor: '#ffffff',
+                      padding: '2px' // Padding para asegurar margen blanco
                     }}
                   >
                     <img
@@ -571,7 +631,7 @@ export function QRGenerator({
                         width: '100%',
                         height: '100%',
                         display: 'block',
-                        imageRendering: 'pixelated'
+                        imageRendering: 'crisp-edges' // Mejor renderizado para QR
                       }}
                     />
                   </div>
@@ -671,6 +731,12 @@ export function QRGenerator({
                 </div>
               </div>
               <p className="text-xs text-gray-500 text-center">Vista a escala real</p>
+              <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                <p className="text-xs text-yellow-800">
+                  <Zap className="w-3 h-3 inline mr-1" />
+                  <strong>Consejo:</strong> Para mejor escaneo, asegúrate de que el QR tenga suficiente contraste con el fondo.
+                </p>
+              </div>
             </div>
 
             {/* Vista digital */}
@@ -680,11 +746,17 @@ export function QRGenerator({
                 Vista Previa Digital
               </h4>
               <div className="flex justify-center mb-4">
-                <div className="bg-white p-4 rounded-lg shadow-md">
-                  <img src={qrDataUrl} alt="QR Code Preview" className="w-32 h-32" />
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <img src={qrDataUrl} alt="QR Code Preview" className="w-48 h-48" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 text-center">Como se verá al escanear</p>
+              <p className="text-xs text-gray-500 text-center mb-3">Como se verá al escanear</p>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-xs text-green-800">
+                  <CheckCircle className="w-3 h-3 inline mr-1" />
+                  QR optimizado con nivel de corrección <strong>{qrQuality}</strong> y margen de seguridad
+                </p>
+              </div>
             </div>
           </div>
 
@@ -702,6 +774,16 @@ export function QRGenerator({
                   {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} {product.modelo || ''}
                 </span>
               </div>
+              <div className="flex items-center">
+                <span className="text-blue-700 font-medium mr-2">Calidad:</span>
+                <span className="text-blue-900">
+                  Corrección de errores nivel {qrQuality} ({
+                    qrQuality === 'L' ? '7%' :
+                    qrQuality === 'M' ? '15%' :
+                    qrQuality === 'Q' ? '25%' : '30%'
+                  })
+                </span>
+              </div>
               {(product as any).qr_generated_at && (
                 <div className="flex items-center">
                   <span className="text-blue-700 font-medium mr-2">Generado:</span>
@@ -711,6 +793,18 @@ export function QRGenerator({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Recomendaciones para impresión */}
+          <div className="bg-purple-50 rounded-lg p-4">
+            <h4 className="font-medium text-purple-900 mb-2">Recomendaciones para Impresión</h4>
+            <ul className="text-sm text-purple-800 space-y-1 list-disc list-inside">
+              <li>Usa papel blanco mate para mejor contraste</li>
+              <li>Imprime en alta calidad (300 DPI mínimo)</li>
+              <li>Evita reducir el tamaño del QR por debajo de 20mm x 20mm</li>
+              <li>Verifica que el QR sea escaneable antes de imprimir en masa</li>
+              <li>Mantén el área alrededor del QR libre de elementos</li>
+            </ul>
           </div>
 
           {/* Botones de acción */}
