@@ -1,8 +1,0 @@
-/* src/styles/fonts.css */
-@font-face {
-  font-family: 'AR-Monserrat-Arabic';
-  src: url('../assets/fonts/AR-Monserrat-arabic.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
