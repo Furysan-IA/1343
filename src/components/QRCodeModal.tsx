@@ -240,20 +240,20 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                         >
                           {/* Logo AR */}
                           <img
-                            src="/images/AR-Montserrat-Arabic.png"
-                            alt=""
+                            src="/images/AR-Monserrat-arabic.png"
+                            alt="AR"
                             style={{
                               height: '19px',
                               width: 'auto',
                               display: 'block'
                             }}
                             onError={(e) => {
-                              console.warn('AR image not found, using fallback');
+                              console.error('Error loading AR image from /images/AR-Monserrat-arabic.png');
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
                               const fallback = document.createElement('span');
                               fallback.textContent = 'AR';
-                              fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
+                              fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
                               target.parentNode?.insertBefore(fallback, target);
                             }}
                             onLoad={() => {
@@ -266,10 +266,10 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             style={{
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0',
-                              height: '19px',
                               alignItems: 'center',
-                              justifyContent: 'center'
+                              justifyContent: 'center',
+                              gap: '0',
+                              height: '19px'
                             }}
                           >
                             <svg
@@ -277,6 +277,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               height="10"
                               viewBox="0 0 19 9.5"
                               fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
                                 marginBottom: '-0.5px'
@@ -295,125 +296,10 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               height="10"
                               viewBox="0 0 19 9.5"
                               fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
                                 marginTop: '-0.5px'
-                              }}
-                            >
-                              <path
-                                d="M3 5L6.5 8.5L16 1.5"
-                                stroke={cmykToRgb()}
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                          position: 'relative',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}
-                      >
-                        {/* QR Code - positioned in center */}
-                        <div style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '100%'
-                        }}>
-                          <img
-                            src={qrDataUrl}
-                            alt="Código QR"
-                            style={{
-                              width: '75px',
-                              height: '75px',
-                              imageRendering: 'pixelated',
-                              display: 'block'
-                            }}
-                            onError={(e) => {
-                              console.warn('AR image not found, using fallback');
-                              // Show fallback text if image fails to load
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const fallback = document.createElement('span');
-                              fallback.textContent = 'AR';
-                              fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
-                              target.parentNode?.insertBefore(fallback, target);
-                            }}
-                          />
-                        </div>
-                        
-                        {/* AR logo with checkmarks - positioned at bottom */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '3px',
-                          marginTop: 'auto',
-                          paddingBottom: '2px'
-                        }}>
-                          {/* AR logo */}
-                          <img
-                            src="/images/AR-Montserrat-Arabic.png"
-                            alt=""
-                            style={{
-                              height: '19px',
-                              width: 'auto',
-                              objectFit: 'contain',
-                              display: 'block',
-                              backgroundColor: 'transparent'
-                            }}
-                            onError={(e) => {
-                              console.error('Error loading AR image:', e);
-                              // Fallback: hide the image if it fails to load
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                            onLoad={() => {
-                              console.log('AR image loaded successfully');
-                            }}
-                          />
-                          
-                          {/* Checkmarks container */}
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0',
-                            height: '19px',
-                            width: '19px',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <svg
-                              width="19"
-                              height="9.5"
-                              viewBox="0 0 19 9.5"
-                              fill="none"
-                              style={{ 
-                                display: 'block',
-                                marginBottom: '-1px'
-                              }}
-                            >
-                              <path
-                                d="M3 5L6.5 8.5L16 1.5"
-                                stroke={cmykToRgb()}
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            <svg
-                              width="19"
-                              height="9.5"
-                              viewBox="0 0 19 9.5"
-                              fill="none"
-                              style={{ 
-                                display: 'block',
-                                marginTop: '-1px'
                               }}
                             >
                               <path

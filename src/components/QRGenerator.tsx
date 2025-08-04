@@ -1,4 +1,4 @@
-// QRGenerator.tsx - Versión actualizada
+// QRGenerator.tsx - Versión completa y corregida
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { qrConfigService } from '../services/qrConfig.service';
@@ -23,7 +23,7 @@ interface QRGeneratorProps {
   };
   onQRGenerated?: (qrUrl: string) => void;
   compact?: boolean;
-  showRegenerateAlert?: boolean; // Para mostrar alerta de regeneración
+  showRegenerateAlert?: boolean;
 }
 
 export function QRGenerator({ 
@@ -384,15 +384,15 @@ export function QRGenerator({
                     boxSizing: 'border-box'
                   }}
                 >
-                  {/* Código QR - 20mm × 20mm centrado con 2.5mm de margen superior */}
+                  {/* Código QR - 20mm × 20mm */}
                   <div
                     style={{
                       position: 'absolute',
-                      top: '9.4px', // 2.5mm desde el borde
+                      top: '3px',
                       left: '50%',
                       transform: 'translateX(-50%)',
-                      width: '75px', // 20mm
-                      height: '75px' // 20mm
+                      width: '75px',
+                      height: '75px'
                     }}
                   >
                     <img
@@ -407,11 +407,11 @@ export function QRGenerator({
                     />
                   </div>
                   
-                  {/* AR + Tildes - En la parte inferior con 2.5mm de margen */}
+                  {/* AR + Tildes */}
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '9.4px', // 2.5mm desde el borde
+                      bottom: '9px',
                       left: '50%',
                       transform: 'translateX(-50%)',
                       display: 'flex',
@@ -422,20 +422,20 @@ export function QRGenerator({
                   >
                     {/* Logo AR */}
                     <img
-                      src="/images/AR-Montserrat-Arabic.png"
-                      alt=""
+                      src="/images/AR-Monserrat-arabic.png"
+                      alt="AR"
                       style={{
                         height: '19px',
                         width: 'auto',
                         display: 'block'
                       }}
                       onError={(e) => {
-                        console.warn('AR image not found, using fallback');
+                        console.error('Error loading AR image from /images/AR-Monserrat-arabic.png');
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
                         const fallback = document.createElement('span');
                         fallback.textContent = 'AR';
-                        fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
+                        fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
                         target.parentNode?.insertBefore(fallback, target);
                       }}
                       onLoad={() => {
@@ -443,20 +443,20 @@ export function QRGenerator({
                       }}
                     />
                     
-                    {/* Código QR - 20mm × 20mm */}
+                    {/* Tildes */}
                     <div
                       style={{
                         display: 'flex',
-                        top: '3px',
+                        flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        width: '75px',
-                        height: '75px'
+                        gap: '0',
+                        height: '19px'
                       }}
                     >
                       <svg
                         width="19"
-                        height="9.5"
+                        height="10"
                         viewBox="0 0 19 9.5"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
@@ -465,8 +465,8 @@ export function QRGenerator({
                           marginBottom: '-0.5px'
                         }}
                       >
-                        bottom: '9px',
-                    {/* AR + Tildes */}
+                        <path
+                          d="M3 5L6.5 8.5L16 1.5"
                           stroke={cmykToRgb()}
                           strokeWidth="2.2"
                           strokeLinecap="round"
@@ -475,8 +475,8 @@ export function QRGenerator({
                       </svg>
                       <svg
                         width="19"
-                        height="9.5"
-                        src="/images/AR-Montserrat-Arabic.png"
+                        height="10"
+                        viewBox="0 0 19 9.5"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ 
@@ -486,7 +486,7 @@ export function QRGenerator({
                       >
                         <path
                           d="M3 5L6.5 8.5L16 1.5"
-                          height="10"
+                          stroke={cmykToRgb()}
                           strokeWidth="2.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -505,7 +505,7 @@ export function QRGenerator({
                 <Smartphone className="w-5 h-5" />
                 Vista Previa Digital
               </h4>
-                          height="10"
+              <div className="flex justify-center mb-4">
                 <div className="bg-white p-4 rounded-lg shadow-md">
                   <img src={qrDataUrl} alt="QR Code Preview" className="w-32 h-32" />
                 </div>
