@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import { saveAs } from 'file-saver';
 import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { getQRModConfig } from '../utils/qrModConfig';
 import { 
   QrCode, Download, Eye, Copy, CheckCircle, Settings,
   TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw

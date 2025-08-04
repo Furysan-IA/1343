@@ -9,6 +9,7 @@ export interface QRModConfig {
   fontSize: number;
   useImage: boolean;
   imagePath: string;
+  customFontUrl?: string;
 }
 
 const DEFAULT_QR_MOD_CONFIG: QRModConfig = {
@@ -29,10 +30,15 @@ export function getQRModConfig(): QRModConfig {
     return DEFAULT_QR_MOD_CONFIG;
   }
   
-  const savedConfig = localStorage.getItem('qr-mod-config');
-  if (savedConfig) {
+  const isApplied = localStorage.getItem('qr-mod-apply') === 'true';
+  if (!isApplied) {
+    return DEFAULT_QR_MOD_CONFIG;
+  }
+  
+  const saved = localStorage.getItem('qr-mod-config');
+  if (saved) {
     try {
-      return { ...DEFAULT_QR_MOD_CONFIG, ...JSON.parse(savedConfig) };
+      return { ...DEFAULT_QR_MOD_CONFIG, ...JSON.parse(saved) };
     } catch (e) {
       console.error("Error parsing QR mod config from localStorage", e);
       return DEFAULT_QR_MOD_CONFIG;
