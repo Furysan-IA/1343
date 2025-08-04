@@ -238,28 +238,21 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             gap: '3px'
                           }}
                         >
-                          {/* Logo AR */}
-                          <img
-                            src="/images/AR-Monserrat-arabic.png"
-                            alt="AR"
+                          {/* Logo AR con fuente personalizada */}
+                          <span
                             style={{
+                              fontFamily: 'AR-Monserrat-Arabic, Arial, sans-serif',
+                              fontSize: '16px',
+                              fontWeight: 'bold',
+                              color: '#000000',
                               height: '19px',
-                              width: 'auto',
-                              display: 'block'
+                              display: 'flex',
+                              alignItems: 'center',
+                              lineHeight: 1
                             }}
-                            onError={(e) => {
-                              console.error('Error loading AR image from /images/AR-Monserrat-arabic.png');
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const fallback = document.createElement('span');
-                              fallback.textContent = 'AR';
-                              fallback.style.cssText = 'font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #000; height: 19px; display: flex; align-items: center;';
-                              target.parentNode?.insertBefore(fallback, target);
-                            }}
-                            onLoad={() => {
-                              console.log('AR image loaded successfully');
-                            }}
-                          />
+                          >
+                            AR
+                          </span>
                           
                           {/* Tildes */}
                           <div
