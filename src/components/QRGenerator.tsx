@@ -18,11 +18,15 @@ import toast from 'react-hot-toast';
 interface QRGeneratorProps {
   product: {
     codificacion: string;
-    uuid?: string;
+    uuid: string;  // Ahora es requerido, no opcional
     marca: string | null;
     producto: string | null;
     modelo: string | null;
     titular?: string | null;
+    qr_link?: string | null;
+    qr_path?: string | null;
+    qr_status?: string | null;
+    qr_generated_at?: string | null;
   };
   onQRGenerated?: (qrUrl: string) => void;
   compact?: boolean;
@@ -59,13 +63,13 @@ export function QRGenerator({
 
   // Cargar QR existente si existe
   useEffect(() => {
-    if ((product as any).qr_link) {
-      setQrUrl((product as any).qr_link);
+    if (product.qr_link) {
+      setQrUrl(product.qr_link);
       // Si ya tiene QR, intentar cargarlo
-      if ((product as any).qr_path) {
-        setQrDataUrlHighRes((product as any).qr_path);
+      if (product.qr_path) {
+        setQrDataUrlHighRes(product.qr_path);
         // Generar versión normal desde la alta resolución
-        generateNormalFromHighRes((product as any).qr_path);
+        generateNormalFromHighRes(product.qr_path);
       }
     }
   }, [product]);
@@ -73,7 +77,7 @@ export function QRGenerator({
   const generateNormalFromHighRes = async (highResData: string) => {
     try {
       // IMPORTANTE: Regenerar el QR con parámetros optimizados para escaneo
-      const qrDataNormal = await QRCode.toDataURL((product as any).qr_link || '', {
+      const qrDataNormal = await QRCode.toDataURL(product.qr_link || '', {
         width: 200, // Aumentado de 75 a 200 para mejor calidad
         margin: 2, // Margen de 2 módulos para mejor detección
         errorCorrectionLevel: 'M', // Cambiado de H a M para mejor balance
@@ -92,8 +96,9 @@ export function QRGenerator({
 
   // Generar la URL que se usará para el QR
   const getPreviewUrl = () => {
-    if ((product as any).uuid) {
-      return qrConfigService.generateProductUrl((product as any).uuid);
+    // Usar UUID del producto
+    if (product.uuid) {
+      return qrConfigService.generateProductUrl(product.uuid);
     }
     // Fallback temporal si no hay UUID
     return `${window.location.origin}/products/[UUID-NO-DISPONIBLE]`;
@@ -101,14 +106,14 @@ export function QRGenerator({
 
   // Verificar si la URL actual es diferente a la configurada
   const checkUrlStatus = () => {
-    if (!(product as any).qr_link) return null;
+    if (!product.qr_link) return null;
     
     const currentBase = currentConfig.baseUrl;
-    const isOutdated = !(product as any).qr_link.startsWith(currentBase);
+    const isOutdated = !product.qr_link.startsWith(currentBase);
     
     if (isOutdated) {
       try {
-        const existingUrl = new URL((product as any).qr_link);
+        const existingUrl = new URL(product.qr_link);
         return {
           isOutdated: true,
           oldBase: existingUrl.origin,
@@ -164,13 +169,13 @@ export function QRGenerator({
     }
 
     // Verificar que el producto tenga UUID
-    if (!(product as any).uuid) {
+    if (!product.uuid) {
       toast.error('Este producto no tiene UUID asignado. Por favor, contacte al administrador.');
       return;
     }
 
     // Si ya tiene QR y no es forzado, preguntar
-    if ((product as any).qr_path && !force && !showRegenerateAlert) {
+    if (product.qr_path && !force && !showRegenerateAlert) {
       if (!confirm('Este producto ya tiene un código QR. ¿Desea regenerarlo?')) {
         return;
       }
@@ -180,7 +185,7 @@ export function QRGenerator({
     
     try {
       // Usar el UUID del producto para generar la URL
-      const productUrl = qrConfigService.generateProductUrl((product as any).uuid);
+      const productUrl = qrConfigService.generateProductUrl(product.uuid);
       setQrUrl(productUrl);
 
       // IMPORTANTE: Configuración optimizada para escaneo móvil
@@ -359,7 +364,7 @@ export function QRGenerator({
             <AlertCircle className="w-4 h-4" />
             Datos faltantes
           </span>
-        ) : (product as any).qr_path ? (
+        ) : product.qr_path ? (
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-green-500" />
             <button
@@ -529,7 +534,7 @@ export function QRGenerator({
                     <Info className="w-4 h-4 text-blue-600 mt-0.5" />
                     <div className="text-blue-800">
                       <p>Esta URL apuntará a la vista pública del producto en esta aplicación.</p>
-                      <p className="mt-1">El código QR dirigirá a los usuarios a: <code className="bg-blue-100 px-1 rounded">/products/{product.codificacion}</code></p>
+                      <p className="mt-1">El código QR dirigirá a los usuarios a: <code className="bg-blue-100 px-1 rounded">/products/{product.uuid}</code></p>
                     </div>
                   </div>
                 </div>
@@ -784,11 +789,11 @@ export function QRGenerator({
                   })
                 </span>
               </div>
-              {(product as any).qr_generated_at && (
+              {product.qr_generated_at && (
                 <div className="flex items-center">
                   <span className="text-blue-700 font-medium mr-2">Generado:</span>
                   <span className="text-blue-900">
-                    {new Date((product as any).qr_generated_at).toLocaleString('es-AR')}
+                    {new Date(product.qr_generated_at).toLocaleString('es-AR')}
                   </span>
                 </div>
               )}

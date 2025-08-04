@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 
 interface Product {
   codificacion: string;
+  uuid: string;
   cuit: number;
   titular: string | null;
   tipo_certificacion: string | null;
