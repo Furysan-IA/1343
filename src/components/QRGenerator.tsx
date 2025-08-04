@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 interface QRGeneratorProps {
   product: {
     codificacion: string;
+    uuid?: string;
     marca: string | null;
     producto: string | null;
     modelo: string | null;
@@ -86,7 +87,11 @@ export function QRGenerator({
 
   // Generar la URL que se usará para el QR
   const getPreviewUrl = () => {
-    return qrConfigService.generateProductUrl(product.codificacion);
+    if ((product as any).uuid) {
+      return qrConfigService.generateProductUrl((product as any).uuid);
+    }
+    // Fallback temporal si no hay UUID
+    return `${window.location.origin}/products/[UUID-NO-DISPONIBLE]`;
   };
 
   // Verificar si la URL actual es diferente a la configurada
@@ -153,6 +158,12 @@ export function QRGenerator({
       return;
     }
 
+    // Verificar que el producto tenga UUID
+    if (!(product as any).uuid) {
+      toast.error('Este producto no tiene UUID asignado. Por favor, contacte al administrador.');
+      return;
+    }
+
     // Si ya tiene QR y no es forzado, preguntar
     if ((product as any).qr_path && !force && !showRegenerateAlert) {
       if (!confirm('Este producto ya tiene un código QR. ¿Desea regenerarlo?')) {
@@ -163,8 +174,8 @@ export function QRGenerator({
     setGenerating(true);
     
     try {
-      // Usar el servicio de configuración para generar la URL
-      const productUrl = qrConfigService.generateProductUrl(product.codificacion);
+      // Usar el UUID del producto para generar la URL
+      const productUrl = qrConfigService.generateProductUrl((product as any).uuid);
       setQrUrl(productUrl);
 
       // Generar QR tamaño normal (75x75px para etiqueta de 25x30mm)

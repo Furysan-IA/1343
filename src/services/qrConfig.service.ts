@@ -143,10 +143,18 @@ class QRConfigService {
   }
 
   // Generar URL para un producto
-  generateProductUrl(codificacion: string): string {
+  generateProductUrl(uuid: string): string {
     const config = this.getConfig();
-    // Usar /products/ en lugar de /qr/
-    return `${config.baseUrl}/products/${codificacion}`;
+    // Usar UUID directamente sin codificación ya que es seguro para URLs
+    return `${config.baseUrl}/products/${uuid}`;
+  }
+
+  // Agregar nueva función para generar URL por codificación (uso interno)
+  generateProductUrlByCodificacion(codificacion: string): string {
+    console.warn('⚠️ Usando codificación en lugar de UUID. Considera migrar a UUID.');
+    const config = this.getConfig();
+    const encodedCode = encodeURIComponent(codificacion);
+    return `${config.baseUrl}/products/code/${encodedCode}`;
   }
 
   // Obtener sugerencias de URL

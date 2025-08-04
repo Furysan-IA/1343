@@ -3,12 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Shield, QrCode, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 
 export function QRLanding() {
-  const { uuid: codificacion } = useParams<{ uuid: string }>();
+  const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    if (!codificacion) {
+    if (!uuid) {
       navigate('/');
       return;
     }
@@ -17,7 +17,7 @@ export function QRLanding() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          navigate(`/products/${codificacion}`);
+          navigate(`/products/${uuid}`);
           return 0;
         }
         return prev - 1;
@@ -25,15 +25,15 @@ export function QRLanding() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [codificacion, navigate]);
+  }, [uuid, navigate]);
 
   const handleManualRedirect = () => {
-    if (codificacion) {
-      navigate(`/products/${codificacion}`);
+    if (uuid) {
+      navigate(`/products/${uuid}`);
     }
   };
 
-  if (!codificacion) {
+  if (!uuid) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md w-full">
@@ -60,7 +60,7 @@ export function QRLanding() {
           Verificando Producto
         </h1>
         <p className="text-gray-600 mb-8">
-          Código: <span className="font-mono font-medium">{codificacion}</span>
+          UUID: <span className="font-mono font-medium">{uuid}</span>
         </p>
 
         {/* Countdown */}

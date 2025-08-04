@@ -49,6 +49,7 @@ export interface Database {
       products: {
         Row: {
           codificacion: string
+          uuid: string
           cuit: number
           titular: string | null
           tipo_certificacion: string | null
@@ -89,6 +90,7 @@ export interface Database {
         }
         Insert: {
           codificacion: string
+          uuid?: string
           cuit: number
           titular?: string | null
           tipo_certificacion?: string | null
@@ -129,6 +131,7 @@ export interface Database {
         }
         Update: {
           codificacion?: string
+          uuid?: string
           cuit?: number
           titular?: string | null
           tipo_certificacion?: string | null

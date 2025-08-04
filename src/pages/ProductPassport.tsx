@@ -10,6 +10,7 @@ import {
 
 interface Product {
   codificacion: string;
+  uuid: string;
   cuit: number;
   titular: string | null;
   tipo_certificacion: string | null;
@@ -80,7 +81,7 @@ interface DJC {
 }
 
 export default function ProductPassport() {
-  const { uuid: codificacion } = useParams<{ uuid: string }>();
+  const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [djc, setDjc] = useState<DJC | null>(null);
@@ -88,24 +89,24 @@ export default function ProductPassport() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (codificacion) {
+    if (uuid) {
       fetchProductData();
     } else {
-      setError('Código de producto no válido');
+      setError('UUID de producto no válido');
       setLoading(false);
     }
-  }, [codificacion]);
+  }, [uuid]);
 
   const fetchProductData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Buscar producto por codificacion
+      // Buscar producto por UUID
       const { data: productData, error: productError } = await supabase
         .from('products')
         .select('*')
-        .eq('codificacion', codificacion)
+        .eq('uuid', uuid)
         .single();
 
       if (productError) {
@@ -119,11 +120,11 @@ export default function ProductPassport() {
 
       setProduct(productData);
 
-      // Buscar DJC asociada
+      // Buscar DJC asociada usando codificacion
       const { data: djcData, error: djcError } = await supabase
         .from('djc')
         .select('*')
-        .eq('codigo_producto', codificacion)
+        .eq('codigo_producto', productData.codificacion)
         .maybeSingle();
 
       if (djcError && djcError.code !== 'PGRST116') {
