@@ -1,8 +1,8 @@
-// QRModTool.tsx - Herramienta avanzada de configuración QR con pestañas
+// QRModTool.tsx - Herramienta avanzada de configuración QR con pestañas mejoradas
 import React, { useState, useRef, useEffect } from 'react';
-import { Wrench, X, Save, Download, Eye, Copy, CheckCircle, AlertCircle, Upload, FileText, RefreshCw, Maximize2, ImageIcon, Grid3x3, Square, Move, Type, Check, Settings, Ruler } from 'lucide-react';
+import { Wrench, X, Save, Download, Eye, Copy, CheckCircle, AlertCircle, Upload, FileText, RefreshCw, Maximize2, ImageIcon, Grid3x3, Square, Move, Type, Check, Settings, Ruler, FileType, Palette } from 'lucide-react';
 
-// Tipos
+// Tipos actualizados
 interface QRConfig {
   // Etiqueta
   labelWidth: number;
@@ -31,13 +31,38 @@ interface QRConfig {
   useImage: boolean;
   imageUrl: string;
   
-  // Tildes
+  // Tildes/Símbolos
   checkWidth: number;
   checkHeight: number;
   checkStrokeWidth: number;
   checkSpacingVertical: number;
   tildeOffsetX: number;
   tildeOffsetY: number;
+  
+  // Símbolos avanzados
+  symbolCount: number;
+  symbol1Angle: number;
+  symbol2Angle: number;
+  symbolSize: number;
+  useIndividualSize: boolean;
+  symbol1Size: number;
+  symbol2Size: number;
+  useIndividualControl: boolean;
+  symbol1X: number;
+  symbol1Y: number;
+  symbol2X: number;
+  symbol2Y: number;
+  
+  // Fuente
+  fontWeight: string;
+  letterSpacing: number;
+  textTransform: string;
+  arText: string;
+  
+  // Colores
+  useCMYK: boolean;
+  cmyk: { c: number; m: number; y: number; k: number };
+  checkColor: string;
   
   // General
   isActive: boolean;
@@ -73,7 +98,7 @@ const defaultConfig: QRConfig = {
   useImage: false,
   imageUrl: '',
   
-  // Tildes
+  // Tildes/Símbolos
   checkWidth: 19,
   checkHeight: 9.5,
   checkStrokeWidth: 2.2,
@@ -81,27 +106,57 @@ const defaultConfig: QRConfig = {
   tildeOffsetX: 0,
   tildeOffsetY: 0,
   
+  // Símbolos avanzados
+  symbolCount: 2,
+  symbol1Angle: 0,
+  symbol2Angle: 0,
+  symbolSize: 100,
+  useIndividualSize: false,
+  symbol1Size: 100,
+  symbol2Size: 100,
+  useIndividualControl: false,
+  symbol1X: 0,
+  symbol1Y: 0,
+  symbol2X: 0,
+  symbol2Y: 0,
+  
+  // Fuente
+  fontWeight: 'bold',
+  letterSpacing: 0,
+  textTransform: 'none',
+  arText: 'AR',
+  
+  // Colores
+  useCMYK: true,
+  cmyk: { c: 47, m: 22, y: 0, k: 14 },
+  checkColor: '#73a9c2',
+  
   // General
   isActive: true,
   showGrid: false,
   gridSize: 1
 };
 
-// Función auxiliar para CMYK a RGB
-const cmykToRgb = () => '#0ac5ff';
+// Función para convertir CMYK a RGB
+const cmykToRgb = (c: number = 47, m: number = 22, y: number = 0, k: number = 14) => {
+  const r = Math.round(255 * (1 - c / 100) * (1 - k / 100));
+  const g = Math.round(255 * (1 - m / 100) * (1 - k / 100));
+  const b = Math.round(255 * (1 - y / 100) * (1 - k / 100));
+  return `rgb(${r}, ${g}, ${b})`;
+};
 
 // Sistema de notificaciones simple
 const toast = {
   success: (message: string) => {
     const toastEl = document.createElement('div');
-    toastEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+    toastEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50 text-sm';
     toastEl.textContent = message;
     document.body.appendChild(toastEl);
     setTimeout(() => toastEl.remove(), 3000);
   },
   error: (message: string) => {
     const toastEl = document.createElement('div');
-    toastEl.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
+    toastEl.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50 text-sm';
     toastEl.textContent = message;
     document.body.appendChild(toastEl);
     setTimeout(() => toastEl.remove(), 3000);
@@ -110,7 +165,6 @@ const toast = {
 
 // Generador de QR simple (placeholder)
 const generateQRDataUrl = (text: string): string => {
-  // Creamos un QR placeholder con SVG
   const size = 200;
   const modules = 25;
   const moduleSize = size / modules;
@@ -118,15 +172,12 @@ const generateQRDataUrl = (text: string): string => {
   let svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">`;
   svg += '<rect width="100%" height="100%" fill="white"/>';
   
-  // Patrón simple de QR (no es un QR real, solo visual)
   for (let row = 0; row < modules; row++) {
     for (let col = 0; col < modules; col++) {
       if (
-        // Esquinas de posición
         (row < 7 && col < 7) ||
         (row < 7 && col >= modules - 7) ||
         (row >= modules - 7 && col < 7) ||
-        // Patrón aleatorio para el centro
         (row >= 7 && row < modules - 7 && col >= 7 && col < modules - 7 && Math.random() > 0.5)
       ) {
         const x = col * moduleSize;
@@ -138,7 +189,6 @@ const generateQRDataUrl = (text: string): string => {
   
   svg += '</svg>';
   
-  // Convertir SVG a data URL
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   return svgUrl;
@@ -165,7 +215,7 @@ export const QRModTool: React.FC = () => {
   const [config, setConfig] = useState<QRConfig>(loadQRModConfig());
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [fontUrl, setFontUrl] = useState<string | null>(null);
-  const [customFonts, setCustomFonts] = useState<string[]>(['Arial', 'Montserrat-Arabic']);
+  const [customFonts, setCustomFonts] = useState<string[]>(['Arial', 'Montserrat-Arabic', 'Helvetica', 'Times New Roman']);
   const [componentsStatus, setComponentsStatus] = useState({
     qrGenerator: false,
     qrModal: false,
@@ -177,12 +227,14 @@ export const QRModTool: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Tabs configuration
+  // Tabs configuration actualizada
   const tabs = [
     { id: 'label', label: 'Etiqueta', icon: Square },
-    { id: 'qr', label: 'Código QR', icon: Grid3x3 },
-    { id: 'ar', label: 'Logo AR', icon: Type },
-    { id: 'tildes', label: 'Tildes', icon: Check },
+    { id: 'qr', label: 'QR', icon: Grid3x3 },
+    { id: 'ar', label: 'AR', icon: Type },
+    { id: 'symbols', label: 'Símbolos', icon: Check },
+    { id: 'font', label: 'Fuente', icon: FileType },
+    { id: 'colors', label: 'Colores', icon: Palette },
     { id: 'general', label: 'General', icon: Settings }
   ];
 
@@ -191,40 +243,6 @@ export const QRModTool: React.FC = () => {
     const qrUrl = generateQRDataUrl('https://ejemplo.com?id=TEST123');
     setQrDataUrl(qrUrl);
   }, []);
-
-  // Cargar fuente personalizada si existe
-  useEffect(() => {
-    if (config.fontFamily && config.fontFamily !== 'Arial' && fontUrl) {
-      const style = document.createElement('style');
-      style.textContent = `
-        @font-face {
-          font-family: '${config.fontFamily}';
-          src: url('${fontUrl}');
-        }
-      `;
-      document.head.appendChild(style);
-      return () => {
-        document.head.removeChild(style);
-      };
-    }
-  }, [config.fontFamily, fontUrl]);
-
-  // Verificar estado de componentes
-  const checkComponentsStatus = () => {
-    const savedConfig = localStorage.getItem('qrModConfig');
-    const status = {
-      qrGenerator: !!savedConfig && config.isActive,
-      qrModal: !!savedConfig && config.isActive,
-      lastCheck: new Date()
-    };
-    setComponentsStatus(status);
-  };
-
-  useEffect(() => {
-    checkComponentsStatus();
-    const interval = setInterval(checkComponentsStatus, 2000);
-    return () => clearInterval(interval);
-  }, [config.isActive]);
 
   // Actualizar configuración
   const updateConfig = (key: keyof QRConfig, value: any) => {
@@ -236,7 +254,6 @@ export const QRModTool: React.FC = () => {
   const handleSave = () => {
     saveQRModConfig(config);
     toast.success('Configuración guardada');
-    checkComponentsStatus();
   };
 
   // Cargar fuente personalizada
@@ -250,222 +267,21 @@ export const QRModTool: React.FC = () => {
         const fontName = file.name.split('.')[0];
         setCustomFonts([...customFonts, fontName]);
         updateConfig('fontFamily', fontName);
+        
+        // Crear @font-face
+        const style = document.createElement('style');
+        style.textContent = `
+          @font-face {
+            font-family: '${fontName}';
+            src: url('${fontData}');
+          }
+        `;
+        document.head.appendChild(style);
+        
         toast.success(`Fuente "${fontName}" cargada`);
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  // Cargar imagen AR
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const imageData = event.target?.result as string;
-        setUploadedImage(imageData);
-        updateConfig('imageUrl', imageData);
-        updateConfig('useImage', true);
-        toast.success('Imagen AR cargada');
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Descargar PNG de prueba
-  const downloadTestPNG = async () => {
-    if (labelRef.current) {
-      try {
-        // Crear canvas para capturar el elemento
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Configurar tamaño del canvas
-        const scale = 8; // Para alta calidad
-        canvas.width = config.labelWidth * scale;
-        canvas.height = config.labelHeight * scale;
-        
-        // Fondo blanco
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Dibujar borde
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = config.labelBorderWidth * scale;
-        ctx.strokeRect(0, 0, canvas.width, canvas.height);
-        
-        // Dibujar QR (placeholder)
-        const qrX = config.qrCenterHorizontally 
-          ? (canvas.width - config.qrSize * scale) / 2 
-          : config.qrLeftPosition * scale;
-        const qrY = config.qrTopPosition * scale;
-        
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(qrX, qrY, config.qrSize * scale, config.qrSize * scale);
-        
-        // Dibujar texto AR o imagen
-        const arX = canvas.width / 2 + config.arOffsetX * scale;
-        const arY = canvas.height - config.arBottomPosition * scale + config.arOffsetY * scale;
-        
-        if (config.useImage && (config.imageUrl || uploadedImage)) {
-          // Si hay imagen, dibujar un rectángulo placeholder
-          ctx.fillStyle = '#cccccc';
-          ctx.fillRect(arX - 20, arY - config.arHeight * scale / 2, 40, config.arHeight * scale);
-        } else {
-          // Dibujar texto AR
-          ctx.fillStyle = '#000000';
-          ctx.font = `bold ${config.fontSize * scale}px ${config.fontFamily}`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('AR', arX, arY);
-        }
-        
-        // Dibujar tildes (checkmarks simplificados)
-        const tildeX = arX + config.arSpacing * scale + config.tildeOffsetX * scale;
-        const tildeY = arY + config.tildeOffsetY * scale;
-        
-        ctx.strokeStyle = cmykToRgb();
-        ctx.lineWidth = config.checkStrokeWidth * scale;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        // Primera tilde
-        ctx.beginPath();
-        ctx.moveTo(tildeX - 8 * scale, tildeY - config.checkSpacingVertical * scale);
-        ctx.lineTo(tildeX - 2 * scale, tildeY + 3 * scale - config.checkSpacingVertical * scale);
-        ctx.lineTo(tildeX + 8 * scale, tildeY - 5 * scale - config.checkSpacingVertical * scale);
-        ctx.stroke();
-        
-        // Segunda tilde
-        ctx.beginPath();
-        ctx.moveTo(tildeX - 8 * scale, tildeY + config.checkSpacingVertical * scale);
-        ctx.lineTo(tildeX - 2 * scale, tildeY + 3 * scale + config.checkSpacingVertical * scale);
-        ctx.lineTo(tildeX + 8 * scale, tildeY - 5 * scale + config.checkSpacingVertical * scale);
-        ctx.stroke();
-        
-        // Convertir canvas a blob y descargar
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'etiqueta-qr-test.png';
-            a.click();
-            URL.revokeObjectURL(url);
-            toast.success('PNG descargado');
-          }
-        });
-      } catch (error) {
-        console.error('Error:', error);
-        toast.error('Error al descargar PNG');
-      }
-    }
-  };
-
-  // Generar imagen AR desde texto
-  const generateARImage = async () => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = 200;
-    canvas.height = 80;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#000000';
-    ctx.font = `bold ${config.fontSize * 3}px ${config.fontFamily}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('AR', canvas.width / 2, canvas.height / 2);
-
-    const imageData = canvas.toDataURL('image/png');
-    setUploadedImage(imageData);
-    updateConfig('imageUrl', imageData);
-    updateConfig('useImage', true);
-    toast.success('Imagen AR generada');
-  };
-
-  // Aplicar a componentes
-  const applyToComponents = () => {
-    handleSave();
-    window.dispatchEvent(new Event('qrModConfigUpdated'));
-    toast.success('Configuración aplicada a los componentes');
-  };
-
-  // Copiar código
-  const copyCode = () => {
-    const code = generateCode();
-    navigator.clipboard.writeText(code);
-    toast.success('Código copiado');
-  };
-
-  // Generar código
-  const generateCode = () => {
-    return `// Configuración QR generada
-const qrConfig = ${JSON.stringify(config, null, 2)};
-
-// Etiqueta QR
-<div 
-  ref={labelRef}
-  style={{
-    width: '${config.labelWidth}px',
-    height: '${config.labelHeight}px',
-    backgroundColor: '#ffffff',
-    border: '${config.labelBorderWidth}px solid #000000',
-    borderRadius: '${config.labelBorderRadius}px',
-    position: 'relative',
-    overflow: 'hidden',
-    boxSizing: 'border-box',
-    padding: '${config.labelPaddingTop}px ${config.labelPaddingRight}px ${config.labelPaddingBottom}px ${config.labelPaddingLeft}px'
-  }}
->
-  {/* Código QR */}
-  <div
-    style={{
-      position: 'absolute',
-      top: '${config.qrTopPosition}px',
-      left: '${config.qrCenterHorizontally ? '50%' : config.qrLeftPosition + 'px'}',
-      transform: '${config.qrCenterHorizontally ? 'translateX(-50%)' : 'none'}',
-      width: '${config.qrSize}px',
-      height: '${config.qrSize}px'
-    }}
-  >
-    <img src={qrDataUrl} alt="QR" style={{ width: '100%', height: '100%' }} />
-  </div>
-
-  {/* AR + Tildes */}
-  <div
-    style={{
-      position: 'absolute',
-      bottom: '${config.arBottomPosition}px',
-      left: '50%',
-      transform: 'translateX(-50%) translateX(${config.arOffsetX}px) translateY(${config.arOffsetY}px)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '${config.arSpacing}px'
-    }}
-  >
-    {/* AR */}
-    ${config.useImage ? `<img src="${config.imageUrl}" alt="AR" style={{ height: '${config.arHeight}px' }} />` : 
-    `<span style={{ fontFamily: '${config.fontFamily}', fontSize: '${config.fontSize}px', fontWeight: 'bold' }}>AR</span>`}
-    
-    {/* Tildes */}
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      gap: '${config.checkSpacingVertical}px',
-      transform: 'translateX(${config.tildeOffsetX}px) translateY(${config.tildeOffsetY}px)'
-    }}>
-      {[0, 1].map(i => (
-        <svg key={i} width="${config.checkWidth}" height="${config.checkHeight}" viewBox="0 0 ${config.checkWidth} ${config.checkHeight}">
-          <path d="M3 5L6.5 8.5L16 1.5" stroke="${cmykToRgb()}" strokeWidth="${config.checkStrokeWidth}" />
-        </svg>
-      ))}
-    </div>
-  </div>
-</div>`;
   };
 
   // Renderizar contenido de pestaña
@@ -652,6 +468,16 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
             </h3>
             
             <div>
+              <label className="text-sm text-gray-600">Texto AR</label>
+              <input
+                type="text"
+                value={config.arText}
+                onChange={(e) => updateConfig('arText', e.target.value)}
+                className="w-full mt-1 p-2 border rounded"
+              />
+            </div>
+            
+            <div>
               <label className="text-sm text-gray-600">Posición desde abajo: {config.arBottomPosition}px</label>
               <input
                 type="range"
@@ -702,7 +528,7 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
             </div>
             
             <div>
-              <label className="text-sm text-gray-600">Espacio AR-Tildes: {config.arSpacing}px</label>
+              <label className="text-sm text-gray-600">Espacio AR-Símbolos: {config.arSpacing}px</label>
               <input
                 type="range"
                 min="0"
@@ -713,100 +539,66 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
               />
             </div>
             
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Fuente y Estilo</h4>
-              
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  type="checkbox"
-                  id="useImage"
-                  checked={config.useImage}
-                  onChange={(e) => updateConfig('useImage', e.target.checked)}
-                  className="rounded"
-                />
-                <label htmlFor="useImage" className="text-sm text-gray-600">Usar imagen en lugar de texto</label>
-              </div>
-              
-              {!config.useImage && (
-                <>
-                  <div className="mb-3">
-                    <label className="text-sm text-gray-600">Fuente</label>
-                    <select
-                      value={config.fontFamily}
-                      onChange={(e) => updateConfig('fontFamily', e.target.value)}
-                      className="w-full mt-1 p-2 border rounded"
-                    >
-                      {customFonts.map(font => (
-                        <option key={font} value={font}>{font}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-600">Tamaño de fuente: {config.fontSize}px</label>
-                    <input
-                      type="range"
-                      min="8"
-                      max="30"
-                      value={config.fontSize}
-                      onChange={(e) => updateConfig('fontSize', Number(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                </>
-              )}
-              
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  Cargar Fuente
-                </button>
-                <button
-                  onClick={() => imageInputRef.current?.click()}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  Cargar Imagen
-                </button>
-              </div>
-              
+            <div className="flex items-center gap-2 mb-3">
               <input
-                ref={fileInputRef}
-                type="file"
-                accept=".otf,.ttf,.woff,.woff2"
-                onChange={handleFontUpload}
-                className="hidden"
+                type="checkbox"
+                id="useImage"
+                checked={config.useImage}
+                onChange={(e) => updateConfig('useImage', e.target.checked)}
+                className="rounded"
               />
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              
-              {!config.useImage && (
-                <button
-                  onClick={generateARImage}
-                  className="w-full mt-2 bg-blue-100 hover:bg-blue-200 p-2 rounded text-sm"
-                >
-                  Generar Imagen AR desde Fuente
-                </button>
-              )}
+              <label htmlFor="useImage" className="text-sm text-gray-600">Usar imagen en lugar de texto</label>
             </div>
+            
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className="w-full bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
+            >
+              <ImageIcon className="w-4 h-4" />
+              Cargar Imagen AR
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const imageData = event.target?.result as string;
+                    setUploadedImage(imageData);
+                    updateConfig('imageUrl', imageData);
+                    updateConfig('useImage', true);
+                    toast.success('Imagen AR cargada');
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="hidden"
+            />
           </div>
         );
         
-      case 'tildes':
+      case 'symbols':
         return (
           <div className="space-y-4">
             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <Check className="w-5 h-5" />
-              Configuración de Tildes
+              Configuración de Símbolos
             </h3>
+            
+            <div>
+              <label className="text-sm text-gray-600">Cantidad de símbolos: {config.symbolCount}</label>
+              <input
+                type="range"
+                min="1"
+                max="3"
+                value={config.symbolCount}
+                onChange={(e) => updateConfig('symbolCount', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -860,30 +652,389 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Desplazamiento X: {config.tildeOffsetX}px</label>
-                <input
-                  type="range"
-                  min="-30"
-                  max="30"
-                  value={config.tildeOffsetX}
-                  onChange={(e) => updateConfig('tildeOffsetX', Number(e.target.value))}
-                  className="w-full"
-                />
+            <div>
+              <label className="text-sm text-gray-600">Tamaño general: {config.symbolSize}%</label>
+              <input
+                type="range"
+                min="50"
+                max="150"
+                step="5"
+                value={config.symbolSize}
+                onChange={(e) => updateConfig('symbolSize', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Control de ángulos</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600">Ángulo símbolo 1: {config.symbol1Angle}°</label>
+                  <input
+                    type="range"
+                    min="-45"
+                    max="45"
+                    value={config.symbol1Angle}
+                    onChange={(e) => updateConfig('symbol1Angle', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                
+                {config.symbolCount > 1 && (
+                  <div>
+                    <label className="text-sm text-gray-600">Ángulo símbolo 2: {config.symbol2Angle}°</label>
+                    <input
+                      type="range"
+                      min="-45"
+                      max="45"
+                      value={config.symbol2Angle}
+                      onChange={(e) => updateConfig('symbol2Angle', Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
-              
-              <div>
-                <label className="text-sm text-gray-600">Desplazamiento Y: {config.tildeOffsetY}px</label>
-                <input
-                  type="range"
-                  min="-20"
-                  max="20"
-                  value={config.tildeOffsetY}
-                  onChange={(e) => updateConfig('tildeOffsetY', Number(e.target.value))}
-                  className="w-full"
-                />
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Posición del grupo</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600">Desplazamiento X: {config.tildeOffsetX}px</label>
+                  <input
+                    type="range"
+                    min="-30"
+                    max="30"
+                    value={config.tildeOffsetX}
+                    onChange={(e) => updateConfig('tildeOffsetX', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Desplazamiento Y: {config.tildeOffsetY}px</label>
+                  <input
+                    type="range"
+                    min="-20"
+                    max="20"
+                    value={config.tildeOffsetY}
+                    onChange={(e) => updateConfig('tildeOffsetY', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
               </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="individualControl"
+                checked={config.useIndividualControl}
+                onChange={(e) => updateConfig('useIndividualControl', e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="individualControl" className="text-sm text-gray-600">Control individual de posición</label>
+            </div>
+            
+            {config.useIndividualControl && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Posición individual</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-600">Símbolo 1 X: {config.symbol1X}px</label>
+                    <input
+                      type="range"
+                      min="-20"
+                      max="20"
+                      value={config.symbol1X}
+                      onChange={(e) => updateConfig('symbol1X', Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm text-gray-600">Símbolo 1 Y: {config.symbol1Y}px</label>
+                    <input
+                      type="range"
+                      min="-20"
+                      max="20"
+                      value={config.symbol1Y}
+                      onChange={(e) => updateConfig('symbol1Y', Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  {config.symbolCount > 1 && (
+                    <>
+                      <div>
+                        <label className="text-sm text-gray-600">Símbolo 2 X: {config.symbol2X}px</label>
+                        <input
+                          type="range"
+                          min="-20"
+                          max="20"
+                          value={config.symbol2X}
+                          onChange={(e) => updateConfig('symbol2X', Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm text-gray-600">Símbolo 2 Y: {config.symbol2Y}px</label>
+                        <input
+                          type="range"
+                          min="-20"
+                          max="20"
+                          value={config.symbol2Y}
+                          onChange={(e) => updateConfig('symbol2Y', Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+        
+      case 'font':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <FileType className="w-5 h-5" />
+              Configuración de Fuente
+            </h3>
+            
+            <div>
+              <label className="text-sm text-gray-600">Texto AR</label>
+              <input
+                type="text"
+                value={config.arText}
+                onChange={(e) => updateConfig('arText', e.target.value)}
+                className="w-full mt-1 p-2 border rounded"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Fuente</label>
+              <select
+                value={config.fontFamily}
+                onChange={(e) => updateConfig('fontFamily', e.target.value)}
+                className="w-full mt-1 p-2 border rounded"
+              >
+                {customFonts.map(font => (
+                  <option key={font} value={font}>{font}</option>
+                ))}
+              </select>
+            </div>
+            
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Cargar Fuente (.otf, .ttf, .woff)
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".otf,.ttf,.woff,.woff2"
+              onChange={handleFontUpload}
+              className="hidden"
+            />
+            
+            <div>
+              <label className="text-sm text-gray-600">Tamaño de fuente: {config.fontSize}px</label>
+              <input
+                type="range"
+                min="8"
+                max="30"
+                value={config.fontSize}
+                onChange={(e) => updateConfig('fontSize', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Peso de fuente</label>
+              <select
+                value={config.fontWeight}
+                onChange={(e) => updateConfig('fontWeight', e.target.value)}
+                className="w-full mt-1 p-2 border rounded"
+              >
+                <option value="normal">Normal</option>
+                <option value="bold">Negrita</option>
+                <option value="300">Light</option>
+                <option value="500">Medium</option>
+                <option value="700">Bold</option>
+                <option value="900">Black</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Espaciado entre letras: {config.letterSpacing}px</label>
+              <input
+                type="range"
+                min="-2"
+                max="5"
+                step="0.1"
+                value={config.letterSpacing}
+                onChange={(e) => updateConfig('letterSpacing', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Transformación de texto</label>
+              <select
+                value={config.textTransform}
+                onChange={(e) => updateConfig('textTransform', e.target.value)}
+                className="w-full mt-1 p-2 border rounded"
+              >
+                <option value="none">Normal</option>
+                <option value="uppercase">MAYÚSCULAS</option>
+                <option value="lowercase">minúsculas</option>
+                <option value="capitalize">Capitalizar</option>
+              </select>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+              <p className="font-medium text-yellow-800 mb-1">Tip para Montserrat Arabic:</p>
+              <ol className="text-yellow-700 text-xs list-decimal list-inside space-y-1">
+                <li>Carga el archivo .otf usando el botón arriba</li>
+                <li>Selecciona la fuente del menú</li>
+                <li>Si no se ve correctamente, usa la opción de imagen en la pestaña AR</li>
+              </ol>
+            </div>
+          </div>
+        );
+        
+      case 'colors':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Palette className="w-5 h-5" />
+              Configuración de Colores
+            </h3>
+            
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="useCMYK"
+                checked={config.useCMYK}
+                onChange={(e) => updateConfig('useCMYK', e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="useCMYK" className="text-sm font-medium text-gray-700">
+                Usar valores CMYK (Especificación Argentina)
+              </label>
+            </div>
+            
+            {config.useCMYK ? (
+              <div className="bg-blue-50 rounded-lg p-4 space-y-4">
+                <p className="text-sm font-medium text-blue-800">Valores CMYK oficiales</p>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Cyan: {config.cmyk.c}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={config.cmyk.c}
+                    onChange={(e) => {
+                      const newCmyk = { ...config.cmyk, c: Number(e.target.value) };
+                      updateConfig('cmyk', newCmyk);
+                      updateConfig('checkColor', cmykToRgb(newCmyk.c, newCmyk.m, newCmyk.y, newCmyk.k));
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Magenta: {config.cmyk.m}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={config.cmyk.m}
+                    onChange={(e) => {
+                      const newCmyk = { ...config.cmyk, m: Number(e.target.value) };
+                      updateConfig('cmyk', newCmyk);
+                      updateConfig('checkColor', cmykToRgb(newCmyk.c, newCmyk.m, newCmyk.y, newCmyk.k));
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Yellow: {config.cmyk.y}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={config.cmyk.y}
+                    onChange={(e) => {
+                      const newCmyk = { ...config.cmyk, y: Number(e.target.value) };
+                      updateConfig('cmyk', newCmyk);
+                      updateConfig('checkColor', cmykToRgb(newCmyk.c, newCmyk.m, newCmyk.y, newCmyk.k));
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Key (Negro): {config.cmyk.k}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={config.cmyk.k}
+                    onChange={(e) => {
+                      const newCmyk = { ...config.cmyk, k: Number(e.target.value) };
+                      updateConfig('cmyk', newCmyk);
+                      updateConfig('checkColor', cmykToRgb(newCmyk.c, newCmyk.m, newCmyk.y, newCmyk.k));
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div className="bg-white rounded p-3 flex items-center justify-between">
+                  <span className="text-sm">Color resultante:</span>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-12 h-12 rounded border-2 border-gray-300"
+                      style={{ backgroundColor: cmykToRgb(config.cmyk.c, config.cmyk.m, config.cmyk.y, config.cmyk.k) }}
+                    />
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      {cmykToRgb(config.cmyk.c, config.cmyk.m, config.cmyk.y, config.cmyk.k)}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm text-gray-600">Color de símbolos</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="color"
+                    value={config.checkColor}
+                    onChange={(e) => updateConfig('checkColor', e.target.value)}
+                    className="h-10 w-20 rounded cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={config.checkColor}
+                    onChange={(e) => updateConfig('checkColor', e.target.value)}
+                    className="flex-1 p-2 border rounded font-mono text-sm"
+                  />
+                </div>
+              </div>
+            )}
+            
+            <div className="bg-green-50 border border-green-200 rounded p-3 text-sm">
+              <p className="font-medium text-green-800">Especificación oficial argentina:</p>
+              <p className="text-green-700 text-xs mt-1">CMYK: C=47, M=22, Y=0, K=14</p>
+              <p className="text-green-700 text-xs">RGB aproximado: rgb(115, 169, 194)</p>
             </div>
           </div>
         );
@@ -895,36 +1046,6 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
               <Settings className="w-5 h-5" />
               Configuración General
             </h3>
-            
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium">Estado de Componentes</h4>
-                <button
-                  onClick={checkComponentsStatus}
-                  className="p-1 hover:bg-gray-100 rounded"
-                  title="Actualizar estado"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${componentsStatus.qrGenerator ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  <span>QRGenerator: {componentsStatus.qrGenerator ? 'Activo' : 'Inactivo'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${componentsStatus.qrModal ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  <span>QRModal: {componentsStatus.qrModal ? 'Activo' : 'Inactivo'}</span>
-                </div>
-              </div>
-              
-              {componentsStatus.lastCheck && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Última verificación: {componentsStatus.lastCheck.toLocaleTimeString()}
-                </p>
-              )}
-            </div>
             
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-2">
@@ -983,14 +1104,14 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setScale(Math.max(1, scale - 0.5))}
-                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                  className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm"
                 >
                   -
                 </button>
-                <span className="min-w-[60px] text-center">{scale * 100}%</span>
+                <span className="min-w-[60px] text-center text-sm">{scale * 100}%</span>
                 <button
                   onClick={() => setScale(Math.min(5, scale + 0.5))}
-                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                  className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm"
                 >
                   +
                 </button>
@@ -1002,6 +1123,13 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
       default:
         return null;
     }
+  };
+
+  // Función para obtener el color actual
+  const getCurrentColor = () => {
+    return config.useCMYK 
+      ? cmykToRgb(config.cmyk.c, config.cmyk.m, config.cmyk.y, config.cmyk.k)
+      : config.checkColor;
   };
 
   return (
@@ -1027,81 +1155,82 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
             isFullscreen ? 'w-full h-full' : 'max-w-7xl w-full max-h-[95vh]'
           }`}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold flex items-center gap-2">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2">
                 <Wrench className="w-5 h-5" />
                 Configurador QR Avanzado
               </h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="p-2 hover:bg-blue-800 rounded transition-colors"
+                  className="p-1.5 hover:bg-blue-800 rounded transition-colors"
                   title="Pantalla completa"
                 >
-                  <Maximize2 className="w-5 h-5" />
+                  <Maximize2 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-2 hover:bg-blue-800 rounded transition-colors"
+                  className="p-1.5 hover:bg-blue-800 rounded transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Content */}
-            <div className="flex h-[calc(100%-4rem)]">
+            <div className="flex h-[calc(100%-3rem)]">
               {/* Sidebar with tabs */}
-              <div className="w-64 bg-gray-100 border-r overflow-y-auto">
-                <nav className="p-4">
+              <div className="w-56 bg-gray-100 border-r overflow-y-auto">
+                <nav className="p-3">
                   {tabs.map((tab) => {
                     const Icon = tab.icon;
                     return (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-full text-left p-3 mb-2 rounded-lg flex items-center gap-3 transition-colors ${
+                        className={`w-full text-left p-2.5 mb-1.5 rounded-lg flex items-center gap-2.5 transition-colors text-sm ${
                           activeTab === tab.id
                             ? 'bg-blue-600 text-white'
                             : 'hover:bg-gray-200 text-gray-700'
                         }`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <Icon className="w-4 h-4" />
                         <span>{tab.label}</span>
                       </button>
                     );
                   })}
                 </nav>
                 
-                {/* Actions */}
-                <div className="p-4 border-t">
+                {/* Actions - botones más pequeños */}
+                <div className="p-3 border-t space-y-2">
                   <button
                     onClick={handleSave}
-                    className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm flex items-center justify-center gap-2"
                   >
-                    <Save className="w-4 h-4" />
+                    <Save className="w-3.5 h-3.5" />
                     Guardar
                   </button>
                   <button
-                    onClick={applyToComponents}
-                    className="w-full mb-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                    onClick={() => {
+                      handleSave();
+                      window.dispatchEvent(new Event('qrModConfigUpdated'));
+                      toast.success('Configuración aplicada');
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm flex items-center justify-center gap-2"
                   >
-                    <CheckCircle className="w-4 h-4" />
+                    <CheckCircle className="w-3.5 h-3.5" />
                     Aplicar
                   </button>
                   <button
-                    onClick={downloadTestPNG}
-                    className="w-full mb-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                    onClick={() => {
+                      const code = generateCode();
+                      navigator.clipboard.writeText(code);
+                      toast.success('Código copiado');
+                    }}
+                    className="w-full bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-sm flex items-center justify-center gap-2"
                   >
-                    <Download className="w-4 h-4" />
-                    Test PNG
-                  </button>
-                  <button
-                    onClick={copyCode}
-                    className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Copiar Código
+                    <Copy className="w-3.5 h-3.5" />
+                    Copiar
                   </button>
                 </div>
               </div>
@@ -1160,24 +1289,12 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
                             left: config.qrCenterHorizontally ? '50%' : `${config.qrLeftPosition}px`,
                             transform: config.qrCenterHorizontally ? 'translateX(-50%)' : 'none',
                             width: `${config.qrSize}px`,
-                            height: `${config.qrSize}px`
+                            height: `${config.qrSize}px`,
+                            backgroundColor: '#000000'
                           }}
-                        >
-                          {qrDataUrl && (
-                            <img
-                              src={qrDataUrl}
-                              alt="Código QR"
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                display: 'block',
-                                imageRendering: 'pixelated'
-                              }}
-                            />
-                          )}
-                        </div>
+                        />
 
-                        {/* AR + Tildes */}
+                        {/* AR + Símbolos */}
                         <div
                           style={{
                             position: 'absolute',
@@ -1206,16 +1323,18 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
                               style={{
                                 fontFamily: config.fontFamily,
                                 fontSize: `${config.fontSize}px`,
-                                fontWeight: 'bold',
+                                fontWeight: config.fontWeight,
+                                letterSpacing: `${config.letterSpacing}px`,
+                                textTransform: config.textTransform as any,
                                 color: '#000000',
                                 lineHeight: 1
                               }}
                             >
-                              AR
+                              {config.arText}
                             </span>
                           )}
 
-                          {/* Tildes */}
+                          {/* Símbolos */}
                           <div
                             style={{
                               display: 'flex',
@@ -1226,25 +1345,38 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
                               transform: `translateX(${config.tildeOffsetX}px) translateY(${config.tildeOffsetY}px)`
                             }}
                           >
-                            {[0, 1].map((i) => (
-                              <svg
-                                key={i}
-                                width={config.checkWidth}
-                                height={config.checkHeight}
-                                viewBox={`0 0 ${config.checkWidth} ${config.checkHeight}`}
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                style={{ display: 'block' }}
-                              >
-                                <path
-                                  d="M3 5L6.5 8.5L16 1.5"
-                                  stroke={cmykToRgb()}
-                                  strokeWidth={config.checkStrokeWidth}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            ))}
+                            {Array.from({ length: config.symbolCount }, (_, i) => {
+                              const angle = i === 0 ? config.symbol1Angle : config.symbol2Angle;
+                              const size = config.symbolSize / 100;
+                              const offsetX = config.useIndividualControl ? (i === 0 ? config.symbol1X : config.symbol2X) : 0;
+                              const offsetY = config.useIndividualControl ? (i === 0 ? config.symbol1Y : config.symbol2Y) : 0;
+                              
+                              return (
+                                <div
+                                  key={i}
+                                  style={{
+                                    transform: `rotate(${angle}deg) scale(${size}) translate(${offsetX}px, ${offsetY}px)`,
+                                    transformOrigin: 'center'
+                                  }}
+                                >
+                                  <svg
+                                    width={config.checkWidth}
+                                    height={config.checkHeight}
+                                    viewBox={`0 0 ${config.checkWidth} ${config.checkHeight}`}
+                                    fill="none"
+                                    style={{ display: 'block' }}
+                                  >
+                                    <path
+                                      d="M3 5L6.5 8.5L16 1.5"
+                                      stroke={getCurrentColor()}
+                                      strokeWidth={config.checkStrokeWidth}
+                                      strokeLinecap="square"
+                                      strokeLinejoin="miter"
+                                    />
+                                  </svg>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -1258,9 +1390,6 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
                     <p className="text-xs text-gray-500 mt-1">
                       Tamaño: {config.labelWidth}px × {config.labelHeight}px
                     </p>
-                    <p className="text-xs text-gray-500">
-                      ({(config.labelWidth / 3.78).toFixed(1)}mm × {(config.labelHeight / 3.78).toFixed(1)}mm)
-                    </p>
                   </div>
                 </div>
               </div>
@@ -1270,6 +1399,91 @@ const qrConfig = ${JSON.stringify(config, null, 2)};
       )}
     </>
   );
+};
+
+// Función para generar código
+const generateCode = (): string => {
+  const config = loadQRModConfig();
+  const getCurrentColor = () => {
+    return config.useCMYK 
+      ? cmykToRgb(config.cmyk.c, config.cmyk.m, config.cmyk.y, config.cmyk.k)
+      : config.checkColor;
+  };
+  
+  return `// Configuración QR generada
+const qrConfig = ${JSON.stringify(config, null, 2)};
+
+// Etiqueta QR
+<div 
+  ref={labelRef}
+  style={{
+    width: '${config.labelWidth}px',
+    height: '${config.labelHeight}px',
+    backgroundColor: '#ffffff',
+    border: '${config.labelBorderWidth}px solid #000000',
+    borderRadius: '${config.labelBorderRadius}px',
+    position: 'relative',
+    overflow: 'hidden',
+    boxSizing: 'border-box'
+  }}
+>
+  {/* Código QR */}
+  <div
+    style={{
+      position: 'absolute',
+      top: '${config.qrTopPosition}px',
+      left: '${config.qrCenterHorizontally ? '50%' : config.qrLeftPosition + 'px'}',
+      transform: '${config.qrCenterHorizontally ? 'translateX(-50%)' : 'none'}',
+      width: '${config.qrSize}px',
+      height: '${config.qrSize}px',
+      backgroundColor: '#000000'
+    }}
+  >
+    <img src={qrDataUrl} alt="QR" style={{ width: '100%', height: '100%' }} />
+  </div>
+
+  {/* AR + Símbolos */}
+  <div
+    style={{
+      position: 'absolute',
+      bottom: '${config.arBottomPosition}px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '${config.arSpacing}px'
+    }}
+  >
+    {/* AR */}
+    ${config.useImage ? 
+      `<img src="${config.imageUrl}" alt="AR" style={{ height: '${config.arHeight}px' }} />` : 
+      `<span style={{ 
+        fontFamily: '${config.fontFamily}', 
+        fontSize: '${config.fontSize}px', 
+        fontWeight: '${config.fontWeight}',
+        letterSpacing: '${config.letterSpacing}px',
+        textTransform: '${config.textTransform}'
+      }}>${config.arText}</span>`
+    }
+    
+    {/* Símbolos */}
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: '${config.checkSpacingVertical}px',
+      transform: 'translate(${config.tildeOffsetX}px, ${config.tildeOffsetY}px)'
+    }}>
+      ${Array.from({ length: config.symbolCount }, (_, i) => `
+      <div style={{ 
+        transform: 'rotate(${i === 0 ? config.symbol1Angle : config.symbol2Angle}deg) scale(${config.symbolSize / 100})'
+      }}>
+        <svg width="${config.checkWidth}" height="${config.checkHeight}" viewBox="0 0 ${config.checkWidth} ${config.checkHeight}">
+          <path d="M3 5L6.5 8.5L16 1.5" stroke="${getCurrentColor()}" strokeWidth="${config.checkStrokeWidth}" strokeLinecap="square" />
+        </svg>
+      </div>`).join('')}
+    </div>
+  </div>
+</div>`;
 };
 
 // Función para usar en otros componentes
