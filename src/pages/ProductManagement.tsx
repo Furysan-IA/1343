@@ -1,4 +1,4 @@
-// ProductManagement.tsx - Versión corregida con todas las implementaciones
+// ProductManagement.tsx - Versión con personalización de columnas
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -8,7 +8,7 @@ import { QRConfigModal } from '../components/QRConfigModal';
 import { 
   Package, AlertCircle, CheckCircle, Search, Calendar, 
   X, Eye, Download, Clock, XCircle, Settings, QrCode,
-  RefreshCw, Trash2
+  RefreshCw, Trash2, GripVertical, RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -56,6 +56,17 @@ interface Product {
   updated_at: string;
 }
 
+interface ColumnConfig {
+  id: string;
+  label: string;
+  accessor: (product: Product) => any;
+  isVisible: boolean;
+  align?: 'left' | 'right' | 'center';
+  isDraggable: boolean;
+  width?: string;
+  render: (product: Product) => React.ReactNode;
+}
+
 export function ProductManagement() {
   const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,6 +78,285 @@ export function ProductManagement() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  
+  // Estados para personalización de columnas
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+
+  // Configuración por defecto de columnas
+  const defaultColumns: ColumnConfig[] = [
+    {
+      id: 'codificacion',
+      label: 'Codificación',
+      accessor: (product) => product.codificacion,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => (
+        <span 
+          className="text-sm font-medium text-gray-900 break-words"
+          title={product.codificacion}
+        >
+          {product.codificacion}
+        </span>
+      )
+    },
+    {
+      id: 'producto',
+      label: 'Producto',
+      accessor: (product) => product.producto,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-48',
+      render: (product) => {
+        const missingData = !hasAllRequiredData(product);
+        return (
+          <div className="flex items-start gap-2">
+            <span 
+              className="text-sm text-gray-900 break-words flex-1"
+              title={product.producto || 'Sin nombre'}
+            >
+              {product.producto || <span className="text-gray-400 italic">Sin nombre</span>}
+            </span>
+            {missingData && (
+              <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" title="Datos faltantes" />
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      id: 'marca',
+      label: 'Marca',
+      accessor: (product) => product.marca,
+      isVisible: true,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.marca || 'Sin marca'}
+        >
+          {product.marca || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'modelo',
+      label: 'Modelo',
+      accessor: (product) => product.modelo,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.modelo || 'Sin modelo'}
+        >
+          {product.modelo || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'titular',
+      label: 'Titular',
+      accessor: (product) => product.titular,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-40',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.titular || 'Sin titular'}
+        >
+          {product.titular || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'fabricante',
+      label: 'Fabricante',
+      accessor: (product) => product.fabricante,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-40',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.fabricante || 'Sin fabricante'}
+        >
+          {product.fabricante || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'origen',
+      label: 'Origen',
+      accessor: (product) => product.origen,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.origen || 'Sin origen'}
+        >
+          {product.origen || <span className="text-gray-400 italic">-</span>}
+        </span>
+      )
+    },
+    {
+      id: 'estado',
+      label: 'Estado',
+      accessor: (product) => getProductStatus(product).status,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-36',
+      render: (product) => {
+        const status = getProductStatus(product);
+        return (
+          <span 
+            className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color} break-words`}
+            title={status.status}
+          >
+            {status.status}
+          </span>
+        );
+      }
+    },
+    {
+      id: 'qr',
+      label: 'QR',
+      accessor: (product) => getQRStatus(product).status,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => {
+        const qrStatus = getQRStatus(product);
+        const Icon = qrStatus.icon;
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <Icon className={`w-4 h-4 ${qrStatus.color}`} />
+            <span 
+              className={`text-sm ${qrStatus.color} break-words`}
+              title={qrStatus.status}
+            >
+              {qrStatus.status}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'vencimiento',
+      label: 'Vencimiento',
+      accessor: (product) => product.vencimiento,
+      isVisible: true,
+      align: 'center',
+      isDraggable: true,
+      width: 'w-32',
+      render: (product) => {
+        const vencimiento = product.vencimiento 
+          ? new Date(product.vencimiento).toLocaleDateString('es-AR')
+          : null;
+        return (
+          <span 
+            className="text-sm text-gray-900 break-words"
+            title={vencimiento || 'Sin fecha de vencimiento'}
+          >
+            {vencimiento || <span className="text-gray-400 italic">-</span>}
+          </span>
+        );
+      }
+    },
+    {
+      id: 'normas',
+      label: 'Normas',
+      accessor: (product) => product.normas_aplicacion,
+      isVisible: false,
+      align: 'left',
+      isDraggable: true,
+      width: 'w-48',
+      render: (product) => (
+        <span 
+          className="text-sm text-gray-900 break-words"
+          title={product.normas_aplicacion || 'Sin normas especificadas'}
+        >
+          {product.normas_aplicacion ? (
+            product.normas_aplicacion.length > 50 
+              ? `${product.normas_aplicacion.substring(0, 50)}...`
+              : product.normas_aplicacion
+          ) : (
+            <span className="text-gray-400 italic">-</span>
+          )}
+        </span>
+      )
+    },
+    {
+      id: 'acciones',
+      label: 'Acciones',
+      accessor: () => null,
+      isVisible: true,
+      align: 'center',
+      isDraggable: false,
+      width: 'w-24',
+      render: (product) => (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedProduct(product);
+            }}
+            className="text-purple-600 hover:text-purple-800 p-1 rounded hover:bg-purple-50 transition-colors"
+            title="Ver ficha del producto"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteProduct(product);
+            }}
+            className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition-colors"
+            title="Eliminar producto"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  // Estado de configuración de columnas
+  const [columnOrder, setColumnOrder] = useState<ColumnConfig[]>(() => {
+    const savedOrder = localStorage.getItem('productManagementColumnOrder');
+    if (savedOrder) {
+      try {
+        const parsed = JSON.parse(savedOrder);
+        // Verificar que la configuración guardada tenga la estructura correcta
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
+          // Combinar configuración guardada con configuración por defecto para nuevas columnas
+          const mergedColumns = defaultColumns.map(defaultCol => {
+            const savedCol = parsed.find((col: any) => col.id === defaultCol.id);
+            return savedCol ? { ...defaultCol, ...savedCol, render: defaultCol.render } : defaultCol;
+          });
+          return mergedColumns;
+        }
+      } catch (error) {
+        console.error('Error parsing saved column order:', error);
+      }
+    }
+    return defaultColumns;
+  });
 
   // Estadísticas
   const [stats, setStats] = useState({
@@ -81,19 +371,31 @@ export function ProductManagement() {
     conDatosFaltantes: 0
   });
 
+  // Guardar configuración de columnas en localStorage
+  useEffect(() => {
+    const configToSave = columnOrder.map(col => ({
+      id: col.id,
+      label: col.label,
+      isVisible: col.isVisible,
+      align: col.align,
+      isDraggable: col.isDraggable,
+      width: col.width
+    }));
+    localStorage.setItem('productManagementColumnOrder', JSON.stringify(configToSave));
+  }, [columnOrder]);
+
   useEffect(() => {
     fetchProducts();
 
     // Suscribirse a cambios de configuración QR
     const unsubscribe = qrConfigService.subscribe(() => {
-      // Actualizar vista si cambia la configuración
       fetchProducts();
     });
 
     // Configurar auto-sincronización cada 5 minutos
     const syncInterval = setInterval(() => {
       syncWithSupabase();
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 60 * 1000);
 
     return () => {
       unsubscribe();
@@ -105,6 +407,80 @@ export function ProductManagement() {
     filterProducts();
     calculateStats();
   }, [products, searchQuery, statusFilter]);
+
+  // Funciones de drag and drop para columnas
+  const onDragStart = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    setDraggedColumnId(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', columnId);
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const onDragEnter = (e: React.DragEvent<HTMLTableCellElement>, columnId: string) => {
+    e.preventDefault();
+    setDragOverColumnId(columnId);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    setDragOverColumnId(null);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLTableCellElement>, targetColumnId: string) => {
+    e.preventDefault();
+    
+    if (!draggedColumnId || draggedColumnId === targetColumnId) {
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    const newColumnOrder = [...columnOrder];
+    const draggedIndex = newColumnOrder.findIndex(col => col.id === draggedColumnId);
+    const targetIndex = newColumnOrder.findIndex(col => col.id === targetColumnId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    // Mover el elemento arrastrado a la nueva posición
+    const [removed] = newColumnOrder.splice(draggedIndex, 1);
+    newColumnOrder.splice(targetIndex, 0, removed);
+
+    setColumnOrder(newColumnOrder);
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+    
+    toast.success('Orden de columnas actualizado');
+  };
+
+  const onDragEnd = () => {
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
+  };
+
+  // Función para alternar visibilidad de columna
+  const toggleColumnVisibility = (columnId: string) => {
+    setColumnOrder(prev => 
+      prev.map(col => 
+        col.id === columnId 
+          ? { ...col, isVisible: !col.isVisible }
+          : col
+      )
+    );
+  };
+
+  // Función para resetear configuración de columnas
+  const resetColumnOrder = () => {
+    setColumnOrder(defaultColumns);
+    toast.success('Configuración de columnas restablecida');
+  };
 
   const fetchProducts = async () => {
     try {
@@ -141,7 +517,6 @@ export function ProductManagement() {
       setProducts(allProducts);
       setLastSync(new Date());
 
-      // Mostrar cuántos productos se cargaron
       toast.success(`${allProducts.length} productos cargados exitosamente`);
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -282,25 +657,15 @@ export function ProductManagement() {
 
   const exportToExcel = async () => {
     try {
-      const dataToExport = filteredProducts.map(product => ({
-        'Codificación': product.codificacion,
-        'CUIT': product.cuit,
-        'Titular': product.titular || '',
-        'Producto': product.producto || '',
-        'Marca': product.marca || '',
-        'Modelo': product.modelo || '',
-        'Origen': product.origen || '',
-        'Fabricante': product.fabricante || '',
-        'Planta': product.planta_fabricacion || '',
-        'Normas': product.normas_aplicacion || '',
-        'N° Informe': product.informe_ensayo_nro || '',
-        'Fecha Emisión': product.fecha_emision || '',
-        'Vencimiento': product.vencimiento || '',
-        'Estado': getProductStatus(product).status,
-        'QR': getQRStatus(product).status,
-        'DJC': product.djc_path ? 'Sí' : 'No',
-        'Certificado': product.certificado_path ? 'Sí' : 'No'
-      }));
+      const visibleColumns = columnOrder.filter(col => col.isVisible && col.id !== 'acciones');
+      const dataToExport = filteredProducts.map(product => {
+        const row: any = {};
+        visibleColumns.forEach(col => {
+          const value = col.accessor(product);
+          row[col.label] = value || '';
+        });
+        return row;
+      });
 
       // Convertir a CSV
       const headers = Object.keys(dataToExport[0]);
@@ -308,8 +673,7 @@ export function ProductManagement() {
         headers.join(','),
         ...dataToExport.map(row => 
           headers.map(header => {
-            const value = row[header as keyof typeof row];
-            // Escapar comas y comillas
+            const value = row[header];
             return typeof value === 'string' && value.includes(',') 
               ? `"${value.replace(/"/g, '""')}"` 
               : value;
@@ -351,6 +715,7 @@ export function ProductManagement() {
       toast.error(`Error al eliminar el producto: ${error.message}`);
     }
   };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -358,6 +723,8 @@ export function ProductManagement() {
       </div>
     );
   }
+
+  const visibleColumns = columnOrder.filter(col => col.isVisible);
 
   return (
     <div className="space-y-6">
@@ -485,107 +852,100 @@ export function ProductManagement() {
         )}
       </div>
 
+      {/* Configuración de columnas */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Configuración de Columnas</h3>
+          <button
+            onClick={resetColumnOrder}
+            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 text-sm"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Restablecer
+          </button>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {columnOrder.map((column) => (
+            <label
+              key={column.id}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={column.isVisible}
+                onChange={() => toggleColumnVisibility(column.id)}
+                className="w-4 h-4 text-purple-600 rounded"
+              />
+              <span className="text-sm text-gray-700">{column.label}</span>
+              {column.isDraggable && (
+                <GripVertical className="w-4 h-4 text-gray-400" />
+              )}
+            </label>
+          ))}
+        </div>
+        
+        <p className="text-xs text-gray-500 mt-2">
+          Arrastra los encabezados de las columnas para reordenarlas. Usa las casillas para mostrar/ocultar columnas.
+        </p>
+      </div>
+
       {/* Tabla de productos */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Codificación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Producto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Marca
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  QR
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vencimiento
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
+                {visibleColumns.map((column) => (
+                  <th
+                    key={column.id}
+                    className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-move select-none transition-colors ${
+                      column.align === 'center' ? 'text-center' :
+                      column.align === 'right' ? 'text-right' : 'text-left'
+                    } ${column.width || 'w-auto'} ${
+                      draggedColumnId === column.id ? 'opacity-50' : ''
+                    } ${
+                      dragOverColumnId === column.id ? 'bg-purple-100' : ''
+                    }`}
+                    draggable={column.isDraggable}
+                    onDragStart={(e) => column.isDraggable && onDragStart(e, column.id)}
+                    onDragOver={onDragOver}
+                    onDragEnter={(e) => onDragEnter(e, column.id)}
+                    onDragLeave={onDragLeave}
+                    onDrop={(e) => onDrop(e, column.id)}
+                    onDragEnd={onDragEnd}
+                    title={column.isDraggable ? `Arrastra para reordenar: ${column.label}` : column.label}
+                  >
+                    <div className="flex items-center gap-1">
+                      {column.isDraggable && (
+                        <GripVertical className="w-3 h-3 text-gray-400" />
+                      )}
+                      {column.label}
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((product) => {
-                const status = getProductStatus(product);
-                const qrStatus = getQRStatus(product);
-                const missingData = !hasAllRequiredData(product);
-
-                return (
-                  <tr 
-                    key={product.codificacion} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedProduct(product)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.codificacion}
+              {filteredProducts.map((product) => (
+                <tr 
+                  key={product.codificacion} 
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => setSelectedProduct(product)}
+                >
+                  {visibleColumns.map((column) => (
+                    <td
+                      key={`${product.codificacion}-${column.id}`}
+                      className={`px-4 py-4 text-sm ${
+                        column.align === 'center' ? 'text-center' :
+                        column.align === 'right' ? 'text-right' : 'text-left'
+                      } ${column.width || 'w-auto'} max-w-xs`}
+                    >
+                      {column.render(product)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {product.producto || <span className="text-gray-400">Sin nombre</span>}
-                        {missingData && (
-                          <AlertCircle className="w-4 h-4 text-orange-500" title="Datos faltantes" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.marca || <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${status.bgColor} ${status.color}`}>
-                        {status.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <qrStatus.icon className={`w-4 h-4 ${qrStatus.color}`} />
-                        <span className={`text-sm ${qrStatus.color}`}>
-                          {qrStatus.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.vencimiento 
-                        ? new Date(product.vencimiento).toLocaleDateString('es-AR')
-                        : <span className="text-gray-400">-</span>
-                      }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProduct(product);
-                          }}
-                          className="text-purple-600 hover:text-purple-800 p-1"
-                          title="Ver ficha del producto"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteProduct(product);
-                          }}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Eliminar producto"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
 
