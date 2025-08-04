@@ -1,1166 +1,1285 @@
-// QRModTool.tsx - Herramienta mejorada con rangos ampliados y generador de QR de prueba
+// QRModTool.tsx - Herramienta avanzada de configuración QR con pestañas
 import React, { useState, useRef, useEffect } from 'react';
-import { Wrench, X, Save, Download, Eye, Copy, CheckCircle, AlertCircle, Upload, FileText, RefreshCw, QrCode, TestTube, Maximize2, Minimize2, Maximize, Minimize, Settings } from 'lucide-react';
-import { toPng } from 'html-to-image';
-import { saveAs } from 'file-saver';
-import QRCode from 'qrcode';
-import toast from 'react-hot-toast';
+import { Wrench, X, Save, Download, Eye, Copy, CheckCircle, AlertCircle, Upload, FileText, RefreshCw, Maximize2, ImageIcon, Grid3x3, Square, Move, Type, Check, Settings, Ruler } from 'lucide-react';
 
-interface QRModConfig {
-  qrTop: number;
-  arBottom: number;
-  arSize: number;
-  arGap: number;
-  checkHeight: number;
-  checkOverlap: number;
-  fontFamily: string;
-  fontSize: number;
-  useImage: boolean;
-  imagePath: string;
-  customFontUrl?: string;
-  labelScale: number; // Nueva propiedad para escalar toda la etiqueta
-}
-
-interface ComponentStatus {
-  qrGenerator: boolean;
-  qrModal: boolean;
-  lastChecked: Date | null;
-}
-
-export function QRModTool() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [originalConfig, setOriginalConfig] = useState<QRModConfig | null>(null);
-  const [config, setConfig] = useState<QRModConfig>({
-    qrTop: 3,
-    arBottom: 9,
-    arSize: 19,
-    arGap: 3,
-    checkHeight: 10,
-    checkOverlap: -0.5,
-    fontFamily: 'AR-Monserrat-Arabic',
-    fontSize: 16,
-    useImage: false,
-    imagePath: '/src/assets/images/AR-Monserrat-arabic.png',
-    labelScale: 1
-  });
+// Tipos
+interface QRConfig {
+  // Etiqueta
+  labelWidth: number;
+  labelHeight: number;
+  labelBorderRadius: number;
+  labelBorderWidth: number;
+  labelPaddingTop: number;
+  labelPaddingBottom: number;
+  labelPaddingLeft: number;
+  labelPaddingRight: number;
   
-  const [fontStatus, setFontStatus] = useState<'checking' | 'loaded' | 'error'>('checking');
-  const [customFontName, setCustomFontName] = useState('');
-  const [customImageUrl, setCustomImageUrl] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [componentStatus, setComponentStatus] = useState<ComponentStatus>({
+  // QR
+  qrSize: number;
+  qrTopPosition: number;
+  qrLeftPosition: number;
+  qrCenterHorizontally: boolean;
+  
+  // AR
+  arBottomPosition: number;
+  arHeight: number;
+  arOffsetX: number;
+  arOffsetY: number;
+  arSpacing: number;
+  fontSize: number;
+  fontFamily: string;
+  useImage: boolean;
+  imageUrl: string;
+  
+  // Tildes
+  checkWidth: number;
+  checkHeight: number;
+  checkStrokeWidth: number;
+  checkSpacingVertical: number;
+  tildeOffsetX: number;
+  tildeOffsetY: number;
+  
+  // General
+  isActive: boolean;
+  showGrid: boolean;
+  gridSize: number;
+}
+
+const defaultConfig: QRConfig = {
+  // Etiqueta
+  labelWidth: 94,
+  labelHeight: 113,
+  labelBorderRadius: 8,
+  labelBorderWidth: 1,
+  labelPaddingTop: 0,
+  labelPaddingBottom: 0,
+  labelPaddingLeft: 0,
+  labelPaddingRight: 0,
+  
+  // QR
+  qrSize: 75,
+  qrTopPosition: 3,
+  qrLeftPosition: 9.5,
+  qrCenterHorizontally: true,
+  
+  // AR
+  arBottomPosition: 9,
+  arHeight: 19,
+  arOffsetX: 0,
+  arOffsetY: 0,
+  arSpacing: 3,
+  fontSize: 14,
+  fontFamily: 'Montserrat-Arabic',
+  useImage: false,
+  imageUrl: '',
+  
+  // Tildes
+  checkWidth: 19,
+  checkHeight: 9.5,
+  checkStrokeWidth: 2.2,
+  checkSpacingVertical: -0.5,
+  tildeOffsetX: 0,
+  tildeOffsetY: 0,
+  
+  // General
+  isActive: true,
+  showGrid: false,
+  gridSize: 1
+};
+
+// Función auxiliar para CMYK a RGB
+const cmykToRgb = () => '#0ac5ff';
+
+// Sistema de notificaciones simple
+const toast = {
+  success: (message: string) => {
+    const toastEl = document.createElement('div');
+    toastEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+    toastEl.textContent = message;
+    document.body.appendChild(toastEl);
+    setTimeout(() => toastEl.remove(), 3000);
+  },
+  error: (message: string) => {
+    const toastEl = document.createElement('div');
+    toastEl.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
+    toastEl.textContent = message;
+    document.body.appendChild(toastEl);
+    setTimeout(() => toastEl.remove(), 3000);
+  }
+};
+
+// Generador de QR simple (placeholder)
+const generateQRDataUrl = (text: string): string => {
+  // Creamos un QR placeholder con SVG
+  const size = 200;
+  const modules = 25;
+  const moduleSize = size / modules;
+  
+  let svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += '<rect width="100%" height="100%" fill="white"/>';
+  
+  // Patrón simple de QR (no es un QR real, solo visual)
+  for (let row = 0; row < modules; row++) {
+    for (let col = 0; col < modules; col++) {
+      if (
+        // Esquinas de posición
+        (row < 7 && col < 7) ||
+        (row < 7 && col >= modules - 7) ||
+        (row >= modules - 7 && col < 7) ||
+        // Patrón aleatorio para el centro
+        (row >= 7 && row < modules - 7 && col >= 7 && col < modules - 7 && Math.random() > 0.5)
+      ) {
+        const x = col * moduleSize;
+        const y = row * moduleSize;
+        svg += `<rect x="${x}" y="${y}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`;
+      }
+    }
+  }
+  
+  svg += '</svg>';
+  
+  // Convertir SVG a data URL
+  const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  return svgUrl;
+};
+
+// Guardar configuración en localStorage
+const saveQRModConfig = (config: QRConfig) => {
+  localStorage.setItem('qrModConfig', JSON.stringify(config));
+};
+
+// Cargar configuración desde localStorage
+const loadQRModConfig = (): QRConfig => {
+  const saved = localStorage.getItem('qrModConfig');
+  if (saved) {
+    return { ...defaultConfig, ...JSON.parse(saved) };
+  }
+  return defaultConfig;
+};
+
+export const QRModTool: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
+  const [activeTab, setActiveTab] = useState('label');
+  const [config, setConfig] = useState<QRConfig>(loadQRModConfig());
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [fontUrl, setFontUrl] = useState<string | null>(null);
+  const [customFonts, setCustomFonts] = useState<string[]>(['Arial', 'Montserrat-Arabic']);
+  const [componentsStatus, setComponentsStatus] = useState({
     qrGenerator: false,
     qrModal: false,
-    lastChecked: null
+    lastCheck: null as Date | null
   });
-  const [testQrUrl, setTestQrUrl] = useState('https://qrdeclarg.com/products/80587de9-4374-42b4-bed5-1006ac7abcc2');
-  const [testQrDataUrl, setTestQrDataUrl] = useState('');
-  const [isGeneratingTestQr, setIsGeneratingTestQr] = useState(false);
-  
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [scale, setScale] = useState(3);
   const labelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Tabs configuration
+  const tabs = [
+    { id: 'label', label: 'Etiqueta', icon: Square },
+    { id: 'qr', label: 'Código QR', icon: Grid3x3 },
+    { id: 'ar', label: 'Logo AR', icon: Type },
+    { id: 'tildes', label: 'Tildes', icon: Check },
+    { id: 'general', label: 'General', icon: Settings }
+  ];
+
+  // Generar QR de prueba
   useEffect(() => {
-    checkFontStatus();
-    checkComponentsStatus();
-    // Cargar configuración guardada
-    const savedConfig = localStorage.getItem('qr-mod-config');
-    if (savedConfig) {
-      const parsedConfig = JSON.parse(savedConfig);
-      setConfig(parsedConfig);
-      setOriginalConfig(parsedConfig);
-    } else {
-      setOriginalConfig(config);
-    }
-    // Generar QR de prueba inicial
-    generateTestQr();
+    const qrUrl = generateQRDataUrl('https://ejemplo.com?id=TEST123');
+    setQrDataUrl(qrUrl);
   }, []);
 
+  // Cargar fuente personalizada si existe
   useEffect(() => {
-    generateCode();
-  }, [config]);
-
-  useEffect(() => {
-    // Revisar estado de componentes cada 2 segundos cuando está abierto
-    if (isOpen) {
-      const interval = setInterval(checkComponentsStatus, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [isOpen]);
-
-  const generateTestQr = async () => {
-    setIsGeneratingTestQr(true);
-    try {
-      const qrData = await QRCode.toDataURL(testQrUrl, {
-        width: 200,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-      setTestQrDataUrl(qrData);
-    } catch (error) {
-      console.error('Error generando QR de prueba:', error);
-      toast.error('Error al generar QR de prueba');
-    } finally {
-      setIsGeneratingTestQr(false);
-    }
-  };
-
-  const checkFontStatus = async () => {
-    try {
-      await document.fonts.ready;
-      const fontLoaded = await document.fonts.load(`700 ${config.fontSize}px ${config.fontFamily}`);
-      setFontStatus(fontLoaded.length > 0 ? 'loaded' : 'error');
-    } catch {
-      setFontStatus('error');
-    }
-  };
-
-  const checkComponentsStatus = () => {
-    const isApplied = localStorage.getItem('qr-mod-apply') === 'true';
-    const savedConfig = localStorage.getItem('qr-mod-config');
-    
-    setComponentStatus({
-      qrGenerator: isApplied && !!savedConfig,
-      qrModal: isApplied && !!savedConfig,
-      lastChecked: new Date()
-    });
-  };
-
-  const handleFontUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      if (!file.name.match(/\.(otf|ttf|woff|woff2)$/i)) {
-        toast.error('Por favor sube un archivo de fuente válido (.otf, .ttf, .woff, .woff2)');
-        return;
-      }
-
-      const fontUrl = URL.createObjectURL(file);
-      const fontName = file.name.replace(/\.[^/.]+$/, "");
-
+    if (config.fontFamily && config.fontFamily !== 'Arial' && fontUrl) {
       const style = document.createElement('style');
-      style.innerHTML = `
+      style.textContent = `
         @font-face {
-          font-family: '${fontName}';
-          src: url('${fontUrl}') format('opentype');
-          font-weight: 700;
-          font-style: normal;
+          font-family: '${config.fontFamily}';
+          src: url('${fontUrl}');
         }
       `;
       document.head.appendChild(style);
-
-      await document.fonts.load(`700 16px "${fontName}"`);
-
-      setCustomFontName(fontName);
-      updateConfig('fontFamily', fontName);
-      updateConfig('customFontUrl', fontUrl);
-      
-      toast.success(`Fuente ${fontName} cargada exitosamente`);
-      checkFontStatus();
-    } catch (error) {
-      console.error('Error cargando fuente:', error);
-      toast.error('Error al cargar la fuente');
+      return () => {
+        document.head.removeChild(style);
+      };
     }
+  }, [config.fontFamily, fontUrl]);
+
+  // Verificar estado de componentes
+  const checkComponentsStatus = () => {
+    const savedConfig = localStorage.getItem('qrModConfig');
+    const status = {
+      qrGenerator: !!savedConfig && config.isActive,
+      qrModal: !!savedConfig && config.isActive,
+      lastCheck: new Date()
+    };
+    setComponentsStatus(status);
   };
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    checkComponentsStatus();
+    const interval = setInterval(checkComponentsStatus, 2000);
+    return () => clearInterval(interval);
+  }, [config.isActive]);
 
-    try {
-      if (!file.type.startsWith('image/')) {
-        toast.error('Por favor sube una imagen válida');
-        return;
-      }
-
-      const imageUrl = URL.createObjectURL(file);
-      
-      setCustomImageUrl(imageUrl);
-      updateConfig('imagePath', imageUrl);
-      updateConfig('useImage', true);
-      
-      toast.success(`Imagen cargada exitosamente`);
-    } catch (error) {
-      console.error('Error cargando imagen:', error);
-      toast.error('Error al cargar la imagen');
-    }
+  // Actualizar configuración
+  const updateConfig = (key: keyof QRConfig, value: any) => {
+    const newConfig = { ...config, [key]: value };
+    setConfig(newConfig);
   };
 
-  const updateConfig = (key: keyof QRModConfig, value: any) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
-    setHasUnsavedChanges(true);
-  };
-
-  const saveConfig = () => {
-    localStorage.setItem('qr-mod-config', JSON.stringify(config));
-    setOriginalConfig(config);
-    setHasUnsavedChanges(false);
+  // Guardar configuración
+  const handleSave = () => {
+    saveQRModConfig(config);
     toast.success('Configuración guardada');
-  };
-
-  const applyToComponents = () => {
-    localStorage.setItem('qr-mod-config', JSON.stringify(config));
-    localStorage.setItem('qr-mod-apply', 'true');
     checkComponentsStatus();
-    toast.success('Configuración aplicada. Los componentes usarán estos valores.');
   };
 
-  const handleClose = () => {
-    if (hasUnsavedChanges) {
-      const shouldSave = confirm('Tienes cambios sin guardar. ¿Deseas guardarlos antes de cerrar?');
-      if (shouldSave) {
-        saveConfig();
+  // Cargar fuente personalizada
+  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const fontData = event.target?.result as string;
+        setFontUrl(fontData);
+        const fontName = file.name.split('.')[0];
+        setCustomFonts([...customFonts, fontName]);
+        updateConfig('fontFamily', fontName);
+        toast.success(`Fuente "${fontName}" cargada`);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Cargar imagen AR
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageData = event.target?.result as string;
+        setUploadedImage(imageData);
+        updateConfig('imageUrl', imageData);
+        updateConfig('useImage', true);
+        toast.success('Imagen AR cargada');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Descargar PNG de prueba
+  const downloadTestPNG = async () => {
+    if (labelRef.current) {
+      try {
+        // Crear canvas para capturar el elemento
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Configurar tamaño del canvas
+        const scale = 8; // Para alta calidad
+        canvas.width = config.labelWidth * scale;
+        canvas.height = config.labelHeight * scale;
+        
+        // Fondo blanco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Dibujar borde
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = config.labelBorderWidth * scale;
+        ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        
+        // Dibujar QR (placeholder)
+        const qrX = config.qrCenterHorizontally 
+          ? (canvas.width - config.qrSize * scale) / 2 
+          : config.qrLeftPosition * scale;
+        const qrY = config.qrTopPosition * scale;
+        
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(qrX, qrY, config.qrSize * scale, config.qrSize * scale);
+        
+        // Dibujar texto AR o imagen
+        const arX = canvas.width / 2 + config.arOffsetX * scale;
+        const arY = canvas.height - config.arBottomPosition * scale + config.arOffsetY * scale;
+        
+        if (config.useImage && (config.imageUrl || uploadedImage)) {
+          // Si hay imagen, dibujar un rectángulo placeholder
+          ctx.fillStyle = '#cccccc';
+          ctx.fillRect(arX - 20, arY - config.arHeight * scale / 2, 40, config.arHeight * scale);
+        } else {
+          // Dibujar texto AR
+          ctx.fillStyle = '#000000';
+          ctx.font = `bold ${config.fontSize * scale}px ${config.fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('AR', arX, arY);
+        }
+        
+        // Dibujar tildes (checkmarks simplificados)
+        const tildeX = arX + config.arSpacing * scale + config.tildeOffsetX * scale;
+        const tildeY = arY + config.tildeOffsetY * scale;
+        
+        ctx.strokeStyle = cmykToRgb();
+        ctx.lineWidth = config.checkStrokeWidth * scale;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Primera tilde
+        ctx.beginPath();
+        ctx.moveTo(tildeX - 8 * scale, tildeY - config.checkSpacingVertical * scale);
+        ctx.lineTo(tildeX - 2 * scale, tildeY + 3 * scale - config.checkSpacingVertical * scale);
+        ctx.lineTo(tildeX + 8 * scale, tildeY - 5 * scale - config.checkSpacingVertical * scale);
+        ctx.stroke();
+        
+        // Segunda tilde
+        ctx.beginPath();
+        ctx.moveTo(tildeX - 8 * scale, tildeY + config.checkSpacingVertical * scale);
+        ctx.lineTo(tildeX - 2 * scale, tildeY + 3 * scale + config.checkSpacingVertical * scale);
+        ctx.lineTo(tildeX + 8 * scale, tildeY - 5 * scale + config.checkSpacingVertical * scale);
+        ctx.stroke();
+        
+        // Convertir canvas a blob y descargar
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'etiqueta-qr-test.png';
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('PNG descargado');
+          }
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        toast.error('Error al descargar PNG');
       }
     }
-    setIsOpen(false);
-    setIsMinimized(false);
-    setIsMaximized(false);
   };
 
-  const toggleMinimize = () => {
-    setIsMinimized(!isMinimized);
-  };
-
-  const toggleMaximize = () => {
-    setIsMaximized(!isMaximized);
-  };
-
-  const resetApplication = () => {
-    localStorage.removeItem('qr-mod-apply');
-    checkComponentsStatus();
-    toast.info('Aplicación de cambios desactivada');
-  };
-
-  const downloadTestLabel = async () => {
-    if (!labelRef.current) return;
-
-    try {
-      await document.fonts.ready;
-      
-      const scale = config.labelScale;
-      const baseWidth = 94;
-      const baseHeight = 113;
-      
-      const dataUrl = await toPng(labelRef.current, {
-        width: baseWidth * scale,
-        height: baseHeight * scale,
-        pixelRatio: 8,
-        quality: 1,
-        backgroundColor: '#ffffff',
-        includeQueryParams: true,
-        cacheBust: true
-      });
-      
-      saveAs(dataUrl, `qr-test-label-${scale}x.png`);
-      toast.success(`Etiqueta de prueba descargada (escala ${scale}x)`);
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Error al descargar');
-    }
-  };
-
+  // Generar imagen AR desde texto
   const generateARImage = async () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 60;
-    canvas.height = 30;
     const ctx = canvas.getContext('2d');
-    
     if (!ctx) return;
+
+    canvas.width = 200;
+    canvas.height = 80;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = `bold ${config.fontSize}px "${config.fontFamily}"`;
     ctx.fillStyle = '#000000';
+    ctx.font = `bold ${config.fontSize * 3}px ${config.fontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('AR', 30, 15);
-    
-    canvas.toBlob((blob) => {
-      if (blob) {
-        saveAs(blob, `AR-${config.fontFamily}.png`);
-        toast.success('Imagen AR generada y descargada');
-      }
-    });
+    ctx.fillText('AR', canvas.width / 2, canvas.height / 2);
+
+    const imageData = canvas.toDataURL('image/png');
+    setUploadedImage(imageData);
+    updateConfig('imageUrl', imageData);
+    updateConfig('useImage', true);
+    toast.success('Imagen AR generada');
   };
 
+  // Aplicar a componentes
+  const applyToComponents = () => {
+    handleSave();
+    window.dispatchEvent(new Event('qrModConfigUpdated'));
+    toast.success('Configuración aplicada a los componentes');
+  };
+
+  // Copiar código
+  const copyCode = () => {
+    const code = generateCode();
+    navigator.clipboard.writeText(code);
+    toast.success('Código copiado');
+  };
+
+  // Generar código
   const generateCode = () => {
-    const code = `<div 
+    return `// Configuración QR generada
+const qrConfig = ${JSON.stringify(config, null, 2)};
+
+// Etiqueta QR
+<div 
   ref={labelRef}
   style={{
-    width: '94px',
-    height: '113px',
+    width: '${config.labelWidth}px',
+    height: '${config.labelHeight}px',
     backgroundColor: '#ffffff',
-    border: '1px solid #000000',
-    borderRadius: '8px',
+    border: '${config.labelBorderWidth}px solid #000000',
+    borderRadius: '${config.labelBorderRadius}px',
     position: 'relative',
     overflow: 'hidden',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    padding: '${config.labelPaddingTop}px ${config.labelPaddingRight}px ${config.labelPaddingBottom}px ${config.labelPaddingLeft}px'
   }}
 >
   {/* Código QR */}
   <div
     style={{
       position: 'absolute',
-      top: '${config.qrTop}px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '75px',
-      height: '75px'
+      top: '${config.qrTopPosition}px',
+      left: '${config.qrCenterHorizontally ? '50%' : config.qrLeftPosition + 'px'}',
+      transform: '${config.qrCenterHorizontally ? 'translateX(-50%)' : 'none'}',
+      width: '${config.qrSize}px',
+      height: '${config.qrSize}px'
     }}
   >
-    <img
-      src={qrDataUrl}
-      alt="Código QR"
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'block',
-        imageRendering: 'crisp-edges'
-      }}
-    />
+    <img src={qrDataUrl} alt="QR" style={{ width: '100%', height: '100%' }} />
   </div>
-  
+
   {/* AR + Tildes */}
   <div
     style={{
       position: 'absolute',
-      bottom: '${config.arBottom}px',
+      bottom: '${config.arBottomPosition}px',
       left: '50%',
-      transform: 'translateX(-50%)',
+      transform: 'translateX(-50%) translateX(${config.arOffsetX}px) translateY(${config.arOffsetY}px)',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: '${config.arGap}px'
+      gap: '${config.arSpacing}px'
     }}
   >
-    {/* Logo AR */}
-    ${config.useImage ? `<img
-      src="${config.imagePath}"
-      alt="AR"
-      style={{
-        height: '${config.arSize}px',
-        width: 'auto',
-        display: 'block'
-      }}
-    />` : `<span
-      style={{
-        fontFamily: '"${config.fontFamily}", Arial, sans-serif',
-        fontSize: '${config.fontSize}px',
-        fontWeight: 700,
-        color: '#000000',
-        height: '${config.arSize}px',
-        display: 'flex',
-        alignItems: 'center',
-        lineHeight: 1
-      }}
-    >
-      AR
-    </span>`}
+    {/* AR */}
+    ${config.useImage ? `<img src="${config.imageUrl}" alt="AR" style={{ height: '${config.arHeight}px' }} />` : 
+    `<span style={{ fontFamily: '${config.fontFamily}', fontSize: '${config.fontSize}px', fontWeight: 'bold' }}>AR</span>`}
     
     {/* Tildes */}
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0',
-        height: '${config.arSize}px'
-      }}
-    >
-      <svg
-        width="${config.arSize}"
-        height="${config.checkHeight}"
-        viewBox="0 0 19 9.5"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ 
-          display: 'block',
-          marginBottom: '${config.checkOverlap}px'
-        }}
-      >
-        <path
-          d="M3 5L6.5 8.5L16 1.5"
-          stroke={cmykToRgb()}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <svg
-        width="${config.arSize}"
-        height="${config.checkHeight}"
-        viewBox="0 0 19 9.5"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ 
-          display: 'block',
-          marginTop: '${config.checkOverlap}px'
-        }}
-      >
-        <path
-          d="M3 5L6.5 8.5L16 1.5"
-          stroke={cmykToRgb()}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: '${config.checkSpacingVertical}px',
+      transform: 'translateX(${config.tildeOffsetX}px) translateY(${config.tildeOffsetY}px)'
+    }}>
+      {[0, 1].map(i => (
+        <svg key={i} width="${config.checkWidth}" height="${config.checkHeight}" viewBox="0 0 ${config.checkWidth} ${config.checkHeight}">
+          <path d="M3 5L6.5 8.5L16 1.5" stroke="${cmykToRgb()}" strokeWidth="${config.checkStrokeWidth}" />
+        </svg>
+      ))}
     </div>
   </div>
 </div>`;
-    setGeneratedCode(code);
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(generatedCode);
-    toast.success('Código copiado');
-  };
-
-  const copyTestUrl = () => {
-    navigator.clipboard.writeText(testQrUrl);
-    toast.success('URL copiada');
-  };
-
-  // Convert CMYK to RGB
-  const cmykToRgb = () => {
-    const c = 0.47;
-    const m = 0.22;
-    const y = 0;
-    const k = 0.14;
-    
-    const r = Math.round(255 * (1 - c) * (1 - k));
-    const g = Math.round(255 * (1 - m) * (1 - k));
-    const b = Math.round(255 * (1 - y) * (1 - k));
-    
-    return `rgb(${r}, ${g}, ${b})`;
+  // Renderizar contenido de pestaña
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'label':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Square className="w-5 h-5" />
+              Configuración de Etiqueta
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600">Ancho: {config.labelWidth}px</label>
+                <input
+                  type="range"
+                  min="80"
+                  max="150"
+                  value={config.labelWidth}
+                  onChange={(e) => updateConfig('labelWidth', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Alto: {config.labelHeight}px</label>
+                <input
+                  type="range"
+                  min="100"
+                  max="150"
+                  value={config.labelHeight}
+                  onChange={(e) => updateConfig('labelHeight', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Radio de borde: {config.labelBorderRadius}px</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="20"
+                  value={config.labelBorderRadius}
+                  onChange={(e) => updateConfig('labelBorderRadius', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Grosor de borde: {config.labelBorderWidth}px</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  value={config.labelBorderWidth}
+                  onChange={(e) => updateConfig('labelBorderWidth', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Espaciado interno (Padding)</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600">Superior: {config.labelPaddingTop}px</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    value={config.labelPaddingTop}
+                    onChange={(e) => updateConfig('labelPaddingTop', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Inferior: {config.labelPaddingBottom}px</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    value={config.labelPaddingBottom}
+                    onChange={(e) => updateConfig('labelPaddingBottom', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Izquierda: {config.labelPaddingLeft}px</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    value={config.labelPaddingLeft}
+                    onChange={(e) => updateConfig('labelPaddingLeft', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600">Derecha: {config.labelPaddingRight}px</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    value={config.labelPaddingRight}
+                    onChange={(e) => updateConfig('labelPaddingRight', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'qr':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Grid3x3 className="w-5 h-5" />
+              Configuración del Código QR
+            </h3>
+            
+            <div>
+              <label className="text-sm text-gray-600">Tamaño del QR: {config.qrSize}px</label>
+              <input
+                type="range"
+                min="50"
+                max="100"
+                value={config.qrSize}
+                onChange={(e) => updateConfig('qrSize', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Posición desde arriba: {config.qrTopPosition}px</label>
+              <input
+                type="range"
+                min="0"
+                max="40"
+                value={config.qrTopPosition}
+                onChange={(e) => updateConfig('qrTopPosition', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                id="centerQR"
+                checked={config.qrCenterHorizontally}
+                onChange={(e) => updateConfig('qrCenterHorizontally', e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="centerQR" className="text-sm text-gray-600">Centrar horizontalmente</label>
+            </div>
+            
+            {!config.qrCenterHorizontally && (
+              <div>
+                <label className="text-sm text-gray-600">Posición desde la izquierda: {config.qrLeftPosition}px</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  value={config.qrLeftPosition}
+                  onChange={(e) => updateConfig('qrLeftPosition', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            )}
+          </div>
+        );
+        
+      case 'ar':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Type className="w-5 h-5" />
+              Configuración del Logo AR
+            </h3>
+            
+            <div>
+              <label className="text-sm text-gray-600">Posición desde abajo: {config.arBottomPosition}px</label>
+              <input
+                type="range"
+                min="0"
+                max="30"
+                value={config.arBottomPosition}
+                onChange={(e) => updateConfig('arBottomPosition', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Altura AR: {config.arHeight}px</label>
+              <input
+                type="range"
+                min="10"
+                max="40"
+                value={config.arHeight}
+                onChange={(e) => updateConfig('arHeight', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600">Desplazamiento X: {config.arOffsetX}px</label>
+                <input
+                  type="range"
+                  min="-30"
+                  max="30"
+                  value={config.arOffsetX}
+                  onChange={(e) => updateConfig('arOffsetX', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Desplazamiento Y: {config.arOffsetY}px</label>
+                <input
+                  type="range"
+                  min="-20"
+                  max="20"
+                  value={config.arOffsetY}
+                  onChange={(e) => updateConfig('arOffsetY', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Espacio AR-Tildes: {config.arSpacing}px</label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                value={config.arSpacing}
+                onChange={(e) => updateConfig('arSpacing', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Fuente y Estilo</h4>
+              
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="useImage"
+                  checked={config.useImage}
+                  onChange={(e) => updateConfig('useImage', e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="useImage" className="text-sm text-gray-600">Usar imagen en lugar de texto</label>
+              </div>
+              
+              {!config.useImage && (
+                <>
+                  <div className="mb-3">
+                    <label className="text-sm text-gray-600">Fuente</label>
+                    <select
+                      value={config.fontFamily}
+                      onChange={(e) => updateConfig('fontFamily', e.target.value)}
+                      className="w-full mt-1 p-2 border rounded"
+                    >
+                      {customFonts.map(font => (
+                        <option key={font} value={font}>{font}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm text-gray-600">Tamaño de fuente: {config.fontSize}px</label>
+                    <input
+                      type="range"
+                      min="8"
+                      max="30"
+                      value={config.fontSize}
+                      onChange={(e) => updateConfig('fontSize', Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                </>
+              )}
+              
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Cargar Fuente
+                </button>
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 p-2 rounded text-sm flex items-center justify-center gap-2"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Cargar Imagen
+                </button>
+              </div>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".otf,.ttf,.woff,.woff2"
+                onChange={handleFontUpload}
+                className="hidden"
+              />
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              
+              {!config.useImage && (
+                <button
+                  onClick={generateARImage}
+                  className="w-full mt-2 bg-blue-100 hover:bg-blue-200 p-2 rounded text-sm"
+                >
+                  Generar Imagen AR desde Fuente
+                </button>
+              )}
+            </div>
+          </div>
+        );
+        
+      case 'tildes':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Check className="w-5 h-5" />
+              Configuración de Tildes
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600">Ancho: {config.checkWidth}px</label>
+                <input
+                  type="range"
+                  min="10"
+                  max="40"
+                  value={config.checkWidth}
+                  onChange={(e) => updateConfig('checkWidth', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Altura: {config.checkHeight}px</label>
+                <input
+                  type="range"
+                  min="5"
+                  max="20"
+                  value={config.checkHeight}
+                  onChange={(e) => updateConfig('checkHeight', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Grosor del trazo: {config.checkStrokeWidth}</label>
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="0.1"
+                value={config.checkStrokeWidth}
+                onChange={(e) => updateConfig('checkStrokeWidth', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-600">Espaciado vertical: {config.checkSpacingVertical}px</label>
+              <input
+                type="range"
+                min="-10"
+                max="10"
+                step="0.5"
+                value={config.checkSpacingVertical}
+                onChange={(e) => updateConfig('checkSpacingVertical', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600">Desplazamiento X: {config.tildeOffsetX}px</label>
+                <input
+                  type="range"
+                  min="-30"
+                  max="30"
+                  value={config.tildeOffsetX}
+                  onChange={(e) => updateConfig('tildeOffsetX', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-600">Desplazamiento Y: {config.tildeOffsetY}px</label>
+                <input
+                  type="range"
+                  min="-20"
+                  max="20"
+                  value={config.tildeOffsetY}
+                  onChange={(e) => updateConfig('tildeOffsetY', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'general':
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Configuración General
+            </h3>
+            
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-medium">Estado de Componentes</h4>
+                <button
+                  onClick={checkComponentsStatus}
+                  className="p-1 hover:bg-gray-100 rounded"
+                  title="Actualizar estado"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${componentsStatus.qrGenerator ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  <span>QRGenerator: {componentsStatus.qrGenerator ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${componentsStatus.qrModal ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  <span>QRModal: {componentsStatus.qrModal ? 'Activo' : 'Inactivo'}</span>
+                </div>
+              </div>
+              
+              {componentsStatus.lastCheck && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Última verificación: {componentsStatus.lastCheck.toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={config.isActive}
+                    onChange={(e) => updateConfig('isActive', e.target.checked)}
+                    className="rounded"
+                  />
+                  <label htmlFor="isActive" className="font-medium">
+                    Aplicar configuración a componentes
+                  </label>
+                </div>
+                <span className={`text-sm px-2 py-1 rounded ${config.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  {config.isActive ? 'ACTIVO' : 'INACTIVO'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-4">
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Ruler className="w-4 h-4" />
+                Cuadrícula de Medición
+              </h4>
+              
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="showGrid"
+                  checked={config.showGrid}
+                  onChange={(e) => updateConfig('showGrid', e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="showGrid" className="text-sm text-gray-600">Mostrar cuadrícula</label>
+              </div>
+              
+              {config.showGrid && (
+                <div>
+                  <label className="text-sm text-gray-600">Tamaño de cuadrícula: {config.gridSize}px</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={config.gridSize}
+                    onChange={(e) => updateConfig('gridSize', Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-4">
+              <h4 className="font-medium mb-3">Zoom de Vista Previa</h4>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setScale(Math.max(1, scale - 0.5))}
+                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                >
+                  -
+                </button>
+                <span className="min-w-[60px] text-center">{scale * 100}%</span>
+                <button
+                  onClick={() => setScale(Math.min(5, scale + 0.5))}
+                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+        
+      default:
+        return null;
+    }
   };
 
   return (
     <>
       {/* Botón flotante */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 left-4 p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 transition-all z-50 group"
+        onClick={() => setIsOpen(true)}
+        className={`fixed bottom-4 left-4 z-50 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 ${config.isActive ? 'ring-4 ring-green-400 ring-opacity-50' : ''}`}
         title="Modificar QR"
       >
         <Wrench className="w-6 h-6" />
-        {componentStatus.qrGenerator && componentStatus.qrModal && (
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+        {config.isActive && (
+          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
         )}
       </button>
 
-      {/* Panel de herramientas expandido */}
+      {/* Modal */}
       {isOpen && (
-        <div className={`fixed ${isMaximized ? 'inset-0' : 'inset-2 md:inset-auto md:bottom-4 md:left-4'} ${!isMaximized ? 'md:w-[900px] md:max-w-[calc(100vw-32px)] md:h-[calc(100vh-32px)] md:max-h-[900px]' : ''} bg-white rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col transition-all duration-300 ${isMinimized ? 'h-auto' : ''}`}>
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
-            <div className="flex-1">
-              <h3 className="font-semibold flex items-center gap-2">
+        <div className={`fixed inset-0 z-50 ${isFullscreen ? '' : 'p-4'}`}>
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsOpen(false)} />
+          
+          <div className={`relative bg-white rounded-lg shadow-xl mx-auto overflow-hidden ${
+            isFullscreen ? 'w-full h-full' : 'max-w-7xl w-full max-h-[95vh]'
+          }`}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
                 <Wrench className="w-5 h-5" />
-                Modificador de QR - Herramienta de Desarrollo
-                {hasUnsavedChanges && (
-                  <span className="text-xs bg-yellow-500 text-yellow-900 px-2 py-1 rounded-full">
-                    Cambios sin guardar
-                  </span>
-                )}
-              </h3>
-              {!isMinimized && (
-                <p className="text-sm text-purple-100 mt-1">
-                  Ajusta todos los parámetros del QR en tiempo real desde esta ventana
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={toggleMinimize}
-                className="hover:bg-white/20 p-2 rounded-lg transition-colors"
-                title={isMinimized ? "Maximizar" : "Minimizar"}
-              >
-                {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={toggleMaximize}
-                className="hover:bg-white/20 p-2 rounded-lg transition-colors"
-                title={isMaximized ? "Restaurar" : "Maximizar"}
-              >
-                {isMaximized ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={handleClose}
-                className="hover:bg-white/20 p-2 rounded-lg transition-colors"
-                title="Cerrar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Estado de componentes */}
-          <div className="p-3 bg-gray-50 border-b">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium">Estado de Componentes:</h4>
-              <button
-                onClick={checkComponentsStatus}
-                className="text-xs text-blue-600 hover:text-blue-800"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex gap-4 mt-2">
+                Configurador QR Avanzado
+              </h2>
               <div className="flex items-center gap-2">
-                {componentStatus.qrGenerator ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-gray-400" />
-                )}
-                <span className="text-sm">QRGenerator</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {componentStatus.qrModal ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-gray-400" />
-                )}
-                <span className="text-sm">QRModal</span>
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="p-2 hover:bg-blue-800 rounded transition-colors"
+                  title="Pantalla completa"
+                >
+                  <Maximize2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 hover:bg-blue-800 rounded transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
-            {componentStatus.lastChecked && (
-              <p className="text-xs text-gray-500 mt-1">
-                Última verificación: {componentStatus.lastChecked.toLocaleTimeString()}
-              </p>
-            )}
-          </div>
 
-          {/* Content con tabs - Solo mostrar si no está minimizado */}
-          {!isMinimized && (
-            <div className="flex-1 overflow-y-auto">
-              {/* Tab de configuración principal */}
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Vista previa */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">Vista Previa</h4>
-                      <span className="text-sm text-gray-500">Escala: {config.labelScale}x</span>
-                    </div>
-                    <div className="flex justify-center p-6 bg-gray-50 rounded-lg">
-                      <div style={{ transform: `scale(${config.labelScale})`, transformOrigin: 'center' }}>
-                        <div
-                          ref={labelRef}
-                          style={{
-                            width: '94px',
-                            height: '113px',
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #000000',
-                            borderRadius: '8px',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            boxSizing: 'border-box',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          {/* QR real o simulado */}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: `${config.qrTop}px`,
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              width: '75px',
-                              height: '75px',
-                              backgroundColor: '#ffffff',
-                              padding: '2px'
-                            }}
-                          >
-                            {testQrDataUrl ? (
-                              <img
-                                src={testQrDataUrl}
-                                alt="QR de prueba"
-                                style={{
-                                  width: '100%',
-                                  height: '100%',
-                                  display: 'block',
-                                  imageRendering: 'crisp-edges'
-                                }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: '100%',
-                                height: '100%',
-                                background: 'repeating-linear-gradient(45deg, #000, #000 2px, #fff 2px, #fff 4px)'
-                              }} />
-                            )}
-                          </div>
-                          
-                          {/* AR + Tildes */}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: `${config.arBottom}px`,
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: `${config.arGap}px`
-                            }}
-                          >
-                            {config.useImage ? (
-                              customImageUrl || config.imagePath ? (
-                                <img
-                                  src={customImageUrl || config.imagePath}
-                                  alt="AR"
-                                  style={{
-                                    height: `${config.arSize}px`,
-                                    width: 'auto',
-                                    display: 'block'
-                                  }}
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    target.parentElement!.innerHTML = `
-                                      <div style="
-                                        height: ${config.arSize}px;
-                                        padding: 2px 6px;
-                                        background: #ddd;
-                                        font-size: 12px;
-                                        display: flex;
-                                        align-items: center;
-                                      ">IMG</div>
-                                    `;
-                                  }}
-                                />
-                              ) : (
-                                <div
-                                  style={{
-                                    height: `${config.arSize}px`,
-                                    width: 'auto',
-                                    background: '#ddd',
-                                    padding: '2px 6px',
-                                    fontSize: '12px',
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                >
-                                  IMG
-                                </div>
-                              )
-                            ) : (
-                              <span
-                                style={{
-                                  fontFamily: `"${config.fontFamily}", Arial, sans-serif`,
-                                  fontSize: `${config.fontSize}px`,
-                                  fontWeight: 700,
-                                  color: '#000000',
-                                  height: `${config.arSize}px`,
-                                  display: 'flex',
-                                  alignItems: 'center'
-                                }}
-                              >
-                                AR
-                              </span>
-                            )}
-                            
-                            <div
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0',
-                                height: `${config.arSize}px`
-                              }}
-                            >
-                              <svg
-                                width={config.arSize}
-                                height={config.checkHeight}
-                                viewBox="0 0 19 9.5"
-                                fill="none"
-                                style={{ 
-                                  display: 'block',
-                                  marginBottom: `${config.checkOverlap}px`
-                                }}
-                              >
-                                <path
-                                  d="M3 5L6.5 8.5L16 1.5"
-                                  stroke={cmykToRgb()}
-                                  strokeWidth="2.2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <svg
-                                width={config.arSize}
-                                height={config.checkHeight}
-                                viewBox="0 0 19 9.5"
-                                fill="none"
-                                style={{ 
-                                  display: 'block',
-                                  marginTop: `${config.checkOverlap}px`
-                                }}
-                              >
-                                <path
-                                  d="M3 5L6.5 8.5L16 1.5"
-                                  stroke={cmykToRgb()}
-                                  strokeWidth="2.2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* QR de prueba con URL personalizada */}
-                    <div className="mt-4 p-3 bg-blue-50 rounded">
-                      <h5 className="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
-                        <TestTube className="w-4 h-4" />
-                        QR de Prueba
-                      </h5>
-                      <div className="flex gap-2 mb-2">
-                        <input
-                          type="text"
-                          value={testQrUrl}
-                          onChange={(e) => setTestQrUrl(e.target.value)}
-                          className="flex-1 p-2 text-xs border rounded"
-                          placeholder="URL para QR de prueba"
-                        />
-                        <button
-                          onClick={copyTestUrl}
-                          className="p-2 text-blue-600 hover:text-blue-800"
-                          title="Copiar URL"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                      </div>
+            {/* Content */}
+            <div className="flex h-[calc(100%-4rem)]">
+              {/* Sidebar with tabs */}
+              <div className="w-64 bg-gray-100 border-r overflow-y-auto">
+                <nav className="p-4">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
                       <button
-                        onClick={generateTestQr}
-                        disabled={isGeneratingTestQr}
-                        className="w-full text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 flex items-center justify-center gap-1"
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`w-full text-left p-3 mb-2 rounded-lg flex items-center gap-3 transition-colors ${
+                          activeTab === tab.id
+                            ? 'bg-blue-600 text-white'
+                            : 'hover:bg-gray-200 text-gray-700'
+                        }`}
                       >
-                        {isGeneratingTestQr ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
-                            Generando...
-                          </>
-                        ) : (
-                          <>
-                            <QrCode className="w-4 h-4" />
-                            Generar QR
-                          </>
-                        )}
+                        <Icon className="w-5 h-5" />
+                        <span>{tab.label}</span>
                       </button>
-                    </div>
-
-                    {/* Estado de la fuente */}
-                    <div className="mt-4 p-3 bg-gray-50 rounded">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {fontStatus === 'loaded' ? (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-red-500" />
-                          )}
-                          <span className="text-sm">
-                            Fuente {config.fontFamily}: {fontStatus === 'loaded' ? 'Cargada' : 'No disponible'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 flex items-center gap-1"
-                        >
-                          <Upload className="w-4 h-4" />
-                          Cargar Fuente
-                        </button>
-                        <button
-                          onClick={() => imageInputRef.current?.click()}
-                          className="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 flex items-center gap-1"
-                        >
-                          <Upload className="w-4 h-4" />
-                          Cargar Imagen
-                        </button>
-                      </div>
-                      {customFontName && (
-                        <p className="text-xs text-gray-600 mt-2">
-                          Fuente personalizada: {customFontName}
-                        </p>
-                      )}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".otf,.ttf,.woff,.woff2"
-                        onChange={handleFontUpload}
-                        className="hidden"
-                      />
-                      <input
-                        ref={imageInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                      {customImageUrl && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <img 
-                            src={customImageUrl} 
-                            alt="Custom AR" 
-                            className="h-8 w-auto border rounded"
-                          />
-                          <span className="text-xs text-gray-600">
-                            Imagen personalizada cargada
-                          </span>
-                          <button
-                            onClick={() => {
-                              setCustomImageUrl('');
-                              updateConfig('imagePath', '/src/assets/images/AR-Monserrat-arabic.png');
-                            }}
-                            className="text-xs text-red-600 hover:text-red-800"
-                          >
-                            Limpiar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Controles */}
-                  <div className="space-y-4">
-                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg">
-                      <h4 className="font-medium mb-3 flex items-center gap-2">
-                        <Settings className="w-5 h-5" />
-                        Controles de Ajuste
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Ajusta todos los parámetros en tiempo real y ve los cambios instantáneamente
-                      </p>
-                    </div>
-                    
-                    {/* Escala de vista previa */}
-                    <div className="p-3 bg-purple-50 rounded">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Maximize2 className="w-4 h-4" />
-                        Escala de vista previa: {config.labelScale}x
-                      </label>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="3"
-                        step="0.5"
-                        value={config.labelScale}
-                        onChange={(e) => updateConfig('labelScale', Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">QR desde arriba: {config.qrTop}px</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="30"
-                        value={config.qrTop}
-                        onChange={(e) => updateConfig('qrTop', Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium">AR desde abajo: {config.arBottom}px</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="30"
-                        value={config.arBottom}
-                        onChange={(e) => updateConfig('arBottom', Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-yellow-50 rounded">
-                      <label className="text-sm font-medium text-yellow-900">
-                        Tamaño AR: {config.arSize}px (Rango ampliado)
-                      </label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="40"
-                        value={config.arSize}
-                        onChange={(e) => updateConfig('arSize', Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <p className="text-xs text-yellow-700 mt-1">
-                        Ahora puedes aumentar hasta 40px para mayor visibilidad
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium">Espacio AR-Tildes: {config.arGap}px</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="15"
-                        value={config.arGap}
-                        onChange={(e) => updateConfig('arGap', Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-yellow-50 rounded">
-                      <label className="text-sm font-medium text-yellow-900">
-                        Altura tildes: {config.checkHeight}px (Rango ampliado)
-                      </label>
-                      <input
-                        type="range"
-                        min="6"
-                        max="20"
-                        value={config.checkHeight}
-                        onChange={(e) => updateConfig('checkHeight', Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <p className="text-xs text-yellow-700 mt-1">
-                        Rango extendido hasta 20px para tildes más grandes
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium">Superposición tildes: {config.checkOverlap}px</label>
-                      <input
-                        type="range"
-                        min="-3"
-                        max="3"
-                        step="0.5"
-                        value={config.checkOverlap}
-                        onChange={(e) => updateConfig('checkOverlap', Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-yellow-50 rounded">
-                      <label className="text-sm font-medium text-yellow-900">
-                        Tamaño de fuente: {config.fontSize}px (Rango ampliado)
-                      </label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="30"
-                        value={config.fontSize}
-                        onChange={(e) => updateConfig('fontSize', Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <p className="text-xs text-yellow-700 mt-1">
-                        Ahora puedes usar fuentes hasta 30px
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium">Fuente</label>
-                      <select
-                        value={config.fontFamily}
-                        onChange={(e) => {
-                          updateConfig('fontFamily', e.target.value);
-                          checkFontStatus();
-                        }}
-                        className="w-full p-2 border rounded"
-                      >
-                        <option value="AR-Monserrat-Arabic">AR Montserrat Arabic</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Helvetica">Helvetica</option>
-                        <option value="Arial Black">Arial Black</option>
-                        <option value="Impact">Impact</option>
-                        {customFontName && (
-                          <option value={customFontName}>{customFontName} (Personalizada)</option>
-                        )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={config.useImage}
-                          onChange={(e) => updateConfig('useImage', e.target.checked)}
-                          className="mr-2"
-                        />
-                        Usar imagen en lugar de fuente
-                      </label>
-                      {config.useImage && (
-                        <div className="mt-2 space-y-2">
-                          <input
-                            type="text"
-                            value={config.imagePath}
-                            onChange={(e) => updateConfig('imagePath', e.target.value)}
-                            placeholder="Ruta de la imagen (ej: /images/AR.png)"
-                            className="w-full p-2 border rounded text-sm"
-                          />
-                          <button
-                            onClick={() => imageInputRef.current?.click()}
-                            className="w-full text-sm bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 flex items-center justify-center gap-2"
-                          >
-                            <Upload className="w-4 h-4" />
-                            Cargar imagen personalizada
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Código generado */}
-                <div className="mt-6 col-span-full">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        Código generado
-                      </h4>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={copyCode}
-                          className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 px-3 py-1 rounded hover:bg-blue-50 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Copiar código
-                        </button>
-                        <button
-                          onClick={() => {
-                            const blob = new Blob([generatedCode], { type: 'text/javascript' });
-                            saveAs(blob, 'qr-label-config.jsx');
-                            toast.success('Código descargado como archivo JSX');
-                          }}
-                          className="text-sm text-green-600 hover:text-green-800 flex items-center gap-1 px-3 py-1 rounded hover:bg-green-50 transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                          Descargar JSX
-                        </button>
-                      </div>
-                    </div>
-                    <pre className="text-xs bg-white p-4 rounded border overflow-x-auto max-h-64 font-mono">
-                      {generatedCode}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Footer con acciones - Siempre visible */}
-          <div className={`border-t ${isMinimized ? 'p-3' : 'p-6'} bg-gray-50`}>
-            {!isMinimized ? (
-              <>
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                    );
+                  })}
+                </nav>
+                
+                {/* Actions */}
+                <div className="p-4 border-t">
                   <button
-                    onClick={saveConfig}
-                    className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                    onClick={handleSave}
+                    className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
                   >
                     <Save className="w-4 h-4" />
-                    Guardar Config
+                    Guardar
                   </button>
                   <button
-                    onClick={downloadTestLabel}
-                    className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                    onClick={applyToComponents}
+                    className="w-full mb-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Aplicar
+                  </button>
+                  <button
+                    onClick={downloadTestPNG}
+                    className="w-full mb-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Test PNG
                   </button>
                   <button
-                    onClick={generateARImage}
-                    className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                    onClick={copyCode}
+                    className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
                   >
-                    <FileText className="w-4 h-4" />
-                    Generar AR
+                    <Copy className="w-4 h-4" />
+                    Copiar Código
                   </button>
-                  <button
-                    onClick={applyToComponents}
-                    className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Aplicar Todo
-                  </button>
-                  <button
-                    onClick={() => {
-                      const defaultConfig = {
-                        qrTop: 3,
-                        arBottom: 9,
-                        arSize: 19,
-                        arGap: 3,
-                        checkHeight: 10,
-                        checkOverlap: -0.5,
-                        fontFamily: 'AR-Monserrat-Arabic',
-                        fontSize: 16,
-                        useImage: false,
-                        imagePath: '/src/assets/images/AR-Monserrat-arabic.png',
-                        labelScale: 1
-                      };
-                      setConfig(defaultConfig);
-                      setHasUnsavedChanges(true);
-                      toast.info('Configuración restaurada a valores por defecto');
-                    }}
-                    className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Restaurar
-                  </button>
-                </div>
-                {componentStatus.qrGenerator && componentStatus.qrModal && (
-                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-sm text-green-700 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      Los cambios están activos en QRGenerator y QRModal
-                      <button
-                        onClick={resetApplication}
-                        className="ml-auto text-xs text-red-600 hover:text-red-800"
-                      >
-                        Desactivar
-                      </button>
-                    </p>
-                  </div>
-                )}
-                <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-xs text-blue-700">
-                    <strong>Tip:</strong> Los rangos ampliados permiten crear etiquetas más visibles. 
-                    Prueba diferentes combinaciones de tamaños para encontrar el balance perfecto.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {hasUnsavedChanges && (
-                    <button
-                      onClick={saveConfig}
-                      className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-sm"
-                    >
-                      <Save className="w-3 h-3" />
-                      Guardar
-                    </button>
-                  )}
-                  <span className="text-sm text-gray-600">
-                    QR Tool {hasUnsavedChanges ? '(cambios sin guardar)' : '(actualizado)'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {componentStatus.qrGenerator && componentStatus.qrModal && (
-                    <span className="w-2 h-2 bg-green-500 rounded-full" title="Cambios aplicados"></span>
-                  )}
                 </div>
               </div>
-            )}
+
+              {/* Main content area */}
+              <div className="flex-1 flex">
+                {/* Tab content */}
+                <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+                  {renderTabContent()}
+                </div>
+
+                {/* Preview panel */}
+                <div className="w-96 bg-white border-l p-6 flex flex-col items-center justify-center">
+                  <h3 className="font-semibold mb-4">Vista Previa ({scale * 100}%)</h3>
+                  
+                  <div className="relative">
+                    {/* Grid overlay */}
+                    {config.showGrid && (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          backgroundImage: `
+                            repeating-linear-gradient(0deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 1px, transparent ${config.gridSize}px),
+                            repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 1px, transparent ${config.gridSize}px)
+                          `,
+                          transform: `scale(${scale})`,
+                          transformOrigin: 'center',
+                          width: `${config.labelWidth}px`,
+                          height: `${config.labelHeight}px`,
+                          zIndex: 10
+                        }}
+                      />
+                    )}
+                    
+                    {/* Etiqueta QR */}
+                    <div style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}>
+                      <div 
+                        ref={labelRef}
+                        style={{
+                          width: `${config.labelWidth}px`,
+                          height: `${config.labelHeight}px`,
+                          backgroundColor: '#ffffff',
+                          border: `${config.labelBorderWidth}px solid #000000`,
+                          borderRadius: `${config.labelBorderRadius}px`,
+                          position: 'relative',
+                          overflow: 'hidden',
+                          boxSizing: 'border-box',
+                          padding: `${config.labelPaddingTop}px ${config.labelPaddingRight}px ${config.labelPaddingBottom}px ${config.labelPaddingLeft}px`
+                        }}
+                      >
+                        {/* Código QR */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: `${config.qrTopPosition}px`,
+                            left: config.qrCenterHorizontally ? '50%' : `${config.qrLeftPosition}px`,
+                            transform: config.qrCenterHorizontally ? 'translateX(-50%)' : 'none',
+                            width: `${config.qrSize}px`,
+                            height: `${config.qrSize}px`
+                          }}
+                        >
+                          {qrDataUrl && (
+                            <img
+                              src={qrDataUrl}
+                              alt="Código QR"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'block',
+                                imageRendering: 'pixelated'
+                              }}
+                            />
+                          )}
+                        </div>
+
+                        {/* AR + Tildes */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: `${config.arBottomPosition}px`,
+                            left: '50%',
+                            transform: `translateX(-50%) translateX(${config.arOffsetX}px) translateY(${config.arOffsetY}px)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: `${config.arSpacing}px`
+                          }}
+                        >
+                          {/* Logo AR */}
+                          {config.useImage && (config.imageUrl || uploadedImage) ? (
+                            <img
+                              src={uploadedImage || config.imageUrl}
+                              alt="AR"
+                              style={{
+                                height: `${config.arHeight}px`,
+                                width: 'auto',
+                                display: 'block'
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                fontFamily: config.fontFamily,
+                                fontSize: `${config.fontSize}px`,
+                                fontWeight: 'bold',
+                                color: '#000000',
+                                lineHeight: 1
+                              }}
+                            >
+                              AR
+                            </span>
+                          )}
+
+                          {/* Tildes */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: `${config.checkSpacingVertical}px`,
+                              transform: `translateX(${config.tildeOffsetX}px) translateY(${config.tildeOffsetY}px)`
+                            }}
+                          >
+                            {[0, 1].map((i) => (
+                              <svg
+                                key={i}
+                                width={config.checkWidth}
+                                height={config.checkHeight}
+                                viewBox={`0 0 ${config.checkWidth} ${config.checkHeight}`}
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                style={{ display: 'block' }}
+                              >
+                                <path
+                                  d="M3 5L6.5 8.5L16 1.5"
+                                  stroke={cmykToRgb()}
+                                  strokeWidth={config.checkStrokeWidth}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-gray-600">
+                      {config.useImage ? 'Usando imagen' : `Fuente: ${config.fontFamily}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Tamaño: {config.labelWidth}px × {config.labelHeight}px
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      ({(config.labelWidth / 3.78).toFixed(1)}mm × {(config.labelHeight / 3.78).toFixed(1)}mm)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
     </>
   );
-}
+};
+
+// Función para usar en otros componentes
+export const getQRModConfig = (): QRConfig | null => {
+  const saved = localStorage.getItem('qrModConfig');
+  if (saved) {
+    const config = JSON.parse(saved);
+    if (config.isActive) {
+      return config;
+    }
+  }
+  return null;
+};
