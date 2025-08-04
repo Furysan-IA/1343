@@ -10,7 +10,7 @@ import { InformationValidation } from './pages/InformationValidation';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
 import { QRLanding } from './pages/QRLanding';
-import { ProductPassport } from './pages/ProductPassport';
+import ProductPassport from './pages/ProductPassport';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
