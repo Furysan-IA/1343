@@ -143,7 +143,7 @@ export default function DJCGenerator() {
         const { data, error } = await supabase
           .from('products')
           .select('*')
-          .order('produto')
+          .order('producto')
           .range(start, end);
 
         if (error) throw error;
