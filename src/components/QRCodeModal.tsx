@@ -7,6 +7,7 @@ import { saveAs } from 'file-saver';
 import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import toast from 'react-hot-toast';
+import { getQRModConfig } from '../utils/qrModConfig';
 
 interface QRCodeModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
   const [destinationUrl, setDestinationUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
+  const config = getQRModConfig();
 
   useEffect(() => {
     if (isOpen) {
@@ -206,7 +208,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                         <div
                           style={{
                             position: 'absolute',
-                            top: '3px',
+                            top: `${config.qrTop}px`,
                             left: '50%',
                             transform: 'translateX(-50%)',
                             width: '75px',
@@ -229,30 +231,42 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                         <div
                           style={{
                             position: 'absolute',
-                            bottom: '9px',
+                            bottom: `${config.arBottom}px`,
                             left: '50%',
                             transform: 'translateX(-50%)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '3px'
+                            gap: `${config.arGap}px`
                           }}
                         >
-                          {/* Logo AR con fuente personalizada */}
-                          <span
-                            style={{
-                              fontFamily: 'AR-Monserrat-Arabic, Arial, sans-serif',
-                              fontSize: '16px',
-                              fontWeight: 'bold',
-                              color: '#000000',
-                              height: '19px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              lineHeight: 1
-                            }}
-                          >
-                            AR
-                          </span>
+                          {/* Logo AR con fuente personalizada o imagen */}
+                          {config.useImage ? (
+                            <img
+                              src={config.imagePath}
+                              alt="AR"
+                              style={{
+                                height: `${config.arSize}px`,
+                                width: 'auto',
+                                display: 'block'
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                fontFamily: `"${config.fontFamily}", Arial, sans-serif`,
+                                fontSize: `${config.fontSize}px`,
+                                fontWeight: 'bold',
+                                color: '#000000',
+                                height: `${config.arSize}px`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                lineHeight: 1
+                              }}
+                            >
+                              AR
+                            </span>
+                          )}
                           
                           {/* Tildes */}
                           <div
@@ -262,18 +276,18 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: '0',
-                              height: '19px'
+                              height: `${config.arSize}px`
                             }}
                           >
                             <svg
-                              width="19"
-                              height="10"
+                              width={config.arSize}
+                              height={config.checkHeight}
                               viewBox="0 0 19 9.5"
                               fill="none"
                               xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
-                                marginBottom: '-0.5px'
+                                marginBottom: `${config.checkOverlap}px`
                               }}
                             >
                               <path
@@ -285,14 +299,14 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               />
                             </svg>
                             <svg
-                              width="19"
-                              height="10"
+                              width={config.arSize}
+                              height={config.checkHeight}
                               viewBox="0 0 19 9.5"
                               fill="none"
                               xmlns="http://www.w3.org/2000/svg"
                               style={{ 
                                 display: 'block',
-                                marginTop: '-0.5px'
+                                marginTop: `${config.checkOverlap}px`
                               }}
                             >
                               <path

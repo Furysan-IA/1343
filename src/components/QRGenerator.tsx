@@ -12,6 +12,7 @@ import {
   TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getQRModConfig } from '../utils/qrModConfig';
 
 interface QRGeneratorProps {
   product: {
@@ -40,6 +41,7 @@ export function QRGenerator({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [currentConfig, setCurrentConfig] = useState(qrConfigService.getConfig());
   const labelRef = useRef<HTMLDivElement>(null);
+  const qrModConfig = getQRModConfig();
   
   // Suscribirse a cambios de configuración
   useEffect(() => {
@@ -388,7 +390,7 @@ export function QRGenerator({
                   <div
                     style={{
                       position: 'absolute',
-                      top: '3px',
+                      top: `${qrModConfig.qrTop}px`,
                       left: '50%',
                       transform: 'translateX(-50%)',
                       width: '75px',
@@ -411,30 +413,42 @@ export function QRGenerator({
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '9px',
+                      bottom: `${qrModConfig.arBottom}px`,
                       left: '50%',
                       transform: 'translateX(-50%)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '3px'
+                      gap: `${qrModConfig.arGap}px`
                     }}
                   >
-                    {/* Logo AR con fuente personalizada */}
-                    <span
-                      style={{
-                        fontFamily: 'AR-Monserrat-Arabic, Arial, sans-serif',
-                        fontSize: '16px',
-                        fontWeight: 'bold',
-                        color: '#000000',
-                        height: '19px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        lineHeight: 1
-                      }}
-                    >
-                      AR
-                    </span>
+                    {/* Logo AR con fuente personalizada o imagen */}
+                    {qrModConfig.useImage ? (
+                      <img
+                        src={qrModConfig.imagePath}
+                        alt="AR"
+                        style={{
+                          height: `${qrModConfig.arSize}px`,
+                          width: 'auto',
+                          display: 'block'
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          fontFamily: `"${qrModConfig.fontFamily}", Arial, sans-serif`,
+                          fontSize: `${qrModConfig.fontSize}px`,
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          height: `${qrModConfig.arSize}px`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          lineHeight: 1
+                        }}
+                      >
+                        AR
+                      </span>
+                    )}
                     
                     {/* Tildes */}
                     <div
@@ -444,18 +458,18 @@ export function QRGenerator({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0',
-                        height: '19px'
+                        height: `${qrModConfig.arSize}px`
                       }}
                     >
                       <svg
-                        width="19"
-                        height="10"
+                        width={qrModConfig.arSize}
+                        height={qrModConfig.checkHeight}
                         viewBox="0 0 19 9.5"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ 
                           display: 'block',
-                          marginBottom: '-0.5px'
+                          marginBottom: `${qrModConfig.checkOverlap}px`
                         }}
                       >
                         <path
@@ -467,14 +481,14 @@ export function QRGenerator({
                         />
                       </svg>
                       <svg
-                        width="19"
-                        height="10"
+                        width={qrModConfig.arSize}
+                        height={qrModConfig.checkHeight}
                         viewBox="0 0 19 9.5"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ 
                           display: 'block',
-                          marginTop: '-0.5px'
+                          marginTop: `${qrModConfig.checkOverlap}px`
                         }}
                       >
                         <path

@@ -12,6 +12,7 @@ import { DJCGenerator } from './components/DJC';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
+import { QRModTool } from './components/QRModTool';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ function AppContent() {
         <Route path="/djc" element={<DJCManagement />} />
         <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
+      {import.meta.env.DEV && <QRModTool />}
     </Layout>
   );
 }
