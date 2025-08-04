@@ -30,7 +30,7 @@ export function QRModTool() {
     fontFamily: 'AR-Monserrat-Arabic',
     fontSize: 16,
     useImage: false,
-    imagePath: '/src/assets/images/AR-Monserrat-arabic.png'
+    imagePath: '/src/assets/fonts/AR-Monserrat-arabic.otf'
   });
   
   const [fontStatus, setFontStatus] = useState<'checking' | 'loaded' | 'error'>('checking');
