@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase-public';
 import { 
   Package, Shield, Factory, Calendar, MapPin, User, 
   FileText, Award, Globe, Phone, Mail, Building2,
@@ -103,7 +103,7 @@ export default function ProductPassport() {
       setError(null);
 
       // Buscar producto por UUID
-      const { data: productData, error: productError } = await supabase
+      const { data: productData, error: productError } = await supabasePublic
         .from('products')
         .select('*')
         .eq('uuid', uuid)
@@ -121,7 +121,7 @@ export default function ProductPassport() {
       setProduct(productData);
 
       // Buscar DJC asociada usando codificacion
-      const { data: djcData, error: djcError } = await supabase
+      const { data: djcData, error: djcError } = await supabasePublic
         .from('djc')
         .select('*')
         .eq('codigo_producto', productData.codificacion)
