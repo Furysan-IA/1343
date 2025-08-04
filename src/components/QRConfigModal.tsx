@@ -287,7 +287,7 @@ export function QRConfigModal({ isOpen, onClose }: QRConfigModalProps) {
             <h3 className="text-sm font-medium text-gray-700 mb-2">Vista Previa del Link</h3>
             <div className="bg-white rounded border border-gray-200 p-2 sm:p-3">
               <p className="text-xs sm:text-sm font-mono text-gray-600 break-all">
-                {baseUrl || 'https://ejemplo.com'}/products/[CODIGO_PRODUCTO]
+                {baseUrl || 'https://ejemplo.com'}/products/[uuid]
               </p>
             </div>
             <p className="mt-2 text-xs text-gray-500">
