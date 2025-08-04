@@ -36,7 +36,7 @@ class QRConfigService {
 
   // Establecer configuración por defecto
   private setDefaultConfig() {
-    const baseUrl = this.autoDetectBaseUrl();
+    const baseUrl = this.getProductionBaseUrl();
     const isDevelopment = this.isDevEnvironment(baseUrl);
     
     this.config = {
@@ -48,17 +48,22 @@ class QRConfigService {
     this.saveConfig();
   }
 
-  // Auto-detectar la URL base actual
-  autoDetectBaseUrl(): string {
+  // Obtener URL base para producción
+  private getProductionBaseUrl(): string {
     const currentUrl = window.location.origin;
     
-    // Si estamos en un WebContainer o entorno similar
+    // Si estamos en un entorno de desarrollo, usar auto-detección
     if (this.isDevEnvironment(currentUrl)) {
       return currentUrl;
     }
     
-    // Para producción, usar el dominio configurado
-    return 'https://verificar.argentina.gob.ar';
+    // Para producción, usar siempre argqr.com
+    return 'https://argqr.com';
+  }
+
+  // Auto-detectar la URL base actual
+  autoDetectBaseUrl(): string {
+    return this.getProductionBaseUrl();
   }
 
   // Detectar si es un entorno de desarrollo
@@ -81,12 +86,11 @@ class QRConfigService {
     // 1. Estamos en desarrollo
     // 2. La URL guardada también es de desarrollo
     // 3. La URL cambió (ej: nuevo WebContainer)
-    if (this.isDevEnvironment(currentUrl) && 
-        this.isDevEnvironment(this.config.baseUrl) && 
-        this.config.baseUrl !== currentUrl) {
+    const expectedUrl = this.getProductionBaseUrl();
+    if (this.config.baseUrl !== expectedUrl) {
       
-      console.log(`[QRConfig] Auto-actualizando URL de ${this.config.baseUrl} a ${currentUrl}`);
-      this.updateConfig(currentUrl);
+      console.log(`[QRConfig] Auto-actualizando URL de ${this.config.baseUrl} a ${expectedUrl}`);
+      this.updateConfig(expectedUrl);
     }
   }
 
@@ -138,7 +142,7 @@ class QRConfigService {
     const stored = localStorage.getItem(this.ENV_CONFIGS_KEY);
     return stored ? JSON.parse(stored) : {
       development: 'http://localhost:5173',
-      production: 'https://verificar.argentina.gob.ar'
+      production: 'https://argqr.com'
     };
   }
 
@@ -180,11 +184,12 @@ class QRConfigService {
     const envConfigs = this.getEnvironmentConfigs();
     
     // Agregar configuraciones guardadas si son diferentes
-    if (envConfigs.production && envConfigs.production !== currentUrl) {
+    const productionUrl = 'https://argqr.com';
+    if (productionUrl !== currentUrl) {
       suggestions.push({
         name: 'Producción',
-        url: envConfigs.production,
-        description: 'URL de producción guardada'
+        url: productionUrl,
+        description: 'URL de producción (argqr.com)'
       });
     }
     
