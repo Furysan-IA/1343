@@ -1,4 +1,4 @@
-// QRGenerator.tsx - Versión completa y corregida
+// QRGenerator.tsx - Versión completa con vista previa de URL
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { qrConfigService } from '../services/qrConfig.service';
@@ -10,7 +10,8 @@ import { jsPDF } from 'jspdf';
 import { getQRModConfig } from '../utils/qrModConfig';
 import { 
   QrCode, Download, Eye, Copy, CheckCircle, Settings,
-  TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw
+  TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw,
+  Globe, Link, AlertTriangle, Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -40,6 +41,8 @@ export function QRGenerator({
   const [showTestModal, setShowTestModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [currentConfig, setCurrentConfig] = useState(qrConfigService.getConfig());
+  const [showUrlPreview, setShowUrlPreview] = useState(false);
+  const [isTestingUrl, setIsTestingUrl] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
   
@@ -80,6 +83,69 @@ export function QRGenerator({
   };
 
   const canGenerate = product.titular && product.producto && product.marca;
+
+  // Generar la URL que se usará para el QR
+  const getPreviewUrl = () => {
+    return qrConfigService.generateProductUrl(product.codificacion);
+  };
+
+  // Verificar si la URL actual es diferente a la configurada
+  const checkUrlStatus = () => {
+    if (!(product as any).qr_link) return null;
+    
+    const currentBase = currentConfig.baseUrl;
+    const isOutdated = !(product as any).qr_link.startsWith(currentBase);
+    
+    if (isOutdated) {
+      try {
+        const existingUrl = new URL((product as any).qr_link);
+        return {
+          isOutdated: true,
+          oldBase: existingUrl.origin,
+          newBase: currentBase
+        };
+      } catch {
+        return null;
+      }
+    }
+    
+    return { isOutdated: false };
+  };
+
+  // Probar URL antes de generar QR
+  const testUrl = async () => {
+    const testUrl = qrUrl || getPreviewUrl();
+    setIsTestingUrl(true);
+    
+    try {
+      // Abrir en nueva pestaña
+      const newWindow = window.open(testUrl, '_blank');
+      
+      if (newWindow) {
+        toast.success('URL abierta en nueva pestaña. Verifica que funcione correctamente.');
+      } else {
+        toast.error('No se pudo abrir la URL. Verifica los bloqueadores de ventanas emergentes.');
+      }
+      
+      // Opcional: Intentar verificar si la URL responde
+      try {
+        // Nota: Esto puede fallar por CORS, pero es un intento adicional
+        const response = await fetch(testUrl, { 
+          method: 'HEAD',
+          mode: 'no-cors' 
+        });
+        console.log('URL verificada:', testUrl);
+      } catch (error) {
+        console.log('No se pudo verificar la URL por CORS, pero esto es normal');
+      }
+      
+    } catch (error) {
+      toast.error('Error al probar la URL');
+      console.error('Error:', error);
+    } finally {
+      setIsTestingUrl(false);
+    }
+  };
 
   const generateQR = async (force = false) => {
     if (!canGenerate) {
@@ -242,16 +308,11 @@ export function QRGenerator({
 
   const copyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(qrUrl);
+      const url = qrUrl || getPreviewUrl();
+      await navigator.clipboard.writeText(url);
       toast.success('URL copiada al portapapeles');
     } catch (err) {
       toast.error('Error al copiar la URL');
-    }
-  };
-
-  const testQR = () => {
-    if (qrUrl) {
-      window.open(qrUrl, '_blank');
     }
   };
 
@@ -287,6 +348,8 @@ export function QRGenerator({
     );
   }
 
+  const urlStatus = checkUrlStatus();
+
   // Vista completa
   return (
     <div className="space-y-6">
@@ -308,8 +371,33 @@ export function QRGenerator({
         </button>
       </div>
 
+      {/* Alerta de URL desactualizada */}
+      {urlStatus?.isOutdated && qrDataUrl && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <AlertTriangle className="w-5 h-5 text-orange-600 mr-2 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-orange-800">
+                La URL del QR está desactualizada
+              </p>
+              <div className="text-sm text-orange-700 mt-1 space-y-1">
+                <p>URL anterior: <code className="text-xs bg-orange-100 px-1 rounded">{urlStatus.oldBase}</code></p>
+                <p>URL actual: <code className="text-xs bg-orange-100 px-1 rounded">{urlStatus.newBase}</code></p>
+              </div>
+              <button
+                onClick={() => generateQR(true)}
+                className="mt-2 px-4 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 flex items-center gap-1"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Actualizar QR con nueva URL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alerta de regeneración si el producto cambió */}
-      {showRegenerateAlert && qrDataUrl && (
+      {showRegenerateAlert && qrDataUrl && !urlStatus?.isOutdated && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start">
             <AlertCircle className="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
@@ -332,37 +420,105 @@ export function QRGenerator({
         </div>
       )}
 
-      {/* Botón generar QR */}
+      {/* Vista previa de URL antes de generar */}
       {!qrDataUrl && (
-        <div className="text-center py-8">
-          <QrCode className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-4">No se ha generado un código QR para este producto</p>
-          <button
-            onClick={() => generateQR()}
-            disabled={generating || !canGenerate}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 mx-auto disabled:opacity-50"
-          >
-            {generating ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                Generando...
-              </>
-            ) : (
-              <>
-                <QrCode className="w-4 h-4" />
-                Generar Código QR
-              </>
+        <div className="space-y-4">
+          {/* Mensaje inicial */}
+          <div className="text-center py-8">
+            <QrCode className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 mb-4">No se ha generado un código QR para este producto</p>
+            {!canGenerate && (
+              <p className="text-red-600 text-sm">
+                Faltan datos obligatorios: titular, producto o marca
+              </p>
             )}
-          </button>
-          {!canGenerate && (
-            <p className="text-red-600 text-sm mt-2">
-              Faltan datos obligatorios: titular, producto o marca
-            </p>
+          </div>
+
+          {/* Vista previa de URL */}
+          {canGenerate && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Link className="w-5 h-5 text-blue-600" />
+                  <h4 className="font-medium text-blue-900">Vista Previa de URL</h4>
+                </div>
+                <button
+                  onClick={() => setShowUrlPreview(!showUrlPreview)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {showUrlPreview ? 'Ocultar' : 'Mostrar detalles'}
+                </button>
+              </div>
+              
+              <div className="bg-white rounded border border-blue-200 p-3 mb-3">
+                <p className="text-sm font-mono text-gray-700 break-all">{getPreviewUrl()}</p>
+              </div>
+              
+              {showUrlPreview && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+                    <div className="text-blue-800">
+                      <p>Esta URL apuntará a la vista pública del producto en esta aplicación.</p>
+                      <p className="mt-1">El código QR dirigirá a los usuarios a: <code className="bg-blue-100 px-1 rounded">/products/{product.codificacion}</code></p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={testUrl}
+                  disabled={isTestingUrl}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm disabled:opacity-50"
+                >
+                  {isTestingUrl ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      Probando...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="w-4 h-4" />
+                      Probar URL
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={copyUrl}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 text-sm"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar
+                </button>
+              </div>
+            </div>
           )}
+
+          {/* Botón generar QR */}
+          <div className="flex justify-center">
+            <button
+              onClick={() => generateQR()}
+              disabled={generating || !canGenerate}
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50"
+            >
+              {generating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <QrCode className="w-4 h-4" />
+                  Generar Código QR
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Vista previa del QR */}
+      {/* Vista del QR generado */}
       {qrDataUrl && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -589,7 +745,7 @@ export function QRGenerator({
             </button>
             
             <button
-              onClick={testQR}
+              onClick={testUrl}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
             >
               <ExternalLink className="w-4 h-4" />
@@ -612,40 +768,6 @@ export function QRGenerator({
         isOpen={showConfigModal}
         onClose={() => setShowConfigModal(false)}
       />
-
-      {/* Modal de prueba local */}
-      {showTestModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4">Prueba Local del QR</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <p className="text-sm text-gray-600 mb-2">
-                El código QR apunta a:
-              </p>
-              <code className="text-xs bg-white p-2 rounded block break-all">
-                {qrUrl}
-              </code>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setShowTestModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  window.open(qrUrl, '_blank');
-                  setShowTestModal(false);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Abrir en nueva pestaña
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
