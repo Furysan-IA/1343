@@ -2,10 +2,12 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { DeploymentBanner } from './components/DeploymentBanner';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { ProductManagement } from './pages/ProductManagement';
 import { ClientManagement } from './pages/ClientManagement';
+import { InformationValidation } from './pages/InformationValidation';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
 import { QRLanding } from './pages/QRLanding';
@@ -14,7 +16,6 @@ import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
 import { QRModTool } from './components/QRModTool';
-import { DeploymentInfoTool } from './components/DeploymentInfoTool';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -43,7 +44,6 @@ function AppContent() {
         <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
       {import.meta.env.DEV && <QRModTool />}
-      {import.meta.env.DEV && <DeploymentInfoTool />}
     </Layout>
   );
 }
