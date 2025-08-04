@@ -7,7 +7,7 @@ import { saveAs } from 'file-saver';
 import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import toast from 'react-hot-toast';
-import { getQRModConfig } from '../utils/qrModConfig';
+import { getQRModConfig, cmykToRgb } from '../utils/qrModConfig';
 
 interface QRCodeModalProps {
   isOpen: boolean;
@@ -132,17 +132,12 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
   };
 
   // Convert CMYK to RGB for checkmarks
-  const cmykToRgb = () => {
-    const c = 0.47;
-    const m = 0.22;
-    const y = 0;
-    const k = 0.14;
-    
-    const r = Math.round(255 * (1 - c) * (1 - k));
-    const g = Math.round(255 * (1 - m) * (1 - k));
-    const b = Math.round(255 * (1 - y) * (1 - k));
-    
-    return `rgb(${r}, ${g}, ${b})`;
+  // Obtener color actual basado en configuración
+  const getCurrentColor = () => {
+    if (qrModConfig.useCMYK) {
+      return cmykToRgb(qrModConfig.cmyk.c, qrModConfig.cmyk.m, qrModConfig.cmyk.y, qrModConfig.cmyk.k);
+    }
+    return qrModConfig.checkColor;
   };
 
   return (
@@ -211,8 +206,8 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             top: `${qrModConfig.qrTop}px`,
                             left: '50%',
                             transform: 'translateX(-50%)',
-                            width: '75px',
-                            height: '75px'
+                            width: `${qrModConfig.qrSize}px`,
+                            height: `${qrModConfig.qrSize}px`
                           }}
                         >
                           <img
@@ -233,7 +228,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                             position: 'absolute',
                             bottom: `${qrModConfig.arBottom}px`,
                             left: '50%',
-                            transform: 'translateX(-50%)',
+                            transform: `translateX(-50%) translateX(${qrModConfig.arOffsetX}px) translateY(${qrModConfig.arOffsetY}px)`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -256,7 +251,9 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               style={{
                                 fontFamily: `"${qrModConfig.fontFamily}", Arial, sans-serif`,
                                 fontSize: `${qrModConfig.fontSize}px`,
-                                fontWeight: 'bold',
+                                fontWeight: qrModConfig.fontWeight,
+                                letterSpacing: `${qrModConfig.letterSpacing}px`,
+                                textTransform: qrModConfig.textTransform as any,
                                 color: '#000000',
                                 height: `${qrModConfig.arSize}px`,
                                 display: 'flex',
@@ -264,7 +261,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                                 lineHeight: 1
                               }}
                             >
-                              AR
+                              {qrModConfig.arText}
                             </span>
                           )}
                           
@@ -275,48 +272,44 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                               flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '0',
-                              height: `${qrModConfig.arSize}px`
+                              gap: `${qrModConfig.checkSpacingVertical}px`,
+                              height: `${qrModConfig.arSize}px`,
+                              transform: `translateX(${qrModConfig.tildeOffsetX}px) translateY(${qrModConfig.tildeOffsetY}px)`
                             }}
                           >
-                            <svg
-                              width={qrModConfig.arSize}
-                              height={qrModConfig.checkHeight}
-                              viewBox="0 0 19 9.5"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                              style={{ 
-                                display: 'block',
-                                marginBottom: `${qrModConfig.checkOverlap}px`
-                              }}
-                            >
-                              <path
-                                d="M3 5L6.5 8.5L16 1.5"
-                                stroke={cmykToRgb()}
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            <svg
-                              width={qrModConfig.arSize}
-                              height={qrModConfig.checkHeight}
-                              viewBox="0 0 19 9.5"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                              style={{ 
-                                display: 'block',
-                                marginTop: `${qrModConfig.checkOverlap}px`
-                              }}
-                            >
-                              <path
-                                d="M3 5L6.5 8.5L16 1.5"
-                                stroke={cmykToRgb()}
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
+                            {Array.from({ length: qrModConfig.symbolCount }, (_, i) => {
+                              const angle = i === 0 ? qrModConfig.symbol1Angle : qrModConfig.symbol2Angle;
+                              const size = qrModConfig.symbolSize / 100;
+                              const offsetX = qrModConfig.useIndividualControl ? (i === 0 ? qrModConfig.symbol1X : qrModConfig.symbol2X) : 0;
+                              const offsetY = qrModConfig.useIndividualControl ? (i === 0 ? qrModConfig.symbol1Y : qrModConfig.symbol2Y) : 0;
+                              
+                              return (
+                                <div
+                                  key={i}
+                                  style={{
+                                    transform: `rotate(${angle}deg) scale(${size}) translate(${offsetX}px, ${offsetY}px)`,
+                                    transformOrigin: 'center'
+                                  }}
+                                >
+                                  <svg
+                                    width={qrModConfig.checkWidth}
+                                    height={qrModConfig.checkHeight}
+                                    viewBox={`0 0 ${qrModConfig.checkWidth} ${qrModConfig.checkHeight}`}
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    style={{ display: 'block' }}
+                                  >
+                                    <path
+                                      d="M3 5L6.5 8.5L16 1.5"
+                                      stroke={getCurrentColor()}
+                                      strokeWidth={qrModConfig.checkStrokeWidth}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
