@@ -560,7 +560,7 @@ export default function ProductPassport() {
           <p className="text-gray-300 mb-4">
             Esta información ha sido verificada y es oficial del Sistema Argentino de Certificación
           </p>
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-400">
+          <div className="flex items-center justify-center gap-6 text-sm text-gray-900 text-white text-center">
             <span>Código: {product.codificacion}</span>
             <span>•</span>
             <span>Verificado: {formatDate(product.created_at)}</span>
