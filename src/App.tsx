@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { DeploymentBanner } from './components/DeploymentBanner';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { ProductManagement } from './pages/ProductManagement';
@@ -52,7 +51,6 @@ function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <DeploymentBanner />
         <Router>
           <Routes>
             {/* Rutas públicas (sin autenticación) */}
