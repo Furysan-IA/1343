@@ -338,29 +338,6 @@ export default function ProductPassport() {
               </div>
             </div>
 
-            {/* Información del Fabricante */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Factory className="w-6 h-6 text-green-600" />
-                Información del Fabricante
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Fabricante</label>
-                  <p className="text-gray-900 font-medium">{product.fabricante || 'No especificado'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Planta de Fabricación</label>
-                  <p className="text-gray-900 font-medium">{product.planta_fabricacion || 'No especificada'}</p>
-                </div>
-                {product.direccion_legal_empresa && (
-                  <div className="md:col-span-2">
-                    <label className="text-sm font-medium text-gray-500">Dirección Legal de la Empresa</label>
-                    <p className="text-gray-900">{product.direccion_legal_empresa}</p>
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* Información de Certificación */}
             <div className="bg-white rounded-xl shadow-lg p-6">
@@ -573,41 +550,6 @@ export default function ProductPassport() {
           </div>
         </div>
 
-        {/* Información Técnica Detallada */}
-        {(product.cod_rubro || product.nombre_subrubro || product.en_proceso_renovacion) && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Award className="w-6 h-6 text-yellow-600" />
-              Información Técnica Adicional
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {product.cod_rubro && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Código Rubro</label>
-                  <p className="text-gray-900 font-medium">{product.cod_rubro}</p>
-                </div>
-              )}
-              {product.cod_subrubro && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Código Subrubro</label>
-                  <p className="text-gray-900 font-medium">{product.cod_subrubro}</p>
-                </div>
-              )}
-              {product.nombre_subrubro && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Nombre Subrubro</label>
-                  <p className="text-gray-900 font-medium">{product.nombre_subrubro}</p>
-                </div>
-              )}
-              {product.en_proceso_renovacion && (
-                <div className="md:col-span-3">
-                  <label className="text-sm font-medium text-gray-500">En Proceso de Renovación</label>
-                  <p className="text-gray-900">{product.en_proceso_renovacion}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Footer de Verificación */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl p-6 text-white text-center">
