@@ -1,876 +1,1088 @@
-// QRGenerator.tsx - Versión mejorada con QR optimizados para escaneo móvil
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
-import { qrConfigService } from '../services/qrConfig.service';
-import { QRConfigModal } from './QRConfigModal';
-import QRCode from 'qrcode';
-import { saveAs } from 'file-saver';
-import { toPng, toBlob } from 'html-to-image';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
-import { getQRModConfig } from '../utils/qrModConfig';
-import { cmykToRgb } from '../utils/qrModConfig';
-import { 
-  QrCode, Download, Eye, Copy, CheckCircle, Settings,
-  TestTube, Smartphone, ExternalLink, AlertCircle, RefreshCw,
-  Globe, Link, AlertTriangle, Info, Zap
-} from 'lucide-react';
+import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface QRGeneratorProps {
-  product: {
-    codificacion: string;
-    uuid: string;  // Ahora es requerido, no opcional
-    marca: string | null;
-    producto: string | null;
-    modelo: string | null;
-    titular?: string | null;
-    qr_link?: string | null;
-    qr_path?: string | null;
-    qr_status?: string | null;
-    qr_generated_at?: string | null;
-  };
-  onQRGenerated?: (qrUrl: string) => void;
-  compact?: boolean;
-  showRegenerateAlert?: boolean;
+interface Client {
+  id: string;
+  razon_social: string;
+  cuit: string;
+  direccion?: string;
+  ciudad?: string;
+  provincia?: string;
+  telefono?: string;
+  email?: string;
 }
 
-export function QRGenerator({ 
-  product, 
-  onQRGenerated, 
-  compact = false,
-  showRegenerateAlert = false 
-}: QRGeneratorProps) {
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [qrDataUrlHighRes, setQrDataUrlHighRes] = useState<string>('');
-  const [qrUrl, setQrUrl] = useState<string>('');
+interface Product {
+  id: string;
+  codificacion: string;
+  producto: string;
+  marca?: string;
+  modelo?: string;
+  cuit: string;
+  djc_status?: string;
+  djc_path?: string;
+  certificado_status?: string;
+  titular?: string;
+  origen?: string;
+  fabricante?: string;
+  planta_fabricacion?: string;
+  normas_aplicacion?: string;
+  informe_ensayo_nro?: string;
+  fecha_emision?: string;
+  fecha_vencimiento?: string;
+  caracteristicas_tecnicas?: string;
+  laboratorio?: string;
+  direccion_legal_empresa?: string;
+}
+
+interface DJCHistory {
+  id: string;
+  created_at: string;
+  numero_djc: string;
+  resolucion: string;
+  status: string;
+  conformity_status: string;
+}
+
+const DJCGenerator: React.FC = () => {
+  const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
+  const [clients, setClients] = useState<Client[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedResolution, setSelectedResolution] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [showTestModal, setShowTestModal] = useState(false);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [currentConfig, setCurrentConfig] = useState(qrConfigService.getConfig());
-  const [showUrlPreview, setShowUrlPreview] = useState(false);
-  const [isTestingUrl, setIsTestingUrl] = useState(false);
-  const [qrQuality, setQrQuality] = useState<'L' | 'M' | 'Q' | 'H'>('M'); // Cambio de H a M por defecto
-  const labelRef = useRef<HTMLDivElement>(null);
-  const qrModConfig = getQRModConfig();
-  
-  // Suscribirse a cambios de configuración
+  const [showProductsWithoutDJC, setShowProductsWithoutDJC] = useState(false);
+  const [djcHistory, setDjcHistory] = useState<DJCHistory[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [representante, setRepresentante] = useState({
+    nombre: '',
+    domicilio: '',
+    cuit: ''
+  });
+
+  const resolutions = [
+    { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
+    { value: 'Res. SICyC N° 17/2025', label: 'Res. SICyC N° 17/2025' },
+    { value: 'Res. SICyC N° 16/2025', label: 'Res. SICyC N° 16/2025' }
+  ];
+
   useEffect(() => {
-    const unsubscribe = qrConfigService.subscribe((config) => {
-      setCurrentConfig(config);
-    });
-    
-    return unsubscribe;
+    fetchClients();
+    fetchProducts();
   }, []);
 
-  // Cargar QR existente si existe
   useEffect(() => {
-    if (product.qr_link) {
-      setQrUrl(product.qr_link);
-      // Si ya tiene QR, intentar cargarlo
-      if (product.qr_path) {
-        setQrDataUrlHighRes(product.qr_path);
-        // Generar versión normal desde la alta resolución
-        generateNormalFromHighRes(product.qr_path);
-      }
-    }
-  }, [product]);
-
-  const generateNormalFromHighRes = async (highResData: string) => {
-    try {
-      // IMPORTANTE: Regenerar el QR con parámetros optimizados para escaneo
-      const qrDataNormal = await QRCode.toDataURL(product.qr_link || '', {
-        width: 200, // Aumentado de 75 a 200 para mejor calidad
-        margin: 2, // Margen de 2 módulos para mejor detección
-        errorCorrectionLevel: 'M', // Cambiado de H a M para mejor balance
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
+    if (selectedClient && products.length > 0) {
+      const filtered = products.filter(p => {
+        // Convertir ambos a string para comparar correctamente
+        const productCuit = p.cuit?.toString();
+        const clientCuit = selectedClient.cuit?.toString();
+        
+        const matchesClient = productCuit === clientCuit;
+        const matchesDJCFilter = !showProductsWithoutDJC || 
+          p.djc_status === 'No Generada' || 
+          !p.djc_status;
+        
+        return matchesClient && matchesDJCFilter;
       });
-      setQrDataUrl(qrDataNormal);
-    } catch (error) {
-      console.error('Error generando QR normal:', error);
+      
+      console.log('Cliente seleccionado CUIT:', selectedClient.cuit);
+      console.log('Productos encontrados para este cliente:', filtered.length);
+      console.log('Productos filtrados:', filtered);
+      
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
     }
-  };
+  }, [selectedClient, products, showProductsWithoutDJC]);
 
-  const canGenerate = product.titular && product.producto && product.marca;
-
-  // Generar la URL que se usará para el QR
-  const getPreviewUrl = () => {
-    // Usar UUID del producto
-    if (product.uuid) {
-      return qrConfigService.generateProductUrl(product.uuid);
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchDJCHistory(selectedProduct.codificacion);
     }
-    // Fallback temporal si no hay UUID
-    return `${window.location.origin}/products/[UUID-NO-DISPONIBLE]`;
-  };
+  }, [selectedProduct]);
 
-  // Verificar si la URL actual es diferente a la configurada
-  const checkUrlStatus = () => {
-    if (!product.qr_link) return null;
-    
-    const currentBase = currentConfig.baseUrl;
-    const isOutdated = !product.qr_link.startsWith(currentBase);
-    
-    if (isOutdated) {
-      try {
-        const existingUrl = new URL(product.qr_link);
-        return {
-          isOutdated: true,
-          oldBase: existingUrl.origin,
-          newBase: currentBase
-        };
-      } catch {
-        return null;
-      }
-    }
-    
-    return { isOutdated: false };
-  };
-
-  // Probar URL antes de generar QR
-  const testUrl = async () => {
-    const testUrl = qrUrl || getPreviewUrl();
-    setIsTestingUrl(true);
-    
+  const fetchClients = async () => {
     try {
-      // Abrir en nueva pestaña
-      const newWindow = window.open(testUrl, '_blank');
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('razon_social');
       
-      if (newWindow) {
-        toast.success('URL abierta en nueva pestaña. Verifica que funcione correctamente.');
-      } else {
-        toast.error('No se pudo abrir la URL. Verifica los bloqueadores de ventanas emergentes.');
-      }
-      
-      // Opcional: Intentar verificar si la URL responde
-      try {
-        // Nota: Esto puede fallar por CORS, pero es un intento adicional
-        const response = await fetch(testUrl, { 
-          method: 'HEAD',
-          mode: 'no-cors' 
-        });
-        console.log('URL verificada:', testUrl);
-      } catch (error) {
-        console.log('No se pudo verificar la URL por CORS, pero esto es normal');
-      }
-      
+      if (error) throw error;
+      setClients(data || []);
     } catch (error) {
-      toast.error('Error al probar la URL');
-      console.error('Error:', error);
-    } finally {
-      setIsTestingUrl(false);
+      console.error('Error fetching clients:', error);
+      toast.error('Error al cargar los clientes');
     }
   };
 
-  const generateQR = async (force = false) => {
-    if (!canGenerate) {
-      toast.error('Faltan datos obligatorios: titular, producto o marca');
-      return;
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('producto');
+      
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('Error al cargar los productos');
     }
+  };
 
-    // Verificar que el producto tenga UUID
-    if (!product.uuid) {
-      toast.error('Este producto no tiene UUID asignado. Por favor, contacte al administrador.');
-      return;
+  const fetchDJCHistory = async (productCode: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('djc')
+        .select('id, created_at, numero_djc, resolucion, status, conformity_status')
+        .eq('codigo_producto', productCode)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setDjcHistory(data || []);
+    } catch (error) {
+      console.error('Error fetching DJC history:', error);
     }
+  };
 
-    // Si ya tiene QR y no es forzado, preguntar
-    if (product.qr_path && !force && !showRegenerateAlert) {
-      if (!confirm('Este producto ya tiene un código QR. ¿Desea regenerarlo?')) {
-        return;
+  const handleProductSearch = (searchTerm: string) => {
+    setProductSearch(searchTerm);
+    
+    if (searchMode === 'product' && searchTerm) {
+      // Buscar el producto en TODOS los productos disponibles
+      const foundProduct = products.find(p => 
+        p.producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.codificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.marca?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      if (foundProduct) {
+        setSelectedProduct(foundProduct);
+        
+        // Auto-seleccionar el cliente correcto basado en el CUIT del producto
+        const productClient = clients.find(c => 
+          c.cuit?.toString() === foundProduct.cuit?.toString()
+        );
+        
+        if (productClient) {
+          setSelectedClient(productClient);
+          toast.success(`Cliente "${productClient.razon_social}" seleccionado automáticamente`);
+        } else {
+          toast.error('No se encontró el cliente asociado a este producto');
+        }
       }
+    }
+  };
+
+  const generateDJCNumber = (): string => {
+    const timestamp = Date.now().toString().slice(-6);
+    return `DJC-2025-${timestamp}`;
+  };
+
+  const generatePDF = async () => {
+    if (!selectedClient || !selectedProduct || !selectedResolution) {
+      toast.error('Por favor complete todos los campos requeridos');
+      return;
     }
 
     setGenerating(true);
-    
+
     try {
-      // Usar el UUID del producto para generar la URL
-      const productUrl = qrConfigService.generateProductUrl(product.uuid);
-      setQrUrl(productUrl);
-
-      // IMPORTANTE: Configuración optimizada para escaneo móvil
-      const qrOptions = {
-        errorCorrectionLevel: qrQuality, // Usar nivel seleccionado
-        type: 'image/png' as const,
-        quality: 1,
-        margin: 2, // Margen de 2 módulos para mejor detección
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        },
-        rendererOpts: {
-          quality: 1
-        }
-      };
-
-      // Generar QR para visualización (200x200px)
-      const qrDataNormal = await QRCode.toDataURL(productUrl, {
-        ...qrOptions,
-        width: 200 // Tamaño óptimo para visualización y escaneo
+      const djcNumber = generateDJCNumber();
+      const currentDate = new Date().toLocaleDateString('es-AR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
       });
-      setQrDataUrl(qrDataNormal);
 
-      // Generar QR alta resolución para impresión (600x600px)
-      const qrDataHigh = await QRCode.toDataURL(productUrl, {
-        ...qrOptions,
-        width: 600 // Alta resolución para impresión
+      // Crear el PDF con el formato exacto del modelo
+      const pdf = new jsPDF();
+      
+      // Configurar fuente
+      pdf.setFont('helvetica');
+      
+      // Título principal
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('DECLARACIÓN JURADA DE CONFORMIDAD (DJC)', 105, 20, { align: 'center' });
+      
+      // Resolución
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedResolution, 105, 30, { align: 'center' });
+      
+      // Número de identificación
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Número de Identificación de DJC:', 105, 40, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(djcNumber, 105, 47, { align: 'center' });
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(número único de identificación autodeterminado)', 105, 53, { align: 'center' });
+
+      // Línea separadora
+      pdf.line(20, 60, 190, 60);
+
+      // Información del Fabricante o Importador
+      let yPos = 70;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Información del Fabricante o Importador:', 20, yPos);
+      
+      yPos += 10;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      
+      // Razón Social
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Razón Social: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedClient.razon_social || '', 55, yPos);
+      
+      // CUIT
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• C.U.I.T. N°', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(cuando fuera aplicable)', 45, yPos);
+      pdf.text(': ' + formatCuit(selectedClient.cuit || ''), 85, yPos);
+      
+      // Nombre Comercial o Marca
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Nombre Comercial o Marca Registrada: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedProduct.marca || selectedProduct.titular || '', 100, yPos);
+      
+      // Domicilio Legal
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Domicilio Legal: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
+      pdf.text(domicilio, 60, yPos);
+      
+      // Domicilio de la planta
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Domicilio de la planta de producción o del depósito del importador: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      yPos += 6;
+      pdf.text(selectedProduct.planta_fabricacion || 'No especificado', 25, yPos);
+      
+      // Teléfono
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Teléfono: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      const telefono = selectedClient.telefono || 'CAMPO NO ENCONTRADO';
+      if (telefono === 'CAMPO NO ENCONTRADO') {
+        pdf.setTextColor(255, 0, 0);
+      }
+      pdf.text(telefono, 50, yPos);
+      pdf.setTextColor(0, 0, 0);
+      
+      // Correo Electrónico
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Correo Electrónico: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedClient.email || '', 65, yPos);
+
+      // Representante Autorizado
+      yPos += 15;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Representante Autorizado (si corresponde):', 20, yPos);
+      
+      yPos += 8;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Nombre y Apellido / Razón Social: ', 25, yPos);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text(representante.nombre || 'No aplica', 85, yPos);
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Domicilio Legal: ', 25, yPos);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text(representante.domicilio || 'No aplica', 60, yPos);
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• C.U.I.T. N°: ', 25, yPos);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text(representante.cuit || 'No aplica', 55, yPos);
+
+      // Información del Producto
+      yPos += 15;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Información del Producto ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(por producto o familia de productos):', 75, yPos);
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Código de Identificación Único del Producto ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(autodeterminado): ', 115, yPos);
+      pdf.text(selectedProduct.codificacion || '', 155, yPos);
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Fabricante', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(Incluir domicilio de la planta de producción): ', 50, yPos);
+      pdf.text(selectedProduct.fabricante || '', 140, yPos);
+      
+      if (selectedProduct.planta_fabricacion) {
+        yPos += 6;
+        pdf.text(selectedProduct.planta_fabricacion, 25, yPos);
+      }
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Identificación del producto ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(marca, modelo, características técnicas): ', 80, yPos);
+      yPos += 6;
+      const identificacion = `${selectedProduct.marca || ''} - ${selectedProduct.modelo || ''} - ${selectedProduct.caracteristicas_tecnicas || ''}`;
+      pdf.text(identificacion, 25, yPos);
+
+      // Nueva página para Normas y Evaluación
+      pdf.addPage();
+      yPos = 30;
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Normas y Evaluación de la Conformidad:', 20, yPos);
+      
+      yPos += 10;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Reglamento/s Aplicable/s: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedResolution, 75, yPos);
+      yPos += 6;
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(Detallar el o los reglamentos bajo los cuales se encuentra alcanzado el producto)', 25, yPos);
+      
+      yPos += 10;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Norma/s Técnica/s: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(selectedProduct.normas_aplicacion || '', 65, yPos);
+      yPos += 6;
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(Incluir normas técnicas específicas a las que se ajusta el producto)', 25, yPos);
+      
+      yPos += 10;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Referencia al Documento de Evaluación de la Conformidad: ', 25, yPos);
+      pdf.setFont('helvetica', 'normal');
+      yPos += 6;
+      pdf.text(selectedProduct.informe_ensayo_nro || '', 25, yPos);
+      yPos += 6;
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(Emitido por un OEC, especificar el número de referencia)', 25, yPos);
+
+      // Otros Datos
+      yPos += 15;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Otros Datos:', 20, yPos);
+      
+      yPos += 10;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('• Enlace a la copia de la Declaración de la Conformidad en Internet: ', 25, yPos);
+      yPos += 6;
+      const qrLink = `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+      pdf.setTextColor(0, 0, 255);
+      pdf.text(qrLink, 25, yPos);
+      pdf.setTextColor(0, 0, 0);
+      yPos += 6;
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(Si está disponible, incluir el enlace al documento en línea)', 25, yPos);
+
+      // Texto legal
+      yPos += 15;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      const textoLegal = 'La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.';
+      const lines = pdf.splitTextToSize(textoLegal, 165);
+      lines.forEach((line: string) => {
+        pdf.text(line, 22, yPos);
+        yPos += 6;
       });
-      setQrDataUrlHighRes(qrDataHigh);
 
-      // Guardar en base de datos
-      const { error } = await supabase
+      // Fecha
+      yPos += 10;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Fecha:', 20, yPos);
+      yPos += 6;
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(currentDate, 20, yPos);
+
+      // Firma
+      yPos += 15;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Firma:', 20, yPos);
+      yPos += 6;
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('(Firma del responsable)', 20, yPos);
+      
+      // Línea para firma
+      yPos += 20;
+      pdf.line(20, yPos, 80, yPos);
+      
+      // Línea para aclaración
+      yPos += 15;
+      pdf.text('Aclaración:', 20, yPos);
+      yPos += 10;
+      pdf.line(20, yPos, 80, yPos);
+
+      // Nota de documento preliminar
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(128, 128, 128);
+      pdf.text('DOCUMENTO PRELIMINAR - PENDIENTE DE FIRMA', 105, 280, { align: 'center' });
+      pdf.setTextColor(0, 0, 0);
+
+      // Convertir PDF a blob
+      const pdfBlob = pdf.output('blob');
+      const fileName = `djc_preliminar_${selectedProduct.codificacion}_${Date.now()}.pdf`;
+
+      // Guardar en bucket 'djc' (preliminares)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('djc')
+        .upload(fileName, pdfBlob, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Obtener URL pública
+      const { data: urlData } = supabase.storage
+        .from('djc')
+        .getPublicUrl(fileName);
+
+      // Guardar registro en tabla djc
+      const { error: djcError } = await supabase
+        .from('djc')
+        .insert({
+          numero_djc: djcNumber,
+          resolucion: selectedResolution,
+          razon_social: selectedClient.razon_social,
+          cuit: selectedClient.cuit,
+          marca: selectedProduct.marca || selectedProduct.titular || '',
+          domicilio_legal: domicilio,
+          domicilio_planta: selectedProduct.planta_fabricacion || 'No especificado',
+          telefono: selectedClient.telefono || '',
+          email: selectedClient.email || '',
+          representante_nombre: representante.nombre || null,
+          representante_domicilio: representante.domicilio || null,
+          representante_cuit: representante.cuit || null,
+          codigo_producto: selectedProduct.codificacion,
+          fabricante: selectedProduct.fabricante || '',
+          identificacion_producto: identificacion,
+          reglamentos: selectedResolution,
+          normas_tecnicas: selectedProduct.normas_aplicacion || '',
+          documento_evaluacion: selectedProduct.informe_ensayo_nro || '',
+          enlace_declaracion: qrLink,
+          fecha_lugar: currentDate,
+          pdf_url: urlData.publicUrl,
+          status: 'Generada Pendiente de Firma',
+          conformity_status: 'Conforme'
+        });
+
+      if (djcError) throw djcError;
+
+      // Actualizar estado del producto
+      const { error: updateError } = await supabase
         .from('products')
         .update({
-          qr_link: productUrl,
-          qr_path: qrDataHigh,
-          qr_status: 'Generado',
-          qr_generated_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          djc_status: 'Generada Pendiente de Firma',
+          djc_path: urlData.publicUrl
         })
-        .eq('codificacion', product.codificacion);
+        .eq('codificacion', selectedProduct.codificacion);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      toast.success('Código QR generado exitosamente');
+      // Guardar historial
+      const { error: historyError } = await supabase
+        .from('djc_history')
+        .insert({
+          djc_id: djcNumber,
+          product_code: selectedProduct.codificacion,
+          action: 'created',
+          details: {
+            resolution: selectedResolution,
+            client: selectedClient.razon_social,
+            product: selectedProduct.producto
+          }
+        });
+
+      if (historyError) console.error('Error saving history:', historyError);
+
+      // Descargar el PDF
+      pdf.save(`DJC_${djcNumber}.pdf`);
+
+      toast.success('DJC generada y guardada exitosamente');
       
-      // Mostrar información sobre escaneo
-      toast((t) => (
-        <div>
-          <p className="font-medium">QR generado correctamente</p>
-          <p className="text-sm mt-1">
-            Optimizado para escaneo móvil con corrección de errores nivel {qrQuality}
-          </p>
-        </div>
-      ), {
-        duration: 4000,
-        icon: '✅'
-      });
+      // Limpiar formulario
+      handleClear();
       
-      if (onQRGenerated) {
-        onQRGenerated(productUrl);
-      }
-
-    } catch (error: any) {
-      console.error('Error generando QR:', error);
-      toast.error('Error al generar el código QR');
+    } catch (error) {
+      console.error('Error generating DJC:', error);
+      toast.error('Error al generar la DJC');
     } finally {
       setGenerating(false);
     }
   };
 
-  const downloadQR = (highRes: boolean = false) => {
-    const link = document.createElement('a');
-    link.download = `qr-${product.codificacion}${highRes ? '-hd' : ''}.png`;
-    link.href = highRes ? qrDataUrlHighRes : qrDataUrl;
-    link.click();
+  const handleClear = () => {
+    setSelectedClient(null);
+    setSelectedProduct(null);
+    setSelectedResolution('');
+    setClientSearch('');
+    setProductSearch('');
+    setRepresentante({ nombre: '', domicilio: '', cuit: '' });
+    setDjcHistory([]);
+    setShowHistory(false);
   };
 
-  const downloadLabelPNG = async () => {
-    if (!labelRef.current) return;
-
-    try {
-      const dataUrl = await toPng(labelRef.current, {
-        width: 94,
-        height: 113,
-        pixelRatio: 12, // Aumentado de 8 a 12 para mejor calidad
-        quality: 1,
-        backgroundColor: '#ffffff',
-        canvasWidth: 1128, // 94 * 12
-        canvasHeight: 1356, // 113 * 12
-        skipAutoScale: true,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left'
-        }
-      });
-      
-      saveAs(dataUrl, `etiqueta-qr-${product.codificacion}.png`);
-      toast.success('Etiqueta PNG descargada exitosamente');
-    } catch (error) {
-      console.error('Error downloading PNG:', error);
-      toast.error('Error al descargar la etiqueta PNG');
-    }
+  const getMissingFields = () => {
+    const missing = [];
+    if (!selectedClient) missing.push('Cliente');
+    if (!selectedProduct) missing.push('Producto');
+    if (!selectedResolution) missing.push('Resolución');
+    if (selectedClient && !selectedClient.telefono) missing.push('Teléfono del cliente');
+    if (selectedProduct && !selectedProduct.normas_aplicacion) missing.push('Normas técnicas');
+    if (selectedProduct && !selectedProduct.informe_ensayo_nro) missing.push('Informe de ensayo');
+    return missing;
   };
 
-  const downloadLabelPDF = async () => {
-    if (!labelRef.current) return;
+  const missingFields = getMissingFields();
+  const canGenerate = selectedClient && selectedProduct && selectedResolution;
 
-    try {
-      const blob = await toBlob(labelRef.current, {
-        width: 94,
-        height: 113, 
-        pixelRatio: 12, // Aumentado para mejor calidad
-        quality: 1,
-        backgroundColor: '#ffffff',
-        canvasWidth: 1128,
-        canvasHeight: 1356,
-        skipAutoScale: true,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left'
-        }
-      });
-
-      if (!blob) throw new Error('Error generating image');
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [25, 30]
-      });
-
-      const imgData = URL.createObjectURL(blob);
-      pdf.addImage(imgData, 'PNG', 0, 0, 25, 30);
-      pdf.save(`etiqueta-qr-${product.codificacion}.pdf`);
-      
-      URL.revokeObjectURL(imgData);
-      toast.success('Etiqueta PDF descargada exitosamente');
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      toast.error('Error al descargar la etiqueta PDF');
-    }
-  };
-
-  const copyUrl = async () => {
-    try {
-      const url = qrUrl || getPreviewUrl();
-      await navigator.clipboard.writeText(url);
-      toast.success('URL copiada al portapapeles');
-    } catch (err) {
-      toast.error('Error al copiar la URL');
-    }
-  };
-
-  // Obtener color actual basado en configuración
-  const getCurrentColor = () => {
-    if (qrModConfig.useCMYK) {
-      return cmykToRgb(qrModConfig.cmyk.c, qrModConfig.cmyk.m, qrModConfig.cmyk.y, qrModConfig.cmyk.k);
-    }
-    return qrModConfig.checkColor;
-  };
-
-  // Vista compacta para lista
-  if (compact) {
-    return (
-      <div className="flex items-center gap-2">
-        {!canGenerate ? (
-          <span className="text-red-600 text-sm flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" />
-            Datos faltantes
-          </span>
-        ) : product.qr_path ? (
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-green-500" />
-            <button
-              onClick={() => generateQR(true)}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Regenerar
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => generateQR()}
-            disabled={generating}
-            className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:opacity-50"
-          >
-            {generating ? 'Generando...' : 'Generar QR'}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  const urlStatus = checkUrlStatus();
-
-  // Vista completa
   return (
-    <div className="space-y-6">
-      {/* Barra de configuración */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Settings className="w-5 h-5 text-gray-600" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Configuración de URL</p>
-              <p className="text-xs text-gray-600">Base: {currentConfig.baseUrl}</p>
-              {currentConfig.baseUrl === 'https://argqr.com' && (
-                <p className="text-xs text-green-600 font-medium">✓ Modo producción activo</p>
-              )}
-            </div>
-          </div>
+    <div className="max-w-7xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FileText className="h-6 w-6" />
+            Generador de DJC
+          </h2>
           <button
-            onClick={() => setShowConfigModal(true)}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm"
+            onClick={handleClear}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2 transition-colors"
           >
-            <Settings className="w-4 h-4" />
-            Configurar
+            <Trash2 className="h-4 w-4" />
+            Limpiar
           </button>
         </div>
-      </div>
 
-      {/* Selector de calidad del QR */}
-      <div className="bg-blue-50 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-900 mb-3">Calidad del Código QR</h4>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { value: 'L', label: 'Baja (7%)', desc: 'Menor tamaño' },
-            { value: 'M', label: 'Media (15%)', desc: 'Recomendado' },
-            { value: 'Q', label: 'Alta (25%)', desc: 'Más resistente' },
-            { value: 'H', label: 'Máxima (30%)', desc: 'Máxima protección' }
-          ].map((option) => (
+        {/* Información del Sistema */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Cada DJC es individual por producto (permite verificar y corregir datos)</li>
+                <li>Las DJC preliminares se guardan en el bucket "djc" (borradores)</li>
+                <li>Las DJC firmadas se moverán al bucket "documents" (oficiales)</li>
+                <li>Puede agregar un representante autorizado si corresponde</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Modo de búsqueda */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Modo de búsqueda:
+          </label>
+          <div className="flex gap-4">
             <button
-              key={option.value}
-              onClick={() => setQrQuality(option.value as any)}
-              className={`p-2 rounded-lg border-2 transition-all ${
-                qrQuality === option.value
-                  ? 'border-blue-500 bg-blue-100'
-                  : 'border-gray-200 hover:border-gray-300'
+              onClick={() => setSearchMode('client')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                searchMode === 'client'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
             >
-              <div className="text-sm font-medium">{option.label}</div>
-              <div className="text-xs text-gray-600">{option.desc}</div>
+              <User className="h-4 w-4" />
+              Por Cliente
             </button>
-          ))}
+            <button
+              onClick={() => setSearchMode('product')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                searchMode === 'product'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <Package className="h-4 w-4" />
+              Por Producto
+            </button>
+          </div>
         </div>
-        <p className="text-xs text-blue-700 mt-2">
-          <Info className="w-3 h-3 inline mr-1" />
-          Nivel de corrección de errores. Para etiquetas pequeñas se recomienda usar nivel Medio.
-        </p>
-      </div>
 
-      {/* Alerta de URL desactualizada */}
-      {urlStatus?.isOutdated && qrDataUrl && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <AlertTriangle className="w-5 h-5 text-orange-600 mr-2 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-orange-800">
-                La URL del QR está desactualizada
-              </p>
-              <div className="text-sm text-orange-700 mt-1 space-y-1">
-                <p>URL anterior: <code className="text-xs bg-orange-100 px-1 rounded">{urlStatus.oldBase}</code></p>
-                <p>URL actual: <code className="text-xs bg-orange-100 px-1 rounded">{urlStatus.newBase}</code></p>
+        {/* Paso 1: Selección según modo */}
+        {searchMode === 'client' ? (
+          <>
+            {/* Selección de Cliente */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paso 1: Seleccionar Cliente
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  placeholder="Buscar por razón social..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-              <button
-                onClick={() => generateQR(true)}
-                className="mt-2 px-4 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 flex items-center gap-1"
+              <select
+                value={selectedClient?.cuit || ''}
+                onChange={(e) => {
+                  const client = clients.find(c => c.cuit?.toString() === e.target.value);
+                  setSelectedClient(client || null);
+                  setSelectedProduct(null); // Limpiar producto al cambiar cliente
+                  setProductSearch(''); // Limpiar búsqueda
+                }}
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <RefreshCw className="w-4 h-4" />
-                Actualizar QR con nueva URL
-              </button>
+                <option value="">Seleccione un cliente...</option>
+                {clients
+                  .filter(client => 
+                    !clientSearch || 
+                    client.razon_social.toLowerCase().includes(clientSearch.toLowerCase())
+                  )
+                  .map(client => (
+                    <option key={client.cuit} value={client.cuit}>
+                      {client.razon_social} - CUIT: {formatCuit(client.cuit)}
+                    </option>
+                  ))}
+              </select>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Alerta de regeneración si el producto cambió */}
-      {showRegenerateAlert && qrDataUrl && !urlStatus?.isOutdated && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <AlertCircle className="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-800">
-                Los datos del producto han cambiado
-              </p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Se recomienda regenerar el código QR para reflejar los cambios.
-              </p>
-              <button
-                onClick={() => generateQR(true)}
-                className="mt-2 px-4 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700 flex items-center gap-1"
+            {/* Selección de Producto */}
+            {selectedClient && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Paso 2: Seleccionar Producto del Cliente
+                </label>
+                
+                {/* Resumen de productos del cliente */}
+                <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                  <p className="text-sm text-gray-600">
+                    Cliente <span className="font-semibold">{selectedClient.razon_social}</span> tiene{' '}
+                    <span className="font-semibold">{filteredProducts.length}</span> producto(s):
+                  </p>
+                  <div className="mt-1 text-xs text-gray-500">
+                    • Con DJC: {filteredProducts.filter(p => p.djc_status && p.djc_status !== 'No Generada').length}
+                    {' | '}
+                    • Sin DJC: {filteredProducts.filter(p => !p.djc_status || p.djc_status === 'No Generada').length}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="showWithoutDJC"
+                    checked={showProductsWithoutDJC}
+                    onChange={(e) => setShowProductsWithoutDJC(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                  <label htmlFor="showWithoutDJC" className="text-sm text-gray-600">
+                    Mostrar solo productos sin DJC
+                  </label>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Filtrar por producto, marca o código..."
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <select
+                  value={selectedProduct?.codificacion || ''}
+                  onChange={(e) => {
+                    const product = filteredProducts.find(p => p.codificacion === e.target.value);
+                    setSelectedProduct(product || null);
+                    
+                    // Si el producto ya tiene DJC, mostrar advertencia
+                    if (product && product.djc_status && product.djc_status !== 'No Generada') {
+                      toast.warning(
+                        `Este producto ya tiene una DJC con estado: ${product.djc_status}. 
+                        Puede generar una nueva si necesita actualizar información.`,
+                        { duration: 5000 }
+                      );
+                    }
+                  }}
+                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  disabled={filteredProducts.length === 0}
+                >
+                  <option value="">
+                    {filteredProducts.length === 0 
+                      ? 'No hay productos para este cliente' 
+                      : 'Seleccione un producto para generar su DJC...'}
+                  </option>
+                  {filteredProducts
+                    .filter(product => 
+                      !productSearch ||
+                      product.producto?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                      product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                      product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
+                    )
+                    .map(product => (
+                      <option key={product.codificacion} value={product.codificacion}>
+                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} ({product.codificacion})
+                        {product.djc_status === 'Firmada' && ' ✅ DJC Firmada'}
+                        {product.djc_status === 'Generada Pendiente de Firma' && ' 🟡 DJC Pendiente'}
+                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
+                      </option>
+                    ))}
+                </select>
+                
+                {/* Información adicional sobre productos */}
+                {filteredProducts.length > 0 && !selectedProduct && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Seleccione el producto para el cual desea generar la DJC individual
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Búsqueda directa por producto */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paso 1: Buscar Producto
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => handleProductSearch(e.target.value)}
+                  placeholder="Buscar por producto, marca o código..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <select
+                value={selectedProduct?.codificacion || ''}
+                onChange={(e) => {
+                  const product = products.find(p => p.codificacion === e.target.value);
+                  if (product) {
+                    setSelectedProduct(product);
+                    // Auto-seleccionar el cliente basado en el CUIT del producto
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
+                    if (client) {
+                      setSelectedClient(client);
+                      toast.success(`Cliente "${client.razon_social}" seleccionado automáticamente`);
+                    } else {
+                      toast.error('No se encontró el cliente asociado a este producto');
+                    }
+                  }
+                }}
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <RefreshCw className="w-4 h-4" />
-                Regenerar QR
-              </button>
+                <option value="">Seleccione un producto...</option>
+                {products
+                  .filter(product => 
+                    !productSearch ||
+                    product.producto?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
+                  )
+                  .map(product => {
+                    // Encontrar el cliente para mostrar su nombre
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
+                    return (
+                      <option key={product.codificacion} value={product.codificacion}>
+                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} 
+                        {client && ` (${client.razon_social})`}
+                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
+                      </option>
+                    );
+                  })}
+              </select>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
 
-      {/* Vista previa de URL antes de generar */}
-      {!qrDataUrl && (
-        <div className="space-y-4">
-          {/* Mensaje inicial */}
-          <div className="text-center py-8">
-            <QrCode className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">No se ha generado un código QR para este producto</p>
-            {!canGenerate && (
-              <p className="text-red-600 text-sm">
-                Faltan datos obligatorios: titular, producto o marca
+        {/* Información seleccionada */}
+        {selectedClient && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-gray-700 mb-2">Cliente Seleccionado:</h3>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Razón Social:</span> {selectedClient.razon_social}
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">CUIT:</span> {formatCuit(selectedClient.cuit)}
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Dirección:</span> {selectedClient.direccion || 'No especificada'}
+            </p>
+            {!selectedClient.telefono && (
+              <p className="text-sm text-red-600 mt-1">
+                <AlertTriangle className="inline h-4 w-4 mr-1" />
+                Falta teléfono del cliente
               </p>
             )}
           </div>
+        )}
 
-          {/* Vista previa de URL */}
-          {canGenerate && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Link className="w-5 h-5 text-blue-600" />
-                  <h4 className="font-medium text-blue-900">Vista Previa de URL</h4>
-                </div>
-                <button
-                  onClick={() => setShowUrlPreview(!showUrlPreview)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  {showUrlPreview ? 'Ocultar' : 'Mostrar detalles'}
-                </button>
-              </div>
-              
-              <div className="bg-white rounded border border-blue-200 p-3 mb-3">
-                <p className="text-sm font-mono text-gray-700 break-all">{getPreviewUrl()}</p>
-              </div>
-              
-              {showUrlPreview && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <Info className="w-4 h-4 text-blue-600 mt-0.5" />
-                    <div className="text-blue-800">
-                      <p>Esta URL apuntará a la vista pública del producto en esta aplicación.</p>
-                      <p className="mt-1">El código QR dirigirá a los usuarios a: <code className="bg-blue-100 px-1 rounded">/products/{product.uuid}</code></p>
-                    </div>
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Modelo:</span> {selectedProduct.modelo || 'Sin modelo'}
+                    </p>
                   </div>
-                </div>
-              )}
-              
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={testUrl}
-                  disabled={isTestingUrl}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm disabled:opacity-50"
-                >
-                  {isTestingUrl ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                      Probando...
-                    </>
-                  ) : (
-                    <>
-                      <ExternalLink className="w-4 h-4" />
-                      Probar URL
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={copyUrl}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 text-sm"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copiar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Botón generar QR */}
-          <div className="flex justify-center">
-            <button
-              onClick={() => generateQR()}
-              disabled={generating || !canGenerate}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50"
-            >
-              {generating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  Generando...
-                </>
-              ) : (
-                <>
-                  <QrCode className="w-4 h-4" />
-                  Generar Código QR
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Vista del QR generado */}
-      {qrDataUrl && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Vista tamaño real */}
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <QrCode className="w-5 h-5" />
-                Tamaño Real (25mm × 30mm)
-              </h4>
-              <div className="flex justify-center mb-4">
-                <div
-                  ref={labelRef}
-                  style={{
-                    width: '94px',
-                    height: '113px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #000000',
-                    borderRadius: '8px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {/* Código QR - Optimizado para escaneo */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: `${qrModConfig.qrTop}px`,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: `${qrModConfig.qrSize}px`,
-                      height: `${qrModConfig.qrSize}px`,
-                      backgroundColor: '#ffffff',
-                      padding: '2px' // Padding para asegurar margen blanco
-                    }}
-                  >
-                    <img
-                      src={qrDataUrl}
-                      alt="Código QR"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'block',
-                        imageRendering: 'crisp-edges' // Mejor renderizado para QR
-                      }}
-                    />
-                  </div>
-                  
-                  {/* AR + Tildes */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: `${qrModConfig.arBottom}px`,
-                      left: '50%',
-                      transform: `translateX(-50%) translateX(${qrModConfig.arOffsetX}px) translateY(${qrModConfig.arOffsetY}px)`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: `${qrModConfig.arGap}px`
-                    }}
-                  >
-                    {/* Logo AR con fuente personalizada o imagen */}
-                    {qrModConfig.useImage ? (
-                      <img
-                        src={qrModConfig.imagePath}
-                        alt="AR"
-                        style={{
-                          height: `${qrModConfig.arSize}px`,
-                          width: 'auto',
-                          display: 'block'
-                        }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          fontFamily: `"${qrModConfig.fontFamily}", Arial, sans-serif`,
-                          fontSize: `${qrModConfig.fontSize}px`,
-                          fontWeight: qrModConfig.fontWeight,
-                          letterSpacing: `${qrModConfig.letterSpacing}px`,
-                          textTransform: qrModConfig.textTransform as any,
-                          color: '#000000',
-                          height: `${qrModConfig.arSize}px`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          lineHeight: 1
-                        }}
-                      >
-                        {qrModConfig.arText}
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Código:</span> {selectedProduct.codificacion}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Estado DJC:</span>{' '}
+                      <span className={`font-medium ${
+                        selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
+                        selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {selectedProduct.djc_status || 'No Generada'}
                       </span>
-                    )}
-                    
-                    {/* Tildes */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: `${qrModConfig.checkSpacingVertical}px`,
-                        height: `${qrModConfig.arSize}px`,
-                        transform: `translateX(${qrModConfig.tildeOffsetX}px) translateY(${qrModConfig.tildeOffsetY}px)`
-                      }}
-                    >
-                      {Array.from({ length: qrModConfig.symbolCount }, (_, i) => {
-                        const angle = i === 0 ? qrModConfig.symbol1Angle : qrModConfig.symbol2Angle;
-                        const size = qrModConfig.symbolSize / 100;
-                        const offsetX = qrModConfig.useIndividualControl ? (i === 0 ? qrModConfig.symbol1X : qrModConfig.symbol2X) : 0;
-                        const offsetY = qrModConfig.useIndividualControl ? (i === 0 ? qrModConfig.symbol1Y : qrModConfig.symbol2Y) : 0;
-                        
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              transform: `rotate(${angle}deg) scale(${size}) translate(${offsetX}px, ${offsetY}px)`,
-                              transformOrigin: 'center'
-                            }}
-                          >
-                            <svg
-                              width={qrModConfig.checkWidth}
-                              height={qrModConfig.checkHeight}
-                              viewBox={`0 0 ${qrModConfig.checkWidth} ${qrModConfig.checkHeight}`}
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                              style={{ display: 'block' }}
-                            >
-                              <path
-                                d="M3 5L6.5 8.5L16 1.5"
-                                stroke={getCurrentColor()}
-                                strokeWidth={qrModConfig.checkStrokeWidth}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    </p>
                   </div>
                 </div>
+                
+                {/* Advertencias según el estado */}
+                {selectedProduct.djc_status === 'Firmada' && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-sm text-green-700 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Este producto ya tiene una DJC firmada. Generar una nueva reemplazará la anterior.
+                    </p>
+                  </div>
+                )}
+                
+                {selectedProduct.djc_status === 'Generada Pendiente de Firma' && (
+                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                    <p className="text-sm text-yellow-700 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      Existe una DJC pendiente de firma. Puede generar una nueva versión si necesita corregir datos.
+                    </p>
+                  </div>
+                )}
+                
+                {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Faltan datos técnicos del producto (normas o informe de ensayo)
+                    </p>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-gray-500 text-center">Vista a escala real</p>
-              <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
-                <p className="text-xs text-yellow-800">
-                  <Zap className="w-3 h-3 inline mr-1" />
-                  <strong>Consejo:</strong> Para mejor escaneo, asegúrate de que el QR tenga suficiente contraste con el fondo.
+            </div>
+          </div>
+        )}
+
+        {/* Historial de DJCs */}
+        {selectedProduct && djcHistory.length > 0 && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-2"
+            >
+              <History className="h-4 w-4" />
+              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs anteriores ({djcHistory.length})
+            </button>
+            {showHistory && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-blue-800 mb-2">
+                  Historial de DJCs para este producto:
                 </p>
+                {djcHistory.map((djc, index) => (
+                  <div key={djc.id} className="text-sm text-blue-700 mb-2 pb-2 border-b border-blue-200 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">DJC #{index + 1}: {djc.numero_djc}</p>
+                        <p className="text-xs text-blue-600">
+                          • Resolución: {djc.resolucion}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          • Estado: {djc.status}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          • Fecha: {new Date(djc.created_at).toLocaleDateString('es-AR')}
+                        </p>
+                      </div>
+                      {djc.conformity_status === 'Fuera de conformidad' && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                          FUERA DE CONFORMIDAD
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {djcHistory.some(djc => djc.conformity_status === 'Fuera de conformidad') && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Existe una DJC fuera de conformidad. Generar otra requerirá justificación especial.
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+          </div>
+        )}
 
-            {/* Vista digital */}
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <Smartphone className="w-5 h-5" />
-                Vista Previa Digital
-              </h4>
-              <div className="flex justify-center mb-4">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <img src={qrDataUrl} alt="QR Code Preview" className="w-48 h-48" />
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 text-center mb-3">Como se verá al escanear</p>
-              <div className="bg-green-50 rounded-lg p-3">
-                <p className="text-xs text-green-800">
-                  <CheckCircle className="w-3 h-3 inline mr-1" />
-                  QR optimizado con nivel de corrección <strong>{qrQuality}</strong> y margen de seguridad
+        {/* Paso 3: Selección de Resolución */}
+        {selectedProduct && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Paso 3: Seleccionar Resolución Aplicable
+            </label>
+            <select
+              value={selectedResolution}
+              onChange={(e) => setSelectedResolution(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccione una resolución...</option>
+              {resolutions.map(res => (
+                <option key={res.value} value={res.value}>
+                  {res.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Representante Autorizado (Opcional) */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-gray-700 mb-3">
+              Representante Autorizado (Opcional)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="text"
+                placeholder="Nombre y Apellido / Razón Social"
+                value={representante.nombre}
+                onChange={(e) => setRepresentante({...representante, nombre: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <input
+                type="text"
+                placeholder="Domicilio Legal"
+                value={representante.domicilio}
+                onChange={(e) => setRepresentante({...representante, domicilio: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <input
+                type="text"
+                placeholder="CUIT"
+                value={representante.cuit}
+                onChange={(e) => setRepresentante({...representante, cuit: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Complete solo si el producto tiene un representante autorizado
+            </p>
+          </div>
+        )}
+
+        {/* Resumen de campos faltantes */}
+        {missingFields.length > 0 && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <p className="font-semibold text-yellow-800 mb-1">
+                  Campos faltantes:
                 </p>
+                <ul className="list-disc list-inside text-sm text-yellow-700">
+                  {missingFields.map((field, index) => (
+                    <li key={index}>{field}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Información del QR */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">Información del QR</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-start">
-                <span className="text-blue-700 font-medium mr-2">URL:</span>
-                <code className="flex-1 bg-white px-2 py-1 rounded text-xs break-all">{qrUrl}</code>
-              </div>
-              <div className="flex items-center">
-                <span className="text-blue-700 font-medium mr-2">Producto:</span>
-                <span className="text-blue-900">
-                  {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} {product.modelo || ''}
-                </span>
-              </div>
-              <div className="flex items-center">
-                <span className="text-blue-700 font-medium mr-2">Calidad:</span>
-                <span className="text-blue-900">
-                  Corrección de errores nivel {qrQuality} ({
-                    qrQuality === 'L' ? '7%' :
-                    qrQuality === 'M' ? '15%' :
-                    qrQuality === 'Q' ? '25%' : '30%'
-                  })
-                </span>
-              </div>
-              {product.qr_generated_at && (
-                <div className="flex items-center">
-                  <span className="text-blue-700 font-medium mr-2">Generado:</span>
-                  <span className="text-blue-900">
-                    {new Date(product.qr_generated_at).toLocaleString('es-AR')}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recomendaciones para impresión */}
-          <div className="bg-purple-50 rounded-lg p-4">
-            <h4 className="font-medium text-purple-900 mb-2">Recomendaciones para Impresión</h4>
-            <ul className="text-sm text-purple-800 space-y-1 list-disc list-inside">
-              <li>Usa papel blanco mate para mejor contraste</li>
-              <li>Imprime en alta calidad (300 DPI mínimo)</li>
-              <li>Evita reducir el tamaño del QR por debajo de 20mm x 20mm</li>
-              <li>Verifica que el QR sea escaneable antes de imprimir en masa</li>
-              <li>Mantén el área alrededor del QR libre de elementos</li>
-            </ul>
-          </div>
-
-          {/* Botones de acción */}
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => downloadQR(false)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Descargar QR
-            </button>
-            
-            <button
-              onClick={() => downloadQR(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Descargar HD
-            </button>
-            
-            <button
-              onClick={downloadLabelPNG}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Etiqueta PNG
-            </button>
-            
-            <button
-              onClick={downloadLabelPDF}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Etiqueta PDF
-            </button>
-            
-            <button
-              onClick={copyUrl}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-            >
-              <Copy className="w-4 h-4" />
-              Copiar URL
-            </button>
-            
-            <button
-              onClick={testUrl}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Probar QR
-            </button>
-
-            <button
-              onClick={() => generateQR(true)}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Regenerar
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Modal de configuración */}
-      <QRConfigModal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
-      />
+        {/* Botón de generación */}
+        <div className="flex justify-end gap-4">
+          <button
+            onClick={generatePDF}
+            disabled={!canGenerate || generating}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors ${
+              canGenerate && !generating
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {generating ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Generando DJC...
+              </>
+            ) : (
+              <>
+                <Download className="h-5 w-5" />
+                Generar y Guardar DJC
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default DJCGenerator;
