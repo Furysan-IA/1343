@@ -1,4 +1,70 @@
-import React, { useState, useEffect } from 'react';
+{selectedProduct && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Modelo:</span> {selectedProduct.modelo || 'Sin modelo'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Código:</span> {selectedProduct.codificacion}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Estado DJC:</span>{' '}
+                      <span className={`font-medium ${
+                        selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
+                        selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {selectedProduct.djc_status || 'No Generada'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Advertencias según el estado */}
+                {selectedProduct.djc_status === 'Firmada' && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-sm text-green-700 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Este producto ya tiene una DJC firmada. Generar una nueva reemplazará la anterior.
+                    </p>
+                  </div>
+                )}
+                
+                {selectedProduct.djc_status === 'Generada Pendiente de Firma' && (
+                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                    <p className="text-sm text-yellow-700 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      Existe una DJC pendiente de firma. Puede generar una nueva versión si necesita corregir datos.
+                    </p>
+                  </div>
+                )}
+                
+                {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Faltan datos técnicos del producto (normas o informe de ensayo)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}  const handleProductSearch = (searchTerm: string) => {
+    setProductSearch(searchTerm);
+    import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
@@ -82,11 +148,26 @@ const DJCGenerator: React.FC = () => {
 
   useEffect(() => {
     if (selectedClient && products.length > 0) {
-      const filtered = products.filter(p => 
-        p.cuit === selectedClient.cuit.toString() &&
-        (!showProductsWithoutDJC || p.djc_status === 'No Generada' || !p.djc_status)
-      );
+      const filtered = products.filter(p => {
+        // Convertir ambos a string para comparar correctamente
+        const productCuit = p.cuit?.toString();
+        const clientCuit = selectedClient.cuit?.toString();
+        
+        const matchesClient = productCuit === clientCuit;
+        const matchesDJCFilter = !showProductsWithoutDJC || 
+          p.djc_status === 'No Generada' || 
+          !p.djc_status;
+        
+        return matchesClient && matchesDJCFilter;
+      });
+      
+      console.log('Cliente seleccionado CUIT:', selectedClient.cuit);
+      console.log('Productos encontrados para este cliente:', filtered.length);
+      console.log('Productos filtrados:', filtered);
+      
       setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
     }
   }, [selectedClient, products, showProductsWithoutDJC]);
 
@@ -143,7 +224,9 @@ const DJCGenerator: React.FC = () => {
 
   const handleProductSearch = (searchTerm: string) => {
     setProductSearch(searchTerm);
+    
     if (searchMode === 'product' && searchTerm) {
+      // Buscar el producto en TODOS los productos disponibles
       const foundProduct = products.find(p => 
         p.producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.codificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -152,11 +235,17 @@ const DJCGenerator: React.FC = () => {
 
       if (foundProduct) {
         setSelectedProduct(foundProduct);
-        // Auto-seleccionar el cliente correcto
-        const productClient = clients.find(c => c.cuit.toString() === foundProduct.cuit);
+        
+        // Auto-seleccionar el cliente correcto basado en el CUIT del producto
+        const productClient = clients.find(c => 
+          c.cuit?.toString() === foundProduct.cuit?.toString()
+        );
+        
         if (productClient) {
           setSelectedClient(productClient);
           toast.success(`Cliente "${productClient.razon_social}" seleccionado automáticamente`);
+        } else {
+          toast.error('No se encontró el cliente asociado a este producto');
         }
       }
     }
@@ -585,6 +674,7 @@ const DJCGenerator: React.FC = () => {
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
               <ul className="list-disc list-inside space-y-1">
+                <li>Cada DJC es individual por producto (permite verificar y corregir datos)</li>
                 <li>Las DJC preliminares se guardan en el bucket "djc" (borradores)</li>
                 <li>Las DJC firmadas se moverán al bucket "documents" (oficiales)</li>
                 <li>Puede agregar un representante autorizado si corresponde</li>
@@ -645,9 +735,10 @@ const DJCGenerator: React.FC = () => {
               <select
                 value={selectedClient?.cuit || ''}
                 onChange={(e) => {
-                  const client = clients.find(c => c.cuit === e.target.value);
+                  const client = clients.find(c => c.cuit?.toString() === e.target.value);
                   setSelectedClient(client || null);
-                  setSelectedProduct(null);
+                  setSelectedProduct(null); // Limpiar producto al cambiar cliente
+                  setProductSearch(''); // Limpiar búsqueda
                 }}
                 className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
@@ -669,8 +760,22 @@ const DJCGenerator: React.FC = () => {
             {selectedClient && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Paso 2: Seleccionar Producto
+                  Paso 2: Seleccionar Producto del Cliente
                 </label>
+                
+                {/* Resumen de productos del cliente */}
+                <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                  <p className="text-sm text-gray-600">
+                    Cliente <span className="font-semibold">{selectedClient.razon_social}</span> tiene{' '}
+                    <span className="font-semibold">{filteredProducts.length}</span> producto(s):
+                  </p>
+                  <div className="mt-1 text-xs text-gray-500">
+                    • Con DJC: {filteredProducts.filter(p => p.djc_status && p.djc_status !== 'No Generada').length}
+                    {' | '}
+                    • Sin DJC: {filteredProducts.filter(p => !p.djc_status || p.djc_status === 'No Generada').length}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2 mb-2">
                   <input
                     type="checkbox"
@@ -689,7 +794,7 @@ const DJCGenerator: React.FC = () => {
                     type="text"
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="Buscar por producto, marca o código..."
+                    placeholder="Filtrar por producto, marca o código..."
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -698,10 +803,24 @@ const DJCGenerator: React.FC = () => {
                   onChange={(e) => {
                     const product = filteredProducts.find(p => p.codificacion === e.target.value);
                     setSelectedProduct(product || null);
+                    
+                    // Si el producto ya tiene DJC, mostrar advertencia
+                    if (product && product.djc_status && product.djc_status !== 'No Generada') {
+                      toast.warning(
+                        `Este producto ya tiene una DJC con estado: ${product.djc_status}. 
+                        Puede generar una nueva si necesita actualizar información.`,
+                        { duration: 5000 }
+                      );
+                    }
                   }}
                   className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  disabled={filteredProducts.length === 0}
                 >
-                  <option value="">Seleccione un producto...</option>
+                  <option value="">
+                    {filteredProducts.length === 0 
+                      ? 'No hay productos para este cliente' 
+                      : 'Seleccione un producto para generar su DJC...'}
+                  </option>
                   {filteredProducts
                     .filter(product => 
                       !productSearch ||
@@ -711,11 +830,20 @@ const DJCGenerator: React.FC = () => {
                     )
                     .map(product => (
                       <option key={product.codificacion} value={product.codificacion}>
-                        {product.producto} - {product.marca} ({product.codificacion})
-                        {product.djc_status === 'No Generada' && ' ⚠️ Sin DJC'}
+                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} ({product.codificacion})
+                        {product.djc_status === 'Firmada' && ' ✅ DJC Firmada'}
+                        {product.djc_status === 'Generada Pendiente de Firma' && ' 🟡 DJC Pendiente'}
+                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
                       </option>
                     ))}
                 </select>
+                
+                {/* Información adicional sobre productos */}
+                {filteredProducts.length > 0 && !selectedProduct && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Seleccione el producto para el cual desea generar la DJC individual
+                  </p>
+                )}
               </div>
             )}
           </>
@@ -742,10 +870,15 @@ const DJCGenerator: React.FC = () => {
                   const product = products.find(p => p.codificacion === e.target.value);
                   if (product) {
                     setSelectedProduct(product);
-                    const client = clients.find(c => c.cuit.toString() === product.cuit);
+                    // Auto-seleccionar el cliente basado en el CUIT del producto
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
                     if (client) {
                       setSelectedClient(client);
                       toast.success(`Cliente "${client.razon_social}" seleccionado automáticamente`);
+                    } else {
+                      toast.error('No se encontró el cliente asociado a este producto');
                     }
                   }
                 }}
@@ -759,12 +892,19 @@ const DJCGenerator: React.FC = () => {
                     product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
                     product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
                   )
-                  .map(product => (
-                    <option key={product.codificacion} value={product.codificacion}>
-                      {product.producto} - {product.marca} ({product.codificacion})
-                      {product.djc_status === 'No Generada' && ' ⚠️ Sin DJC'}
-                    </option>
-                  ))}
+                  .map(product => {
+                    // Encontrar el cliente para mostrar su nombre
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
+                    return (
+                      <option key={product.codificacion} value={product.codificacion}>
+                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} 
+                        {client && ` (${client.razon_social})`}
+                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
+                      </option>
+                    );
+                  })}
               </select>
             </div>
           </>
@@ -824,35 +964,50 @@ const DJCGenerator: React.FC = () => {
         )}
 
         {/* Historial de DJCs */}
-        {djcHistory.length > 0 && (
+        {selectedProduct && djcHistory.length > 0 && (
           <div className="mb-6">
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-2"
             >
               <History className="h-4 w-4" />
-              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs ({djcHistory.length})
+              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs anteriores ({djcHistory.length})
             </button>
             {showHistory && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-yellow-800 mb-2">
-                  DJCs existentes para este producto:
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-blue-800 mb-2">
+                  Historial de DJCs para este producto:
                 </p>
-                {djcHistory.map((djc) => (
-                  <div key={djc.id} className="text-sm text-yellow-700 mb-1">
-                    • {djc.numero_djc} - {djc.resolucion} - {djc.status}
-                    {djc.conformity_status === 'Fuera de conformidad' && (
-                      <span className="ml-2 text-red-600 font-semibold">
-                        (FUERA DE CONFORMIDAD)
-                      </span>
-                    )}
+                {djcHistory.map((djc, index) => (
+                  <div key={djc.id} className="text-sm text-blue-700 mb-2 pb-2 border-b border-blue-200 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">DJC #{index + 1}: {djc.numero_djc}</p>
+                        <p className="text-xs text-blue-600">
+                          • Resolución: {djc.resolucion}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          • Estado: {djc.status}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          • Fecha: {new Date(djc.created_at).toLocaleDateString('es-AR')}
+                        </p>
+                      </div>
+                      {djc.conformity_status === 'Fuera de conformidad' && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                          FUERA DE CONFORMIDAD
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {djcHistory.some(djc => djc.conformity_status === 'Fuera de conformidad') && (
-                  <p className="text-sm text-red-600 mt-2">
-                    <AlertTriangle className="inline h-4 w-4 mr-1" />
-                    Ya existe una DJC fuera de conformidad. Generar otra requerirá justificación.
-                  </p>
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Existe una DJC fuera de conformidad. Generar otra requerirá justificación especial.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
