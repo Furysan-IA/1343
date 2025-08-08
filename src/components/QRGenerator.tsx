@@ -1085,4 +1085,5 @@ const DJCGenerator: React.FC = () => {
   );
 };
 
+export const QRGenerator = DJCGenerator;
 export default DJCGenerator;
