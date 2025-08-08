@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
-import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2 } from 'lucide-react';
+import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Client {
@@ -48,6 +48,173 @@ interface DJCHistory {
   conformity_status: string;
 }
 
+interface DJCPreviewData {
+  numero_djc: string;
+  resolucion: string;
+  razon_social: string;
+  cuit: string;
+  marca: string;
+  domicilio_legal: string;
+  domicilio_planta: string;
+  telefono: string;
+  email: string;
+  representante_nombre: string;
+  representante_domicilio: string;
+  representante_cuit: string;
+  codigo_producto: string;
+  fabricante: string;
+  identificacion_producto: string;
+  normas_tecnicas: string;
+  documento_evaluacion: string;
+  enlace_declaracion: string;
+  fecha_lugar: string;
+}
+
+// Componente de Preview
+const DJCPreviewModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  djcData: DJCPreviewData | null;
+  onConfirm: () => void;
+  isGenerating: boolean;
+}> = ({ isOpen, onClose, djcData, onConfirm, isGenerating }) => {
+  if (!isOpen || !djcData) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-bold text-gray-900">Vista Previa DJC</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            disabled={isGenerating}
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold mb-2">DECLARACIÓN JURADA DE CONFORMIDAD (DJC)</h1>
+              <p className="text-lg">{djcData.resolucion}</p>
+              <p className="mt-4 font-semibold">Número de Identificación de DJC:</p>
+              <p className="text-blue-600">{djcData.numero_djc}</p>
+              <p className="text-sm italic text-gray-600">(número único de identificación autodeterminado)</p>
+            </div>
+
+            <hr className="my-6" />
+
+            <div className="space-y-6">
+              <section>
+                <h3 className="font-bold text-lg mb-3">Información del Fabricante o Importador:</h3>
+                <div className="space-y-2 pl-4">
+                  <p>• <strong>Razón Social:</strong> {djcData.razon_social}</p>
+                  <p>• <strong>C.U.I.T. N°</strong> <span className="italic text-sm">(cuando fuera aplicable)</span>: {djcData.cuit}</p>
+                  <p>• <strong>Nombre Comercial o Marca:</strong> {djcData.marca}</p>
+                  <p>• <strong>Domicilio Legal:</strong> {djcData.domicilio_legal}</p>
+                  <p>• <strong>Domicilio de la planta:</strong> {djcData.domicilio_planta}</p>
+                  <p>• <strong>Teléfono:</strong> {djcData.telefono || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
+                  <p>• <strong>Correo Electrónico:</strong> {djcData.email}</p>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-lg mb-3">Representante Autorizado (si corresponde):</h3>
+                <div className="space-y-2 pl-4 text-gray-500 italic">
+                  <p>• <strong>Nombre y Apellido / Razón Social:</strong> {djcData.representante_nombre || 'No aplica'}</p>
+                  <p>• <strong>Domicilio Legal:</strong> {djcData.representante_domicilio || 'No aplica'}</p>
+                  <p>• <strong>C.U.I.T. N°:</strong> {djcData.representante_cuit || 'No aplica'}</p>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-lg mb-3">Información del Producto:</h3>
+                <div className="space-y-2 pl-4">
+                  <p>• <strong>Código de Identificación:</strong> {djcData.codigo_producto}</p>
+                  <p>• <strong>Fabricante:</strong> {djcData.fabricante}</p>
+                  <p>• <strong>Identificación del producto:</strong> {djcData.identificacion_producto}</p>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-lg mb-3">Normas y Evaluación de la Conformidad:</h3>
+                <div className="space-y-3 pl-4">
+                  <p>• <strong>Reglamento/s Aplicable/s:</strong> {djcData.resolucion}</p>
+                  <p>• <strong>Norma/s Técnica/s:</strong> {djcData.normas_tecnicas || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
+                  <p>• <strong>Documento de Evaluación:</strong> {djcData.documento_evaluacion || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-lg mb-3">Otros Datos:</h3>
+                <div className="pl-4">
+                  <p>• <strong>Enlace a la Declaración:</strong></p>
+                  <p className="text-blue-600 text-sm break-all">{djcData.enlace_declaracion}</p>
+                </div>
+              </section>
+
+              <div className="mt-8 pt-6 border-t">
+                <p className="italic text-sm text-gray-700 text-justify">
+                  La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los 
+                  Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa 
+                  por los datos declarados, así como por la conformidad del producto.
+                </p>
+                
+                <div className="mt-8">
+                  <p><strong>Fecha y Lugar:</strong> {djcData.fecha_lugar}</p>
+                  
+                  <div className="mt-12">
+                    <p className="italic text-gray-500">Espacio para firma y aclaración</p>
+                  </div>
+                </div>
+                
+                <div className="mt-8 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-700 text-center">
+                    DOCUMENTO PRELIMINAR - PENDIENTE DE FIRMA
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t flex justify-end gap-4">
+          <button
+            onClick={onClose}
+            disabled={isGenerating}
+            className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isGenerating}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+              isGenerating 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Generando y Guardando...
+              </>
+            ) : (
+              <>
+                <Download className="h-5 w-5" />
+                Confirmar y Generar PDF
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DJCGenerator: React.FC = () => {
   const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
   const [clients, setClients] = useState<Client[]>([]);
@@ -63,6 +230,8 @@ const DJCGenerator: React.FC = () => {
   const [showProductsWithoutDJC, setShowProductsWithoutDJC] = useState(false);
   const [djcHistory, setDjcHistory] = useState<DJCHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<DJCPreviewData | null>(null);
   const [representante, setRepresentante] = useState({
     nombre: '',
     domicilio: '',
@@ -83,7 +252,6 @@ const DJCGenerator: React.FC = () => {
   useEffect(() => {
     if (selectedClient && products.length > 0) {
       const filtered = products.filter(p => {
-        // Convertir ambos a string para comparar correctamente
         const productCuit = p.cuit?.toString();
         const clientCuit = selectedClient.cuit?.toString();
         
@@ -94,10 +262,6 @@ const DJCGenerator: React.FC = () => {
         
         return matchesClient && matchesDJCFilter;
       });
-      
-      console.log('Cliente seleccionado CUIT:', selectedClient.cuit);
-      console.log('Productos encontrados para este cliente:', filtered.length);
-      console.log('Productos filtrados:', filtered);
       
       setFilteredProducts(filtered);
     } else {
@@ -151,20 +315,19 @@ const DJCGenerator: React.FC = () => {
       
       if (error) throw error;
       
-      // Mapear los datos para agregar status basado en si existe pdf_url
       const mappedData = (data || []).map(djc => ({
         id: djc.id,
         created_at: djc.created_at,
         numero_djc: djc.numero_djc,
         resolucion: djc.resolucion,
         status: djc.pdf_url ? 'Generada' : 'Pendiente',
-        conformity_status: 'Conforme' // Por defecto conforme
+        conformity_status: 'Conforme'
       }));
       
       setDjcHistory(mappedData);
     } catch (error) {
       console.error('Error fetching DJC history:', error);
-      setDjcHistory([]); // Set empty array on error
+      setDjcHistory([]);
     }
   };
 
@@ -172,7 +335,6 @@ const DJCGenerator: React.FC = () => {
     setProductSearch(searchTerm);
     
     if (searchMode === 'product' && searchTerm) {
-      // Buscar el producto en TODOS los productos disponibles
       const foundProduct = products.find(p => 
         p.producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.codificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -182,7 +344,6 @@ const DJCGenerator: React.FC = () => {
       if (foundProduct) {
         setSelectedProduct(foundProduct);
         
-        // Auto-seleccionar el cliente correcto basado en el CUIT del producto
         const productClient = clients.find(c => 
           c.cuit?.toString() === foundProduct.cuit?.toString()
         );
@@ -190,8 +351,6 @@ const DJCGenerator: React.FC = () => {
         if (productClient) {
           setSelectedClient(productClient);
           toast.success(`Cliente "${productClient.razon_social}" seleccionado automáticamente`);
-        } else {
-          toast.error('No se encontró el cliente asociado a este producto');
         }
       }
     }
@@ -202,23 +361,66 @@ const DJCGenerator: React.FC = () => {
     return `DJC-2025-${timestamp}`;
   };
 
-  const generatePDF = async () => {
+  const preparePreview = () => {
     if (!selectedClient || !selectedProduct || !selectedResolution) {
       toast.error('Por favor complete todos los campos requeridos');
       return;
     }
 
+    const djcNumber = generateDJCNumber();
+    const currentDate = new Date().toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
+    const identificacion = `${selectedProduct.marca || ''} - ${selectedProduct.modelo || ''} - ${selectedProduct.caracteristicas_tecnicas || ''}`;
+    const qrLink = `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+
+    const data: DJCPreviewData = {
+      numero_djc: djcNumber,
+      resolucion: selectedResolution,
+      razon_social: selectedClient.razon_social,
+      cuit: formatCuit(selectedClient.cuit || ''),
+      marca: selectedProduct.marca || selectedProduct.titular || '',
+      domicilio_legal: domicilio,
+      domicilio_planta: selectedProduct.planta_fabricacion || 'No especificado',
+      telefono: selectedClient.telefono || '',
+      email: selectedClient.email || '',
+      representante_nombre: representante.nombre,
+      representante_domicilio: representante.domicilio,
+      representante_cuit: representante.cuit,
+      codigo_producto: selectedProduct.codificacion,
+      fabricante: selectedProduct.fabricante || '',
+      identificacion_producto: identificacion,
+      normas_tecnicas: selectedProduct.normas_aplicacion || '',
+      documento_evaluacion: selectedProduct.informe_ensayo_nro || '',
+      enlace_declaracion: qrLink,
+      fecha_lugar: currentDate
+    };
+
+    setPreviewData(data);
+    setShowPreview(true);
+  };
+
+  const generatePDF = async () => {
+    if (!previewData || !selectedClient || !selectedProduct) return;
+
     setGenerating(true);
 
     try {
-      const djcNumber = generateDJCNumber();
-      const currentDate = new Date().toLocaleDateString('es-AR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
+      // Obtener el usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error('Debe estar autenticado para generar DJCs');
+        setGenerating(false);
+        setShowPreview(false);
+        return;
+      }
 
-      // Crear el PDF con el formato exacto del modelo
+      // Crear el PDF
       const pdf = new jsPDF();
       
       // Configurar fuente
@@ -232,14 +434,14 @@ const DJCGenerator: React.FC = () => {
       // Resolución
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedResolution, 105, 30, { align: 'center' });
+      pdf.text(previewData.resolucion, 105, 30, { align: 'center' });
       
       // Número de identificación
       pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
       pdf.text('Número de Identificación de DJC:', 105, 40, { align: 'center' });
       pdf.setFont('helvetica', 'normal');
-      pdf.text(djcNumber, 105, 47, { align: 'center' });
+      pdf.text(previewData.numero_djc, 105, 47, { align: 'center' });
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'italic');
       pdf.text('(número único de identificación autodeterminado)', 105, 53, { align: 'center' });
@@ -261,7 +463,7 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Razón Social: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedClient.razon_social || '', 55, yPos);
+      pdf.text(previewData.razon_social, 55, yPos);
       
       // CUIT
       yPos += 8;
@@ -269,49 +471,49 @@ const DJCGenerator: React.FC = () => {
       pdf.text('• C.U.I.T. N°', 25, yPos);
       pdf.setFont('helvetica', 'normal');
       pdf.text('(cuando fuera aplicable)', 45, yPos);
-      pdf.text(': ' + formatCuit(selectedClient.cuit || ''), 85, yPos);
+      pdf.text(': ' + previewData.cuit, 85, yPos);
       
       // Nombre Comercial o Marca
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Nombre Comercial o Marca Registrada: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedProduct.marca || selectedProduct.titular || '', 100, yPos);
+      pdf.text(previewData.marca, 100, yPos);
       
       // Domicilio Legal
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Domicilio Legal: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
-      pdf.text(domicilio, 60, yPos);
+      pdf.text(previewData.domicilio_legal, 60, yPos);
       
       // Domicilio de la planta
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
-      pdf.text('• Domicilio de la planta de producción o del depósito del importador: ', 25, yPos);
+      pdf.text('• Domicilio de la planta de producción o del depósito: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
       yPos += 6;
-      pdf.text(selectedProduct.planta_fabricacion || 'No especificado', 25, yPos);
+      pdf.text(previewData.domicilio_planta, 25, yPos);
       
       // Teléfono
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Teléfono: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      const telefono = selectedClient.telefono || 'CAMPO NO ENCONTRADO';
-      if (telefono === 'CAMPO NO ENCONTRADO') {
+      if (!previewData.telefono) {
         pdf.setTextColor(255, 0, 0);
+        pdf.text('CAMPO NO ENCONTRADO', 50, yPos);
+        pdf.setTextColor(0, 0, 0);
+      } else {
+        pdf.text(previewData.telefono, 50, yPos);
       }
-      pdf.text(telefono, 50, yPos);
-      pdf.setTextColor(0, 0, 0);
       
       // Correo Electrónico
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Correo Electrónico: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedClient.email || '', 65, yPos);
+      pdf.text(previewData.email, 65, yPos);
 
       // Representante Autorizado
       yPos += 15;
@@ -325,19 +527,19 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Nombre y Apellido / Razón Social: ', 25, yPos);
       pdf.setFont('helvetica', 'italic');
-      pdf.text(representante.nombre || 'No aplica', 85, yPos);
+      pdf.text(previewData.representante_nombre || 'No aplica', 85, yPos);
       
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Domicilio Legal: ', 25, yPos);
       pdf.setFont('helvetica', 'italic');
-      pdf.text(representante.domicilio || 'No aplica', 60, yPos);
+      pdf.text(previewData.representante_domicilio || 'No aplica', 60, yPos);
       
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• C.U.I.T. N°: ', 25, yPos);
       pdf.setFont('helvetica', 'italic');
-      pdf.text(representante.cuit || 'No aplica', 55, yPos);
+      pdf.text(previewData.representante_cuit || 'No aplica', 55, yPos);
 
       // Información del Producto
       yPos += 15;
@@ -352,18 +554,18 @@ const DJCGenerator: React.FC = () => {
       pdf.text('• Código de Identificación Único del Producto ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
       pdf.text('(autodeterminado): ', 115, yPos);
-      pdf.text(selectedProduct.codificacion || '', 155, yPos);
+      pdf.text(previewData.codigo_producto, 155, yPos);
       
       yPos += 8;
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Fabricante', 25, yPos);
       pdf.setFont('helvetica', 'normal');
       pdf.text('(Incluir domicilio de la planta de producción): ', 50, yPos);
-      pdf.text(selectedProduct.fabricante || '', 140, yPos);
+      pdf.text(previewData.fabricante, 140, yPos);
       
-      if (selectedProduct.planta_fabricacion) {
+      if (previewData.domicilio_planta && previewData.domicilio_planta !== 'No especificado') {
         yPos += 6;
-        pdf.text(selectedProduct.planta_fabricacion, 25, yPos);
+        pdf.text(previewData.domicilio_planta, 25, yPos);
       }
       
       yPos += 8;
@@ -372,8 +574,7 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'normal');
       pdf.text('(marca, modelo, características técnicas): ', 80, yPos);
       yPos += 6;
-      const identificacion = `${selectedProduct.marca || ''} - ${selectedProduct.modelo || ''} - ${selectedProduct.caracteristicas_tecnicas || ''}`;
-      pdf.text(identificacion, 25, yPos);
+      pdf.text(previewData.identificacion_producto, 25, yPos);
 
       // Nueva página para Normas y Evaluación
       pdf.addPage();
@@ -388,7 +589,7 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Reglamento/s Aplicable/s: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedResolution, 75, yPos);
+      pdf.text(previewData.resolucion, 75, yPos);
       yPos += 6;
       pdf.setFont('helvetica', 'italic');
       pdf.text('(Detallar el o los reglamentos bajo los cuales se encuentra alcanzado el producto)', 25, yPos);
@@ -397,7 +598,13 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Norma/s Técnica/s: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(selectedProduct.normas_aplicacion || '', 65, yPos);
+      if (!previewData.normas_tecnicas) {
+        pdf.setTextColor(255, 0, 0);
+        pdf.text('CAMPO NO ENCONTRADO', 65, yPos);
+        pdf.setTextColor(0, 0, 0);
+      } else {
+        pdf.text(previewData.normas_tecnicas, 65, yPos);
+      }
       yPos += 6;
       pdf.setFont('helvetica', 'italic');
       pdf.text('(Incluir normas técnicas específicas a las que se ajusta el producto)', 25, yPos);
@@ -407,7 +614,13 @@ const DJCGenerator: React.FC = () => {
       pdf.text('• Referencia al Documento de Evaluación de la Conformidad: ', 25, yPos);
       pdf.setFont('helvetica', 'normal');
       yPos += 6;
-      pdf.text(selectedProduct.informe_ensayo_nro || '', 25, yPos);
+      if (!previewData.documento_evaluacion) {
+        pdf.setTextColor(255, 0, 0);
+        pdf.text('CAMPO NO ENCONTRADO', 25, yPos);
+        pdf.setTextColor(0, 0, 0);
+      } else {
+        pdf.text(previewData.documento_evaluacion, 25, yPos);
+      }
       yPos += 6;
       pdf.setFont('helvetica', 'italic');
       pdf.text('(Emitido por un OEC, especificar el número de referencia)', 25, yPos);
@@ -423,9 +636,8 @@ const DJCGenerator: React.FC = () => {
       pdf.setFont('helvetica', 'bold');
       pdf.text('• Enlace a la copia de la Declaración de la Conformidad en Internet: ', 25, yPos);
       yPos += 6;
-      const qrLink = `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
       pdf.setTextColor(0, 0, 255);
-      pdf.text(qrLink, 25, yPos);
+      pdf.text(previewData.enlace_declaracion, 25, yPos);
       pdf.setTextColor(0, 0, 0);
       yPos += 6;
       pdf.setFont('helvetica', 'italic');
@@ -449,7 +661,7 @@ const DJCGenerator: React.FC = () => {
       pdf.text('Fecha:', 20, yPos);
       yPos += 6;
       pdf.setFont('helvetica', 'normal');
-      pdf.text(currentDate, 20, yPos);
+      pdf.text(previewData.fecha_lugar, 20, yPos);
 
       // Firma
       yPos += 15;
@@ -480,7 +692,7 @@ const DJCGenerator: React.FC = () => {
       const pdfBlob = pdf.output('blob');
       const fileName = `djc_preliminar_${selectedProduct.codificacion}_${Date.now()}.pdf`;
 
-      // Guardar en bucket 'djcs' (con 's')
+      // Guardar en bucket 'djcs'
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('djcs')
         .upload(fileName, pdfBlob, {
@@ -488,41 +700,56 @@ const DJCGenerator: React.FC = () => {
           upsert: true
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        throw uploadError;
+      }
 
       // Obtener URL pública del bucket djcs
       const { data: urlData } = supabase.storage
         .from('djcs')
         .getPublicUrl(fileName);
 
-      // Guardar registro en tabla djc (sin status ni conformity_status)
+      // Guardar registro en tabla djc con created_by
       const { error: djcError } = await supabase
         .from('djc')
         .insert({
-          numero_djc: djcNumber,
-          resolucion: selectedResolution,
-          razon_social: selectedClient.razon_social,
+          numero_djc: previewData.numero_djc,
+          resolucion: previewData.resolucion,
+          razon_social: previewData.razon_social,
           cuit: selectedClient.cuit,
-          marca: selectedProduct.marca || selectedProduct.titular || '',
-          domicilio_legal: domicilio,
-          domicilio_planta: selectedProduct.planta_fabricacion || 'No especificado',
-          telefono: selectedClient.telefono || '',
-          email: selectedClient.email || '',
-          representante_nombre: representante.nombre || null,
-          representante_domicilio: representante.domicilio || null,
-          representante_cuit: representante.cuit || null,
-          codigo_producto: selectedProduct.codificacion,
-          fabricante: selectedProduct.fabricante || '',
-          identificacion_producto: identificacion,
-          reglamentos: selectedResolution,
-          normas_tecnicas: selectedProduct.normas_aplicacion || '',
-          documento_evaluacion: selectedProduct.informe_ensayo_nro || '',
-          enlace_declaracion: qrLink,
-          fecha_lugar: currentDate,
-          pdf_url: urlData.publicUrl
+          marca: previewData.marca,
+          domicilio_legal: previewData.domicilio_legal,
+          domicilio_planta: previewData.domicilio_planta,
+          telefono: previewData.telefono,
+          email: previewData.email,
+          representante_nombre: previewData.representante_nombre || null,
+          representante_domicilio: previewData.representante_domicilio || null,
+          representante_cuit: previewData.representante_cuit || null,
+          codigo_producto: previewData.codigo_producto,
+          fabricante: previewData.fabricante,
+          identificacion_producto: previewData.identificacion_producto,
+          reglamentos: previewData.resolucion,
+          normas_tecnicas: previewData.normas_tecnicas,
+          documento_evaluacion: previewData.documento_evaluacion,
+          enlace_declaracion: previewData.enlace_declaracion,
+          fecha_lugar: previewData.fecha_lugar,
+          pdf_url: urlData.publicUrl,
+          created_by: user.id, // Campo requerido
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
 
-      if (djcError) throw djcError;
+      if (djcError) {
+        console.error('Error saving DJC:', djcError);
+        
+        // Si el error es de RLS, dar instrucciones específicas
+        if (djcError.code === '42501') {
+          toast.error('Error de permisos. Verifique las políticas RLS en Supabase');
+          throw new Error('Row Level Security error - check database policies');
+        }
+        throw djcError;
+      }
 
       // Actualizar estado del producto
       const { error: updateError } = await supabase
@@ -533,40 +760,23 @@ const DJCGenerator: React.FC = () => {
         })
         .eq('codificacion', selectedProduct.codificacion);
 
-      if (updateError) throw updateError;
-
-      // Guardar historial (opcional - solo si existe la tabla djc_history)
-      try {
-        const { error: historyError } = await supabase
-          .from('djc_history')
-          .insert({
-            djc_id: djcNumber, // Este campo podría necesitar ser el UUID de la DJC
-            action: 'created',
-            changed_fields: {
-              resolution: selectedResolution,
-              client: selectedClient.razon_social,
-              product: selectedProduct.producto
-            }
-          });
-
-        if (historyError) {
-          console.warn('Error saving to djc_history (table might not exist):', historyError);
-        }
-      } catch (histError) {
-        console.warn('djc_history table might not be configured properly');
+      if (updateError) {
+        console.error('Error updating product:', updateError);
+        throw updateError;
       }
 
       // Descargar el PDF
-      pdf.save(`DJC_${djcNumber}.pdf`);
+      pdf.save(`DJC_${previewData.numero_djc}.pdf`);
 
       toast.success('DJC generada y guardada exitosamente');
       
-      // Limpiar formulario
+      // Limpiar formulario y cerrar preview
+      setShowPreview(false);
       handleClear();
       
     } catch (error) {
       console.error('Error generating DJC:', error);
-      toast.error('Error al generar la DJC');
+      toast.error('Error al generar la DJC. Verifique los permisos en la base de datos.');
     } finally {
       setGenerating(false);
     }
@@ -581,6 +791,7 @@ const DJCGenerator: React.FC = () => {
     setRepresentante({ nombre: '', domicilio: '', cuit: '' });
     setDjcHistory([]);
     setShowHistory(false);
+    setPreviewData(null);
   };
 
   const getMissingFields = () => {
@@ -621,9 +832,9 @@ const DJCGenerator: React.FC = () => {
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Cada DJC es individual por producto (permite verificar y corregir datos)</li>
+                <li>Vista previa antes de generar el PDF final</li>
+                <li>Cada DJC es individual por producto</li>
                 <li>Las DJC se guardan en el bucket "djcs"</li>
-                <li>Las DJC firmadas se pueden subir posteriormente</li>
                 <li>Puede agregar un representante autorizado si corresponde</li>
               </ul>
             </div>
@@ -661,7 +872,7 @@ const DJCGenerator: React.FC = () => {
           </div>
         </div>
 
-        {/* Paso 1: Selección según modo */}
+        {/* Selección según modo */}
         {searchMode === 'client' ? (
           <>
             {/* Selección de Cliente */}
@@ -684,8 +895,8 @@ const DJCGenerator: React.FC = () => {
                 onChange={(e) => {
                   const client = clients.find(c => c.cuit?.toString() === e.target.value);
                   setSelectedClient(client || null);
-                  setSelectedProduct(null); // Limpiar producto al cambiar cliente
-                  setProductSearch(''); // Limpiar búsqueda
+                  setSelectedProduct(null);
+                  setProductSearch('');
                 }}
                 className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
@@ -710,17 +921,11 @@ const DJCGenerator: React.FC = () => {
                   Paso 2: Seleccionar Producto del Cliente
                 </label>
                 
-                {/* Resumen de productos del cliente */}
                 <div className="bg-gray-50 p-3 rounded-lg mb-3">
                   <p className="text-sm text-gray-600">
                     Cliente <span className="font-semibold">{selectedClient.razon_social}</span> tiene{' '}
-                    <span className="font-semibold">{filteredProducts.length}</span> producto(s):
+                    <span className="font-semibold">{filteredProducts.length}</span> producto(s)
                   </p>
-                  <div className="mt-1 text-xs text-gray-500">
-                    • Con DJC: {filteredProducts.filter(p => p.djc_status && p.djc_status !== 'No Generada').length}
-                    {' | '}
-                    • Sin DJC: {filteredProducts.filter(p => !p.djc_status || p.djc_status === 'No Generada').length}
-                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 mb-2">
@@ -735,62 +940,27 @@ const DJCGenerator: React.FC = () => {
                     Mostrar solo productos sin DJC
                   </label>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="Filtrar por producto, marca o código..."
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                
                 <select
                   value={selectedProduct?.codificacion || ''}
                   onChange={(e) => {
                     const product = filteredProducts.find(p => p.codificacion === e.target.value);
                     setSelectedProduct(product || null);
-                    
-                    // Si el producto ya tiene DJC, mostrar advertencia
-                    if (product && product.djc_status && product.djc_status !== 'No Generada') {
-                      toast.warning(
-                        `Este producto ya tiene una DJC con estado: ${product.djc_status}. 
-                        Puede generar una nueva si necesita actualizar información.`,
-                        { duration: 5000 }
-                      );
-                    }
                   }}
-                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   disabled={filteredProducts.length === 0}
                 >
                   <option value="">
                     {filteredProducts.length === 0 
                       ? 'No hay productos para este cliente' 
-                      : 'Seleccione un producto para generar su DJC...'}
+                      : 'Seleccione un producto...'}
                   </option>
-                  {filteredProducts
-                    .filter(product => 
-                      !productSearch ||
-                      product.producto?.toLowerCase().includes(productSearch.toLowerCase()) ||
-                      product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
-                      product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
-                    )
-                    .map(product => (
-                      <option key={product.codificacion} value={product.codificacion}>
-                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} ({product.codificacion})
-                        {product.djc_status === 'Firmada' && ' ✅ DJC Firmada'}
-                        {product.djc_status === 'Generada Pendiente de Firma' && ' 🟡 DJC Pendiente'}
-                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
-                      </option>
-                    ))}
+                  {filteredProducts.map(product => (
+                    <option key={product.codificacion} value={product.codificacion}>
+                      {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} ({product.codificacion})
+                    </option>
+                  ))}
                 </select>
-                
-                {/* Información adicional sobre productos */}
-                {filteredProducts.length > 0 && !selectedProduct && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Seleccione el producto para el cual desea generar la DJC individual
-                  </p>
-                )}
               </div>
             )}
           </>
@@ -817,15 +987,12 @@ const DJCGenerator: React.FC = () => {
                   const product = products.find(p => p.codificacion === e.target.value);
                   if (product) {
                     setSelectedProduct(product);
-                    // Auto-seleccionar el cliente basado en el CUIT del producto
                     const client = clients.find(c => 
                       c.cuit?.toString() === product.cuit?.toString()
                     );
                     if (client) {
                       setSelectedClient(client);
                       toast.success(`Cliente "${client.razon_social}" seleccionado automáticamente`);
-                    } else {
-                      toast.error('No se encontró el cliente asociado a este producto');
                     }
                   }
                 }}
@@ -840,7 +1007,6 @@ const DJCGenerator: React.FC = () => {
                     product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
                   )
                   .map(product => {
-                    // Encontrar el cliente para mostrar su nombre
                     const client = clients.find(c => 
                       c.cuit?.toString() === product.cuit?.toString()
                     );
@@ -848,7 +1014,6 @@ const DJCGenerator: React.FC = () => {
                       <option key={product.codificacion} value={product.codificacion}>
                         {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} 
                         {client && ` (${client.razon_social})`}
-                        {(!product.djc_status || product.djc_status === 'No Generada') && ' ⚠️ Sin DJC'}
                       </option>
                     );
                   })}
@@ -867,9 +1032,6 @@ const DJCGenerator: React.FC = () => {
             <p className="text-sm text-gray-600">
               <span className="font-medium">CUIT:</span> {formatCuit(selectedClient.cuit)}
             </p>
-            <p className="text-sm text-gray-600">
-              <span className="font-medium">Dirección:</span> {selectedClient.direccion || 'No especificada'}
-            </p>
             {!selectedClient.telefono && (
               <p className="text-sm text-red-600 mt-1">
                 <AlertTriangle className="inline h-4 w-4 mr-1" />
@@ -881,67 +1043,41 @@ const DJCGenerator: React.FC = () => {
 
         {selectedProduct && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Modelo:</span> {selectedProduct.modelo || 'Sin modelo'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Código:</span> {selectedProduct.codificacion}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Estado DJC:</span>{' '}
-                      <span className={`font-medium ${
-                        selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
-                        selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {selectedProduct.djc_status || 'No Generada'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Advertencias según el estado */}
-                {selectedProduct.djc_status === 'Firmada' && (
-                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-sm text-green-700 flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" />
-                      Este producto ya tiene una DJC firmada. Generar una nueva reemplazará la anterior.
-                    </p>
-                  </div>
-                )}
-                
-                {selectedProduct.djc_status === 'Generada Pendiente de Firma' && (
-                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm text-yellow-700 flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />
-                      Existe una DJC pendiente de firma. Puede generar una nueva versión si necesita corregir datos.
-                    </p>
-                  </div>
-                )}
-                
-                {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
-                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
-                    <p className="text-sm text-red-700 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" />
-                      Faltan datos técnicos del producto (normas o informe de ensayo)
-                    </p>
-                  </div>
-                )}
+            <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Código:</span> {selectedProduct.codificacion}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Estado DJC:</span>{' '}
+                  <span className={`font-medium ${
+                    selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
+                    selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {selectedProduct.djc_status || 'No Generada'}
+                  </span>
+                </p>
               </div>
             </div>
+            
+            {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
+              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                <p className="text-sm text-red-700 flex items-center gap-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  Faltan datos técnicos del producto
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -953,7 +1089,7 @@ const DJCGenerator: React.FC = () => {
               className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-2"
             >
               <History className="h-4 w-4" />
-              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs anteriores ({djcHistory.length})
+              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs ({djcHistory.length})
             </button>
             {showHistory && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -962,41 +1098,16 @@ const DJCGenerator: React.FC = () => {
                 </p>
                 {djcHistory.map((djc, index) => (
                   <div key={djc.id} className="text-sm text-blue-700 mb-2 pb-2 border-b border-blue-200 last:border-0">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">DJC #{index + 1}: {djc.numero_djc}</p>
-                        <p className="text-xs text-blue-600">
-                          • Resolución: {djc.resolucion}
-                        </p>
-                        <p className="text-xs text-blue-600">
-                          • Estado: {djc.status}
-                        </p>
-                        <p className="text-xs text-blue-600">
-                          • Fecha: {new Date(djc.created_at).toLocaleDateString('es-AR')}
-                        </p>
-                      </div>
-                      {djc.conformity_status === 'Fuera de conformidad' && (
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
-                          FUERA DE CONFORMIDAD
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-medium">DJC #{index + 1}: {djc.numero_djc}</p>
+                    <p className="text-xs">• Fecha: {new Date(djc.created_at).toLocaleDateString('es-AR')}</p>
                   </div>
                 ))}
-                {djcHistory.some(djc => djc.conformity_status === 'Fuera de conformidad') && (
-                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
-                    <p className="text-sm text-red-700 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" />
-                      Existe una DJC fuera de conformidad. Generar otra requerirá justificación especial.
-                    </p>
-                  </div>
-                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Paso 3: Selección de Resolución */}
+        {/* Selección de Resolución */}
         {selectedProduct && (
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1017,7 +1128,7 @@ const DJCGenerator: React.FC = () => {
           </div>
         )}
 
-        {/* Representante Autorizado (Opcional) */}
+        {/* Representante Autorizado */}
         {selectedProduct && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-semibold text-gray-700 mb-3">
@@ -1046,9 +1157,6 @@ const DJCGenerator: React.FC = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Complete solo si el producto tiene un representante autorizado
-            </p>
           </div>
         )}
 
@@ -1071,31 +1179,31 @@ const DJCGenerator: React.FC = () => {
           </div>
         )}
 
-        {/* Botón de generación */}
+        {/* Botón de vista previa */}
         <div className="flex justify-end gap-4">
           <button
-            onClick={generatePDF}
-            disabled={!canGenerate || generating}
+            onClick={preparePreview}
+            disabled={!canGenerate}
             className={`px-6 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors ${
-              canGenerate && !generating
+              canGenerate
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {generating ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Generando DJC...
-              </>
-            ) : (
-              <>
-                <Download className="h-5 w-5" />
-                Generar y Guardar DJC
-              </>
-            )}
+            <Eye className="h-5 w-5" />
+            Vista Previa DJC
           </button>
         </div>
       </div>
+
+      {/* Modal de Preview */}
+      <DJCPreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        djcData={previewData}
+        onConfirm={generatePDF}
+        isGenerating={generating}
+      />
     </div>
   );
 };
