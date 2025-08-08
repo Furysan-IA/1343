@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { formatCuit } from '../utils/formatters';
+import { supabase } from '../../lib/supabase';
+import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
 import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
