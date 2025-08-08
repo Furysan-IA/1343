@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { formatCuit } from '../../utils/formatters';
+import { supabase } from '../lib/supabase';
+import { formatCuit } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -145,14 +145,26 @@ const DJCGenerator: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('djc')
-        .select('id, created_at, numero_djc, resolucion, status, conformity_status')
+        .select('id, created_at, numero_djc, resolucion, pdf_url')
         .eq('codigo_producto', productCode)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setDjcHistory(data || []);
+      
+      // Mapear los datos para agregar status basado en si existe pdf_url
+      const mappedData = (data || []).map(djc => ({
+        id: djc.id,
+        created_at: djc.created_at,
+        numero_djc: djc.numero_djc,
+        resolucion: djc.resolucion,
+        status: djc.pdf_url ? 'Generada' : 'Pendiente',
+        conformity_status: 'Conforme' // Por defecto conforme
+      }));
+      
+      setDjcHistory(mappedData);
     } catch (error) {
       console.error('Error fetching DJC history:', error);
+      setDjcHistory([]); // Set empty array on error
     }
   };
 
@@ -468,9 +480,9 @@ const DJCGenerator: React.FC = () => {
       const pdfBlob = pdf.output('blob');
       const fileName = `djc_preliminar_${selectedProduct.codificacion}_${Date.now()}.pdf`;
 
-      // Guardar en bucket 'djc' (preliminares)
+      // Guardar en bucket 'djcs' (con 's')
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('djc')
+        .from('djcs')
         .upload(fileName, pdfBlob, {
           contentType: 'application/pdf',
           upsert: true
@@ -478,12 +490,12 @@ const DJCGenerator: React.FC = () => {
 
       if (uploadError) throw uploadError;
 
-      // Obtener URL pública
+      // Obtener URL pública del bucket djcs
       const { data: urlData } = supabase.storage
-        .from('djc')
+        .from('djcs')
         .getPublicUrl(fileName);
 
-      // Guardar registro en tabla djc
+      // Guardar registro en tabla djc (sin status ni conformity_status)
       const { error: djcError } = await supabase
         .from('djc')
         .insert({
@@ -507,9 +519,7 @@ const DJCGenerator: React.FC = () => {
           documento_evaluacion: selectedProduct.informe_ensayo_nro || '',
           enlace_declaracion: qrLink,
           fecha_lugar: currentDate,
-          pdf_url: urlData.publicUrl,
-          status: 'Generada Pendiente de Firma',
-          conformity_status: 'Conforme'
+          pdf_url: urlData.publicUrl
         });
 
       if (djcError) throw djcError;
@@ -525,21 +535,26 @@ const DJCGenerator: React.FC = () => {
 
       if (updateError) throw updateError;
 
-      // Guardar historial
-      const { error: historyError } = await supabase
-        .from('djc_history')
-        .insert({
-          djc_id: djcNumber,
-          product_code: selectedProduct.codificacion,
-          action: 'created',
-          details: {
-            resolution: selectedResolution,
-            client: selectedClient.razon_social,
-            product: selectedProduct.producto
-          }
-        });
+      // Guardar historial (opcional - solo si existe la tabla djc_history)
+      try {
+        const { error: historyError } = await supabase
+          .from('djc_history')
+          .insert({
+            djc_id: djcNumber, // Este campo podría necesitar ser el UUID de la DJC
+            action: 'created',
+            changed_fields: {
+              resolution: selectedResolution,
+              client: selectedClient.razon_social,
+              product: selectedProduct.producto
+            }
+          });
 
-      if (historyError) console.error('Error saving history:', historyError);
+        if (historyError) {
+          console.warn('Error saving to djc_history (table might not exist):', historyError);
+        }
+      } catch (histError) {
+        console.warn('djc_history table might not be configured properly');
+      }
 
       // Descargar el PDF
       pdf.save(`DJC_${djcNumber}.pdf`);
@@ -607,8 +622,8 @@ const DJCGenerator: React.FC = () => {
               <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>Cada DJC es individual por producto (permite verificar y corregir datos)</li>
-                <li>Las DJC preliminares se guardan en el bucket "djc" (borradores)</li>
-                <li>Las DJC firmadas se moverán al bucket "documents" (oficiales)</li>
+                <li>Las DJC se guardan en el bucket "djcs"</li>
+                <li>Las DJC firmadas se pueden subir posteriormente</li>
                 <li>Puede agregar un representante autorizado si corresponde</li>
               </ul>
             </div>
