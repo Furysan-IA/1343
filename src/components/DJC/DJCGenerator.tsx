@@ -1,70 +1,4 @@
-{selectedProduct && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Modelo:</span> {selectedProduct.modelo || 'Sin modelo'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Código:</span> {selectedProduct.codificacion}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Estado DJC:</span>{' '}
-                      <span className={`font-medium ${
-                        selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
-                        selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {selectedProduct.djc_status || 'No Generada'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Advertencias según el estado */}
-                {selectedProduct.djc_status === 'Firmada' && (
-                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-sm text-green-700 flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" />
-                      Este producto ya tiene una DJC firmada. Generar una nueva reemplazará la anterior.
-                    </p>
-                  </div>
-                )}
-                
-                {selectedProduct.djc_status === 'Generada Pendiente de Firma' && (
-                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm text-yellow-700 flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />
-                      Existe una DJC pendiente de firma. Puede generar una nueva versión si necesita corregir datos.
-                    </p>
-                  </div>
-                )}
-                
-                {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
-                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
-                    <p className="text-sm text-red-700 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" />
-                      Faltan datos técnicos del producto (normas o informe de ensayo)
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}  const handleProductSearch = (searchTerm: string) => {
-    setProductSearch(searchTerm);
-    import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
@@ -250,8 +184,6 @@ const DJCGenerator: React.FC = () => {
       }
     }
   };
-
-
 
   const generateDJCNumber = (): string => {
     const timestamp = Date.now().toString().slice(-6);
@@ -934,32 +866,67 @@ const DJCGenerator: React.FC = () => {
 
         {selectedProduct && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
-            <p className="text-sm text-gray-600">
-              <span className="font-medium">Producto:</span> {selectedProduct.producto}
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="font-medium">Marca:</span> {selectedProduct.marca}
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="font-medium">Código:</span> {selectedProduct.codificacion}
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="font-medium">Estado DJC:</span>{' '}
-              <span className={`font-medium ${
-                selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
-                selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
-                'text-red-600'
-              }`}>
-                {selectedProduct.djc_status || 'No Generada'}
-              </span>
-            </p>
-            {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
-              <p className="text-sm text-red-600 mt-1">
-                <AlertTriangle className="inline h-4 w-4 mr-1" />
-                Faltan datos técnicos del producto
-              </p>
-            )}
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Modelo:</span> {selectedProduct.modelo || 'Sin modelo'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Código:</span> {selectedProduct.codificacion}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Estado DJC:</span>{' '}
+                      <span className={`font-medium ${
+                        selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
+                        selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {selectedProduct.djc_status || 'No Generada'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Advertencias según el estado */}
+                {selectedProduct.djc_status === 'Firmada' && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-sm text-green-700 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Este producto ya tiene una DJC firmada. Generar una nueva reemplazará la anterior.
+                    </p>
+                  </div>
+                )}
+                
+                {selectedProduct.djc_status === 'Generada Pendiente de Firma' && (
+                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                    <p className="text-sm text-yellow-700 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      Existe una DJC pendiente de firma. Puede generar una nueva versión si necesita corregir datos.
+                    </p>
+                  </div>
+                )}
+                
+                {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Faltan datos técnicos del producto (normas o informe de ensayo)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
