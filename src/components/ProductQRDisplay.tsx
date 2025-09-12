@@ -55,18 +55,33 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   };
 
   const handleGenerateQR = async () => {
+    console.log('🔄 Iniciando generación de QR...');
+    console.log('📦 Producto:', product);
+    
     if (!canGenerateQR()) {
+      console.log('❌ No se puede generar QR - datos faltantes');
+      console.log('📋 Datos del producto:', {
+        titular: product.titular,
+        producto: product.producto,
+        marca: product.marca
+      });
       toast.error('El producto debe tener titular, nombre y marca para generar QR');
       return;
     }
 
+    console.log('✅ Verificación de datos pasada');
+    console.log('🆔 UUID del producto:', product.uuid);
+    
     setIsGenerating(true);
     try {
       // Generate product URL using UUID
+      console.log('🔗 Generando URL del producto...');
       const productUrl = qrConfigService.generateProductUrl(product.uuid);
+      console.log('🔗 URL generada:', productUrl);
       setQrLink(productUrl);
 
       // Generate QR code data URL
+      console.log('🔲 Generando código QR...');
       const dataUrl = await QRCode.toDataURL(productUrl, {
         type: 'image/png',
         width: 1000,
@@ -77,9 +92,17 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
           light: '#ffffff'
         }
       });
+      console.log('🔲 QR generado exitosamente, tamaño:', dataUrl.length);
       setQrDataUrl(dataUrl);
 
       // Update product in Supabase
+      console.log('💾 Actualizando producto en Supabase...');
+      console.log('📝 Datos a actualizar:', {
+        qr_link: productUrl,
+        qr_status: 'Generado',
+        codificacion: product.codificacion
+      });
+      
       const { error } = await supabase
         .from('products')
         .update({
@@ -91,16 +114,25 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         })
         .eq('codificacion', product.codificacion);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error de Supabase:', error);
+        throw error;
+      }
+      
+      console.log('✅ Producto actualizado en Supabase exitosamente');
 
       toast.success('Código QR generado exitosamente');
       setShouldRegenerateQR(false);
       onUpdate();
+      console.log('🎉 Proceso de generación de QR completado');
     } catch (error: any) {
-      console.error('Error generating QR:', error);
-      toast.error(`Error al generar QR: ${error.message}`);
+      console.error('❌ Error completo en generación de QR:', error);
+      console.error('❌ Mensaje de error:', error.message);
+      console.error('❌ Stack trace:', error.stack);
+      toast.error(`Error al generar QR: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsGenerating(false);
+      console.log('🏁 Finalizando proceso de generación de QR');
     }
   };
 
