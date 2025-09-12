@@ -86,13 +86,13 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
 
     try {
       const dataUrl = await toPng(labelRef.current, {
-        width: 94,
-        height: 113,
+        width: qrModConfig.labelWidth,
+        height: qrModConfig.labelHeight,
         pixelRatio: selectedPreset.pixelRatio,
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 94 * selectedPreset.pixelRatio,
-        canvasHeight: 113 * selectedPreset.pixelRatio,
+        canvasWidth: qrModConfig.labelWidth * selectedPreset.pixelRatio,
+        canvasHeight: qrModConfig.labelHeight * selectedPreset.pixelRatio,
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -115,13 +115,13 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
 
     try {
       const blob = await toBlob(labelRef.current, {
-        width: 94,
-        height: 113, 
+        width: qrModConfig.labelWidth,
+        height: qrModConfig.labelHeight,
         pixelRatio: selectedPreset.pixelRatio,
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 94 * selectedPreset.pixelRatio,
-        canvasHeight: 113 * selectedPreset.pixelRatio,
+        canvasWidth: qrModConfig.labelWidth * selectedPreset.pixelRatio,
+        canvasHeight: qrModConfig.labelHeight * selectedPreset.pixelRatio,
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -134,11 +134,11 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [25, 30]
+        format: [qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583] // Convert pixels to mm
       });
 
       const imgData = URL.createObjectURL(blob);
-      pdf.addImage(imgData, 'PNG', 0, 0, 25, 30);
+      pdf.addImage(imgData, 'PNG', 0, 0, qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583);
       pdf.save(`qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.pdf`);
       
       URL.revokeObjectURL(imgData);
@@ -217,14 +217,15 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                       <div 
                         ref={labelRef}
                         style={{
-                          width: '94px',
-                          height: '113px',
+                          width: `${qrModConfig.labelWidth}px`,
+                          height: `${qrModConfig.labelHeight}px`,
                           backgroundColor: '#ffffff',
-                          border: '1px solid #000000',
-                          borderRadius: '8px',
+                          border: `${qrModConfig.labelBorderWidth}px solid #000000`,
+                          borderRadius: `${qrModConfig.labelBorderRadius}px`,
                           position: 'relative',
                           overflow: 'hidden',
-                          boxSizing: 'border-box'
+                          boxSizing: 'border-box',
+                          padding: `${qrModConfig.labelPaddingTop}px ${qrModConfig.labelPaddingRight}px ${qrModConfig.labelPaddingBottom}px ${qrModConfig.labelPaddingLeft}px`
                         }}
                       >
                         {/* Código QR - 20mm × 20mm */}
@@ -232,8 +233,8 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                           style={{
                             position: 'absolute',
                             top: `${qrModConfig.qrTop}px`,
-                            left: '50%',
-                            transform: 'translateX(-50%)',
+                            left: qrModConfig.qrCenterHorizontally ? '50%' : `${qrModConfig.qrLeft}px`,
+                            transform: qrModConfig.qrCenterHorizontally ? 'translateX(-50%)' : 'none',
                             width: `${qrModConfig.qrSize}px`,
                             height: `${qrModConfig.qrSize}px`
                           }}
