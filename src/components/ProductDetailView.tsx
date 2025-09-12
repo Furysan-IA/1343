@@ -1,7 +1,7 @@
 // ProductDetailView.tsx - Versión actualizada con esquema de base de datos
 import { useState, useEffect } from 'react';
 import { supabase, Database } from '../lib/supabase';
-import { QRGenerator } from './QRGenerator';
+import { ProductQRDisplay } from './ProductQRDisplay';
 import { qrConfigService } from '../services/qrConfig.service';
 import { 
   X, Edit2, Save, Upload, FileText, QrCode, Award, 
@@ -659,19 +659,9 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
 
           {activeTab === 'qr' && (
             <div>
-              <QRGenerator 
+              <ProductQRDisplay 
                 product={editedProduct}
-                onQRGenerated={(url) => {
-                  // Actualizar el producto con la nueva URL del QR
-                  setEditedProduct(prev => ({
-                    ...prev,
-                    qr_link: url,
-                    qr_status: 'Generado'
-                  }));
-                  setShouldRegenerateQR(false);
-                  onUpdate();
-                }}
-                showRegenerateAlert={shouldRegenerateQR}
+                onUpdate={onUpdate}
               />
             </div>
           )}
