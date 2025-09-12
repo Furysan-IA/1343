@@ -41,11 +41,22 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   }, [product]);
 
   const checkIfQRNeedsRegeneration = () => {
+    console.log('🔍 Verificando si QR necesita regeneración...');
+    console.log('📦 Product QR Link:', product.qr_link);
+    console.log('📦 Product QR Status:', product.qr_status);
+    console.log('📦 Product QR Path:', product.qr_path);
+    
     // Check if QR needs regeneration based on configuration changes
     if (product.qr_link) {
       const currentConfig = qrConfigService.getConfig();
+      console.log('⚙️ Current Config Base URL:', currentConfig.baseUrl);
       const needsUpdate = !product.qr_link.startsWith(currentConfig.baseUrl);
+      console.log('🔄 Needs Update:', needsUpdate);
       setShouldRegenerateQR(needsUpdate);
+      console.log('🎯 Should Regenerate QR set to:', needsUpdate);
+    } else {
+      console.log('❌ No QR link found, no regeneration needed');
+      setShouldRegenerateQR(false);
     }
   };
 
@@ -137,7 +148,13 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   };
 
   const getQRStatus = () => {
+    console.log('📊 Getting QR Status...');
+    console.log('📦 Product QR Path:', product.qr_path);
+    console.log('📦 Product QR Status:', product.qr_status);
+    console.log('🔄 Should Regenerate QR:', shouldRegenerateQR);
+    
     if (!product.qr_path) {
+      console.log('🔴 Status: No generado');
       return {
         status: 'No generado',
         color: 'text-gray-600',
@@ -147,6 +164,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     }
 
     if (product.qr_status === 'Pendiente regeneración' || shouldRegenerateQR) {
+      console.log('🟡 Status: Pendiente regeneración');
       return {
         status: 'Pendiente regeneración',
         color: 'text-orange-600',
@@ -155,6 +173,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       };
     }
 
+    console.log('🟢 Status: Generado');
     return {
       status: 'Generado',
       color: 'text-green-600',
