@@ -19,8 +19,37 @@ interface QRCodeModalProps {
 export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [outputResolution, setOutputResolution] = useState<'web' | 'standard' | 'high' | 'ultra'>('standard');
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
+
+  // Resolution presets
+  const resolutionPresets = {
+    web: { 
+      label: 'Web/Pantalla (Baja)', 
+      pixelRatio: 4, 
+      description: 'Ideal para visualización en pantalla',
+      fileSize: 'Pequeño (~50KB)'
+    },
+    standard: { 
+      label: 'Impresión Estándar (Media)', 
+      pixelRatio: 8, 
+      description: 'Recomendado para impresión normal',
+      fileSize: 'Medio (~200KB)'
+    },
+    high: { 
+      label: 'Alta Calidad (Alta)', 
+      pixelRatio: 16, 
+      description: 'Para impresión profesional',
+      fileSize: 'Grande (~800KB)'
+    },
+    ultra: { 
+      label: 'Ultra HD (Máxima)', 
+      pixelRatio: 24, 
+      description: 'Máxima calidad para impresión industrial',
+      fileSize: 'Muy grande (~1.8MB)'
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -53,15 +82,17 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
   const handleDownloadPNG = async () => {
     if (!labelRef.current) return;
 
+    const selectedPreset = resolutionPresets[outputResolution];
+
     try {
       const dataUrl = await toPng(labelRef.current, {
         width: 94,
         height: 113,
-        pixelRatio: 8,
+        pixelRatio: selectedPreset.pixelRatio,
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 752,
-        canvasHeight: 904,
+        canvasWidth: 94 * selectedPreset.pixelRatio,
+        canvasHeight: 113 * selectedPreset.pixelRatio,
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -69,8 +100,8 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
         }
       });
       
-      saveAs(dataUrl, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}.png`);
-      toast.success('Etiqueta PNG descargada exitosamente');
+      saveAs(dataUrl, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.png`);
+      toast.success(`Etiqueta PNG (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
       console.error('Error downloading PNG:', error);
       toast.error('Error al descargar la etiqueta PNG');
@@ -80,15 +111,17 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
   const handleDownloadPDF = async () => {
     if (!labelRef.current) return;
 
+    const selectedPreset = resolutionPresets[outputResolution];
+
     try {
       const blob = await toBlob(labelRef.current, {
         width: 94,
         height: 113, 
-        pixelRatio: 8,
+        pixelRatio: selectedPreset.pixelRatio,
         quality: 1,
         backgroundColor: '#ffffff',
-        canvasWidth: 752,
-        canvasHeight: 904,
+        canvasWidth: 94 * selectedPreset.pixelRatio,
+        canvasHeight: 113 * selectedPreset.pixelRatio,
         skipAutoScale: true,
         style: {
           transform: 'scale(1)',
@@ -106,10 +139,10 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
 
       const imgData = URL.createObjectURL(blob);
       pdf.addImage(imgData, 'PNG', 0, 0, 25, 30);
-      pdf.save(`qr-${productName.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+      pdf.save(`qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.pdf`);
       
       URL.revokeObjectURL(imgData);
-      toast.success('Etiqueta PDF descargada exitosamente');
+      toast.success(`Etiqueta PDF (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
       console.error('Error downloading PDF:', error);
       toast.error('Error al descargar la etiqueta PDF');
@@ -328,20 +361,62 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                         </div>
                       </div>
 
+                      {/* Resolution Selection */}
+                      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3">Calidad de Exportación</h4>
+                        <div className="space-y-2">
+                          {Object.entries(resolutionPresets).map(([key, preset]) => (
+                            <label
+                              key={key}
+                              className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-white transition-colors"
+                            >
+                              <input
+                                type="radio"
+                                name="resolution"
+                                value={key}
+                                checked={outputResolution === key}
+                                onChange={(e) => setOutputResolution(e.target.value as any)}
+                                className="mt-1 w-4 h-4 text-purple-600"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {preset.label}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {preset.fileSize}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {preset.description}
+                                </p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-700">
+                            <strong>Recomendación:</strong> Use "Impresión Estándar" para la mayoría de casos. 
+                            Para QR codes muy pequeños (menos de 15mm) o con problemas de escaneo, use "Alta Calidad".
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="mt-6 flex justify-center gap-3">
                         <button
                           onClick={handleDownloadPNG}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-1"
                         >
                           <Download className="h-4 w-4 mr-2" />
-                          PNG
+                          Descargar PNG
                         </button>
                         <button
                           onClick={handleDownloadPDF}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-1"
                         >
                           <Download className="h-4 w-4 mr-2" />
-                          PDF
+                          Descargar PDF
                         </button>
                       </div>
                     </>
