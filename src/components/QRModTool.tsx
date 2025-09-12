@@ -201,20 +201,6 @@ const generateQRDataUrl = (text: string): string => {
   return svgUrl;
 };
 
-// Guardar configuración en localStorage
-const saveQRModConfig = (config: QRConfig) => {
-  localStorage.setItem('qrModConfig', JSON.stringify(config));
-};
-
-// Cargar configuración desde localStorage
-const loadQRModConfig = (): QRConfig => {
-  const saved = localStorage.getItem('qrModConfig');
-  if (saved) {
-    return { ...defaultConfig, ...JSON.parse(saved) };
-  }
-  return defaultConfig;
-};
-
 export function QRModTool() {
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<QRConfig>(loadQRModConfig);
