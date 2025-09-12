@@ -216,10 +216,7 @@ export function QRModTool() {
   if (!isVisible) {
     return (
       <button
-        onClick={() => {
-          setIsVisible(true);
-          setIsMinimized(false);
-        }}
+        onClick={() => setIsVisible(true)}
         className="fixed bottom-4 left-4 z-50 w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
         title="Abrir QR Mod Tool"
       >
