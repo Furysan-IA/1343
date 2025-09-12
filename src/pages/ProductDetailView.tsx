@@ -1,7 +1,7 @@
 // ProductDetailView.tsx - Versión con mejoras QR aplicadas
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { QRGenerator } from '../components/QRGenerator';
+import { ProductQRDisplay } from '../components/ProductQRDisplay';
 import { qrConfigService } from '../services/qrConfig.service';
 import { 
   X, Edit2, Save, Upload, FileText, QrCode, Award, 
@@ -67,22 +67,6 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
   const [saving, setSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('general');
-  const [shouldRegenerateQR, setShouldRegenerateQR] = useState(false);
-
-  // Detectar si se deben regenerar los QR cuando cambian datos relevantes
-  useEffect(() => {
-    const checkQRRegeneration = async () => {
-      const needsRegeneration = await qrConfigService.regenerateQRIfNeeded(
-        editedProduct, 
-        originalProduct
-      );
-      setShouldRegenerateQR(needsRegeneration);
-    };
-
-    if (editMode) {
-      checkQRRegeneration();
-    }
-  }, [editedProduct, originalProduct, editMode]);
 
   const tabs = [
     { id: 'general', label: 'Información General', icon: Package },
@@ -297,9 +281,6 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                     <span className="ml-1 px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
                       {missingCount}
                     </span>
-                  )}
-                  {tab.id === 'qr' && shouldRegenerateQR && (
-                    <RefreshCw className="w-4 h-4 text-orange-600 ml-1" />
                   )}
                 </button>
               );
@@ -660,19 +641,9 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
 
           {activeTab === 'qr' && (
             <div>
-              <QRGenerator 
+              <ProductQRDisplay 
                 product={editedProduct}
-                onQRGenerated={(url) => {
-                  // Actualizar el producto con la nueva URL del QR
-                  setEditedProduct(prev => ({
-                    ...prev,
-                    qr_link: url,
-                    qr_status: 'Generado'
-                  }));
-                  setShouldRegenerateQR(false);
-                  onUpdate();
-                }}
-                showRegenerateAlert={shouldRegenerateQR}
+                onUpdate={onUpdate}
               />
             </div>
           )}

@@ -12,13 +12,12 @@ import { getQRModConfig, cmykToRgb } from '../utils/qrModConfig';
 interface QRCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  productId: string;
+  qrLink: string;
   productName: string;
 }
 
-export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeModalProps) {
+export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [destinationUrl, setDestinationUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
@@ -27,16 +26,12 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
     if (isOpen) {
       generateQRCode();
     }
-  }, [isOpen, productId]);
+  }, [isOpen, qrLink]);
 
   const generateQRCode = async () => {
     setIsGenerating(true);
     try {
-      const baseUrl = window.location.origin;
-      const url = `${baseUrl}/products/${productId}`;
-      setDestinationUrl(url);
-
-      const dataUrl = await QRCode.toDataURL(url, {
+      const dataUrl = await QRCode.toDataURL(qrLink, {
         type: 'image/png',
         width: 1000,
         margin: 0,
@@ -123,7 +118,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(destinationUrl);
+      await navigator.clipboard.writeText(qrLink);
       toast.success('URL copiada al portapapeles');
     } catch (error) {
       console.error('Error copying to clipboard:', error);
@@ -320,7 +315,7 @@ export function QRCodeModal({ isOpen, onClose, productId, productName }: QRCodeM
                           <input
                             type="text"
                             readOnly
-                            value={destinationUrl}
+                            value={qrLink}
                             className="text-sm text-gray-600 bg-transparent flex-1 outline-none"
                             onClick={(e) => e.currentTarget.select()}
                           />
