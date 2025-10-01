@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
 interface UniversalUploadScreenProps {
   onUploadComplete: (batchId: string, parsedData: ParsedData) => void;
+  onReadyForConfirmation?: (batchId: string, parsedData: ParsedData, stats: DuplicateCheckStats) => void;
 }
 
 interface DuplicateCheckStats {
@@ -25,7 +26,10 @@ interface DuplicateCheckResult {
   stats: DuplicateCheckStats;
 }
 
-export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ onUploadComplete }) => {
+export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
+  onUploadComplete,
+  onReadyForConfirmation
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -251,40 +255,32 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         setProcessingStep('');
       });
 
-      console.log('🎯 Data saved, now showing modal...');
+      console.log('🎯 Data saved, now creating batch and showing confirmation...');
 
-      // Mostrar el modal React
+      // Crear el batch ANTES de mostrar el modal
+      const batchId = await createBatch({
+        filename: selectedFile.name,
+        fileSize: selectedFile.size,
+        totalRecords: duplicateCheck.stats.activeRecords
+      });
+
+      console.log('✅ Batch created:', batchId);
+
+      // Si hay callback de confirmación, usarlo (modal en el padre)
+      if (onReadyForConfirmation) {
+        console.log('🎯 Calling onReadyForConfirmation callback...');
+        onReadyForConfirmation(batchId, parsedData, duplicateCheck.stats);
+        return;
+      }
+
+      // Fallback: mostrar modal interno (para compatibilidad)
+      console.log('🎯 No confirmation callback, showing internal modal...');
       flushSync(() => {
         setShowDuplicateModal(true);
       });
 
       console.log('✅ Modal shown, waiting for user interaction...');
       return;
-
-      // El resto del código NO se ejecuta aquí - el flujo continúa cuando el usuario hace clic en:
-      // - "Continuar" -> handleContinueAfterDuplicateCheck()
-      // - "Cancelar" -> handleCancelDuplicateCheck()
-
-      // ==========================================
-      // CÓDIGO MUERTO - NUNCA SE EJECUTA
-      // ==========================================
-      const batchId = await createBatch({
-        filename: selectedFile.name,
-        fileSize: selectedFile.size,
-        totalRecords: parsedData.rows.length
-      });
-
-      console.log('Batch created:', batchId);
-
-      // Paso 5: Completado
-      setProcessingStep('Análisis completado!');
-      setProgress(100);
-
-      // Pequeño delay para que el usuario vea el 100%
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      toast.success('Archivo validado exitosamente!');
-      onUploadComplete(batchId, parsedData);
     } catch (error: any) {
       console.error('❌ Error processing file:', error);
       console.error('Error stack:', error?.stack);

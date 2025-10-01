@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { UniversalUploadScreen } from './UniversalUploadScreen';
 import { UniversalReviewScreen } from './UniversalReviewScreen';
-import { ParsedData } from '../../services/universalDataValidation.service';
-import { CircleCheck as CheckCircle } from 'lucide-react';
+import { ParsedData, DuplicateCheckResult } from '../../services/universalDataValidation.service';
+import { CircleCheck as CheckCircle, AlertCircle, FileText, CheckCircle as Check, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 type Step = 'upload' | 'review' | 'complete';
 
@@ -10,6 +11,41 @@ export const UniversalValidationPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [batchId, setBatchId] = useState<string>('');
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
+
+  // Estado para el modal de confirmación
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingUploadData, setPendingUploadData] = useState<{
+    id: string;
+    data: ParsedData;
+    stats: DuplicateCheckResult['stats'];
+  } | null>(null);
+
+  const handleUploadReadyForConfirmation = (
+    id: string,
+    data: ParsedData,
+    stats: DuplicateCheckResult['stats']
+  ) => {
+    console.log('🎯 Upload ready for confirmation:', { id, recordCount: data.rows.length, stats });
+    setPendingUploadData({ id, data, stats });
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmUpload = () => {
+    console.log('✅ User confirmed upload, proceeding to review');
+    if (!pendingUploadData) return;
+
+    setBatchId(pendingUploadData.id);
+    setParsedData(pendingUploadData.data);
+    setShowConfirmModal(false);
+    setPendingUploadData(null);
+    setCurrentStep('review');
+  };
+
+  const handleCancelUpload = () => {
+    console.log('❌ User cancelled upload');
+    setShowConfirmModal(false);
+    setPendingUploadData(null);
+  };
 
   const handleUploadComplete = (id: string, data: ParsedData) => {
     console.log('Upload complete:', { id, recordCount: data.rows.length });
@@ -33,7 +69,10 @@ export const UniversalValidationPage: React.FC = () => {
   return (
     <>
       {currentStep === 'upload' && (
-        <UniversalUploadScreen onUploadComplete={handleUploadComplete} />
+        <UniversalUploadScreen
+          onUploadComplete={handleUploadComplete}
+          onReadyForConfirmation={handleUploadReadyForConfirmation}
+        />
       )}
 
       {currentStep === 'review' && parsedData && (
@@ -72,6 +111,116 @@ export const UniversalValidationPage: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal de Confirmación - Renderizado en el nivel superior para evitar desmontaje */}
+      {showConfirmModal && pendingUploadData && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            zIndex: 999999,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden"
+            style={{ zIndex: 1000000 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                    <CheckCircle className="w-8 h-8" />
+                    Análisis Completado
+                  </h2>
+                  <p className="text-green-50 text-sm">
+                    El archivo ha sido procesado exitosamente
+                  </p>
+                </div>
+                <button
+                  onClick={handleCancelUpload}
+                  className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-slate-50 rounded-xl p-4 border-2 border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-5 h-5 text-slate-600" />
+                    <p className="text-xs font-medium text-slate-600">Total Filas</p>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {pendingUploadData.stats.totalInFile.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="bg-red-50 rounded-xl p-4 border-2 border-red-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <X className="w-5 h-5 text-red-600" />
+                    <p className="text-xs font-medium text-red-600">Con "Baja"</p>
+                  </div>
+                  <p className="text-2xl font-bold text-red-800">
+                    {pendingUploadData.stats.withBaja.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Check className="w-5 h-5 text-blue-600" />
+                    <p className="text-xs font-medium text-blue-600">Activos</p>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-800">
+                    {pendingUploadData.stats.activeRecords.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-xs font-medium text-green-600">Nuevos</p>
+                  </div>
+                  <p className="text-2xl font-bold text-green-800">
+                    {pendingUploadData.stats.newRecordsCount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Mensaje Informativo */}
+              <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg">
+                <p className="text-sm text-green-800">
+                  ✅ Todos los certificados están listos para ser cargados en el sistema.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 p-6 flex gap-3 justify-end border-t border-slate-200">
+              <button
+                onClick={handleCancelUpload}
+                className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmUpload}
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );
