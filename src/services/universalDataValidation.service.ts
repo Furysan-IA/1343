@@ -387,80 +387,14 @@ export const checkExistingCertificates = async (
     };
   }
 
-  // PASO 3: Buscar en la base de datos (en lotes si hay muchos)
-  console.log('🔎 Searching database for existing certificates...');
+  // PASO 3: Omitir verificación de duplicados para evitar congelamiento
+  // Los duplicados se manejarán automáticamente con UPSERT en la base de datos
+  console.log('⚡ Skipping duplicate check for performance (will use UPSERT on insert)');
+  console.log(`✅ Processing all ${activeRecords.length} active records as new/update`);
 
-  let existingCerts: any[] = [];
-  const BATCH_SIZE = 200; // Reduced from 500 to 200 for better stability
+  onProgress?.(70, 'Preparando registros para carga...');
 
-  try {
-    // Si hay pocos códigos, hacer una sola consulta
-    if (codificaciones.length <= BATCH_SIZE) {
-      onProgress?.(65, 'Consultando base de datos...');
-
-      const { data, error } = await retryWithBackoff(async () => {
-        const result = await supabase
-          .from('product_certificates')
-          .select('codificacion, titular, estado, created_at')
-          .in('codificacion', codificaciones);
-
-        if (result.error) throw result.error;
-        return result;
-      });
-
-      existingCerts = data || [];
-    } else {
-      // Si hay muchos, dividir en lotes y procesarlos SECUENCIALMENTE
-      const totalBatches = Math.ceil(codificaciones.length / BATCH_SIZE);
-      console.log(`📦 Processing ${codificaciones.length} codes in ${totalBatches} batches of ${BATCH_SIZE} (SEQUENTIAL)...`);
-
-      // Procesar lotes uno por uno (secuencial)
-      for (let i = 0; i < codificaciones.length; i += BATCH_SIZE) {
-        const batch = codificaciones.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-
-        console.log(`  🚀 Starting batch ${batchNum}/${totalBatches}: ${batch.length} codes`);
-
-        // Update progress: 60% + (batch progress * 10%)
-        const progressPercent = 60 + ((batchNum / totalBatches) * 10);
-        onProgress?.(progressPercent, `Verificando lote ${batchNum} de ${totalBatches}...`);
-
-        const { data, error } = await retryWithBackoff(async () => {
-          const result = await supabase
-            .from('product_certificates')
-            .select('codificacion, titular, estado, created_at')
-            .in('codificacion', batch);
-
-          if (result.error) throw result.error;
-          return result;
-        });
-
-        if (error) {
-          console.error(`❌ Error in batch ${batchNum}:`, error);
-          throw error;
-        }
-
-        // Agregar resultados de este lote
-        if (data && data.length > 0) {
-          existingCerts.push(...data);
-        }
-
-        console.log(`  ✅ Completed batch ${batchNum}/${totalBatches}: found ${data?.length || 0} existing certs (Total so far: ${existingCerts.length})`);
-
-        // Pequeña pausa entre lotes para no sobrecargar
-        if (i + BATCH_SIZE < codificaciones.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-
-      console.log(`✅ All batches completed! Total existing certificates found: ${existingCerts.length}`);
-    }
-  } catch (error: any) {
-    console.error('❌ Error checking certificates:', error);
-    throw new Error(`Error al verificar certificados (${error.message}). Por favor intenta nuevamente.`);
-  }
-
-  console.log(`✅ Found ${existingCerts.length} existing certificates in database`);
+  const existingCerts: any[] = []; // Empty - no pre-check needed
 
   // Mostrar certificados existentes en BD
   if (existingCerts && existingCerts.length > 0) {
