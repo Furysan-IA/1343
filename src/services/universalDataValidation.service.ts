@@ -303,26 +303,72 @@ export const validateParsedData = (data: ParsedData) => {
 export const checkExistingCertificates = async (records: UniversalRecord[]): Promise<{
   duplicates: Array<{ codificacion: string; existing: any; incoming: any }>;
   newRecords: UniversalRecord[];
+  filtered: UniversalRecord[];
+  stats: {
+    totalInFile: number;
+    withBaja: number;
+    activeRecords: number;
+    withCodificacion: number;
+    duplicatesFound: number;
+    newRecordsCount: number;
+  };
 }> => {
   console.log('🔍 Checking for existing certificates...');
+  console.log('📊 Total records in file:', records.length);
 
-  // Extraer todas las codificaciones únicas del archivo
-  const codificaciones = records
+  // PASO 1: Filtrar registros con estado "baja"
+  const activeRecords = records.filter(r => {
+    const estado = String(r.estado || '').toLowerCase().trim();
+    return estado !== 'baja';
+  });
+
+  const bajaRecords = records.length - activeRecords.length;
+  console.log(`🚫 Filtered out ${bajaRecords} records with estado="baja"`);
+  console.log(`✅ Active records to process: ${activeRecords.length}`);
+
+  // PASO 2: Extraer todas las codificaciones únicas del archivo (solo activos)
+  const recordsWithCode = activeRecords.filter(r => r.codificacion);
+  console.log(`📋 Records with codificacion field: ${recordsWithCode.length}`);
+
+  // Mostrar primeros 20 certificados detectados en el archivo
+  console.log('\n📜 LISTADO DE CERTIFICADOS EN EL ARCHIVO (primeros 20):');
+  console.log('═'.repeat(80));
+  recordsWithCode.slice(0, 20).forEach((record, idx) => {
+    console.log(`${idx + 1}. ${record.codificacion} | Estado: ${record.estado || 'N/A'} | Titular: ${record.titular || 'N/A'}`);
+  });
+  if (recordsWithCode.length > 20) {
+    console.log(`... y ${recordsWithCode.length - 20} certificados más`);
+  }
+  console.log('═'.repeat(80) + '\n');
+
+  const codificaciones = recordsWithCode
     .map(r => r.codificacion)
-    .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i); // Únicos
 
+  console.log(`🔢 Unique certificate codes in file: ${codificaciones.length}`);
+
   if (codificaciones.length === 0) {
-    console.log('⚠️ No certificate codes found in file');
-    return { duplicates: [], newRecords: records };
+    console.log('⚠️ No certificate codes found in active records');
+    return {
+      duplicates: [],
+      newRecords: activeRecords,
+      filtered: activeRecords,
+      stats: {
+        totalInFile: records.length,
+        withBaja: bajaRecords,
+        activeRecords: activeRecords.length,
+        withCodificacion: 0,
+        duplicatesFound: 0,
+        newRecordsCount: activeRecords.length
+      }
+    };
   }
 
-  console.log(`📋 Found ${codificaciones.length} unique certificate codes in file`);
-
-  // Buscar en la base de datos
+  // PASO 3: Buscar en la base de datos
+  console.log('🔎 Searching database for existing certificates...');
   const { data: existingCerts, error } = await supabase
     .from('product_certificates')
-    .select('*')
+    .select('codificacion, titular, estado, created_at')
     .in('codificacion', codificaciones);
 
   if (error) {
@@ -332,17 +378,42 @@ export const checkExistingCertificates = async (records: UniversalRecord[]): Pro
 
   console.log(`✅ Found ${existingCerts?.length || 0} existing certificates in database`);
 
-  if (!existingCerts || existingCerts.length === 0) {
-    return { duplicates: [], newRecords: records };
+  // Mostrar certificados existentes en BD
+  if (existingCerts && existingCerts.length > 0) {
+    console.log('\n🗄️ CERTIFICADOS EXISTENTES EN BASE DE DATOS (primeros 20):');
+    console.log('═'.repeat(80));
+    existingCerts.slice(0, 20).forEach((cert, idx) => {
+      console.log(`${idx + 1}. ${cert.codificacion} | Titular: ${cert.titular || 'N/A'} | Estado: ${cert.estado || 'N/A'}`);
+    });
+    if (existingCerts.length > 20) {
+      console.log(`... y ${existingCerts.length - 20} certificados más`);
+    }
+    console.log('═'.repeat(80) + '\n');
   }
 
-  // Crear mapa de certificados existentes por codificación
+  if (!existingCerts || existingCerts.length === 0) {
+    return {
+      duplicates: [],
+      newRecords: activeRecords,
+      filtered: activeRecords,
+      stats: {
+        totalInFile: records.length,
+        withBaja: bajaRecords,
+        activeRecords: activeRecords.length,
+        withCodificacion: recordsWithCode.length,
+        duplicatesFound: 0,
+        newRecordsCount: activeRecords.length
+      }
+    };
+  }
+
+  // PASO 4: Crear mapa de certificados existentes por codificación
   const existingMap = new Map(existingCerts.map(cert => [cert.codificacion, cert]));
 
   const duplicates: Array<{ codificacion: string; existing: any; incoming: any }> = [];
   const newRecords: UniversalRecord[] = [];
 
-  records.forEach(record => {
+  activeRecords.forEach(record => {
     if (record.codificacion && existingMap.has(record.codificacion)) {
       duplicates.push({
         codificacion: record.codificacion,
@@ -354,9 +425,31 @@ export const checkExistingCertificates = async (records: UniversalRecord[]): Pro
     }
   });
 
-  console.log(`🔍 Analysis complete: ${duplicates.length} duplicates, ${newRecords.length} new records`);
+  console.log('\n📊 RESUMEN FINAL:');
+  console.log('═'.repeat(80));
+  console.log(`Total filas en archivo:          ${records.length}`);
+  console.log(`Registros con estado "baja":      ${bajaRecords}`);
+  console.log(`Registros activos a procesar:    ${activeRecords.length}`);
+  console.log(`Con campo codificacion:          ${recordsWithCode.length}`);
+  console.log(`Códigos únicos en archivo:       ${codificaciones.length}`);
+  console.log(`Certificados YA en base datos:   ${existingCerts.length}`);
+  console.log(`DUPLICADOS detectados:           ${duplicates.length}`);
+  console.log(`NUEVOS registros:                ${newRecords.length}`);
+  console.log('═'.repeat(80) + '\n');
 
-  return { duplicates, newRecords };
+  return {
+    duplicates,
+    newRecords,
+    filtered: activeRecords,
+    stats: {
+      totalInFile: records.length,
+      withBaja: bajaRecords,
+      activeRecords: activeRecords.length,
+      withCodificacion: recordsWithCode.length,
+      duplicatesFound: duplicates.length,
+      newRecordsCount: newRecords.length
+    }
+  };
 };
 
 export const createBatch = async (

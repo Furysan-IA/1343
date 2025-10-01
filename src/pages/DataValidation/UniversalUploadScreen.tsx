@@ -101,25 +101,54 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       const { checkExistingCertificates } = await import('../../services/universalDataValidation.service');
       const duplicateCheck = await checkExistingCertificates(parsedData.rows);
 
-      console.log('Duplicate check result:', {
-        duplicates: duplicateCheck.duplicates.length,
-        newRecords: duplicateCheck.newRecords.length
-      });
+      console.log('Duplicate check result:', duplicateCheck.stats);
 
-      // Si hay duplicados, mostrar advertencia
+      // Mostrar resumen en consola y pantalla
+      console.log('\n📊 RESUMEN PARA EL USUARIO:');
+      console.log(`Total de filas leídas: ${duplicateCheck.stats.totalInFile}`);
+      console.log(`Registros con estado "baja" (ignorados): ${duplicateCheck.stats.withBaja}`);
+      console.log(`Registros activos a procesar: ${duplicateCheck.stats.activeRecords}`);
+      console.log(`Certificados en archivo: ${duplicateCheck.stats.withCodificacion}`);
+      console.log(`Ya existen en BD: ${duplicateCheck.stats.duplicatesFound}`);
+      console.log(`Nuevos certificados: ${duplicateCheck.stats.newRecordsCount}`);
+
+      // Si hay duplicados, mostrar advertencia detallada
       if (duplicateCheck.duplicates.length > 0) {
-        const shouldContinue = window.confirm(
-          `⚠️ ATENCIÓN: Se encontraron ${duplicateCheck.duplicates.length} certificados que YA EXISTEN en la base de datos.\n\n` +
-          `Certificados duplicados: ${duplicateCheck.duplicates.slice(0, 5).map(d => d.codificacion).join(', ')}${duplicateCheck.duplicates.length > 5 ? '...' : ''}\n\n` +
-          `¿Deseas continuar de todas formas? Los certificados duplicados aparecerán en la revisión.`
-        );
+        const message =
+          `⚠️ DETECCIÓN DE CERTIFICADOS DUPLICADOS\n\n` +
+          `📊 RESUMEN:\n` +
+          `• Total filas en archivo: ${duplicateCheck.stats.totalInFile}\n` +
+          `• Registros con "baja" (ignorados): ${duplicateCheck.stats.withBaja}\n` +
+          `• Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
+          `• Certificados en archivo: ${duplicateCheck.stats.withCodificacion}\n\n` +
+          `🔍 ANÁLISIS:\n` +
+          `• YA EXISTEN en base de datos: ${duplicateCheck.stats.duplicatesFound}\n` +
+          `• NUEVOS registros: ${duplicateCheck.stats.newRecordsCount}\n\n` +
+          `📋 Ejemplos de duplicados:\n${duplicateCheck.duplicates.slice(0, 5).map(d => `  • ${d.codificacion}`).join('\n')}${duplicateCheck.duplicates.length > 5 ? '\n  ...' : ''}\n\n` +
+          `⚠️ IMPORTANTE: Los certificados duplicados aparecerán en la pantalla de revisión para que decidas qué hacer con ellos.\n\n` +
+          `¿Deseas continuar?`;
+
+        const shouldContinue = window.confirm(message);
 
         if (!shouldContinue) {
+          console.log('❌ User cancelled upload due to duplicates');
           setIsProcessing(false);
           setSelectedFile(null);
           setProgress(0);
           return;
         }
+      } else {
+        // No hay duplicados, mostrar mensaje informativo
+        alert(
+          `✅ ANÁLISIS COMPLETADO\n\n` +
+          `📊 RESUMEN:\n` +
+          `• Total filas en archivo: ${duplicateCheck.stats.totalInFile}\n` +
+          `• Registros con "baja" (ignorados): ${duplicateCheck.stats.withBaja}\n` +
+          `• Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
+          `• Certificados detectados: ${duplicateCheck.stats.withCodificacion}\n\n` +
+          `🎉 Todos los certificados son NUEVOS (ninguno existe en la base de datos)\n\n` +
+          `Procediendo a crear el batch...`
+        );
       }
 
       // Paso 4: Crear batch
