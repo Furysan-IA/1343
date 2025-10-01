@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { flushSync } from 'react-dom';
+import { flushSync, createPortal } from 'react-dom';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
@@ -458,12 +458,15 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         </div>
       )}
 
-      {/* Modal de Análisis de Certificados */}
+      {/* Modal de Análisis de Certificados - usando Portal */}
       {console.log('🔍 Render check - showDuplicateModal:', showDuplicateModal, 'duplicateCheckResult:', !!duplicateCheckResult)}
-      {showDuplicateModal && duplicateCheckResult && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          {console.log('🎨 RENDERING DUPLICATE MODAL', { showDuplicateModal, hasResult: !!duplicateCheckResult, stats: duplicateCheckResult?.stats })}
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+      {showDuplicateModal && duplicateCheckResult && createPortal(
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ zIndex: 9999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          {console.log('🎨 RENDERING DUPLICATE MODAL IN PORTAL', { showDuplicateModal, hasResult: !!duplicateCheckResult, stats: duplicateCheckResult?.stats })}
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden" style={{ zIndex: 10000 }}>
             {/* Header */}
             <div className={`p-6 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
               <div className="flex items-start justify-between">
@@ -605,7 +608,8 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
