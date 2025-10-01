@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, UserPlus, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CircleCheck as CheckCircle, UserPlus, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EntityType, UniversalRecord, ParsedData, detectDuplicates, insertRecords, updateBatchStatus } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
 

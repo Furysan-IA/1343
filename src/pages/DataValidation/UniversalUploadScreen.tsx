@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, X, Users, Package } from 'lucide-react';
+import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
 
