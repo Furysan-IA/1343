@@ -61,17 +61,23 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     setIsProcessing(true);
 
     try {
+      console.log('Starting file processing...', { fileName: selectedFile.name, entityType });
+
       const parsedData = await parseFile(selectedFile);
+      console.log('File parsed successfully:', { rowCount: parsedData.rows.length });
 
       const dataValidation = validateParsedData(parsedData, entityType);
 
       if (!dataValidation.isValid) {
+        console.error('Validation failed:', dataValidation.errors);
         setValidationErrors([...dataValidation.errors, ...dataValidation.warnings]);
         setShowErrorModal(true);
         setIsProcessing(false);
+        setSelectedFile(null);
         return;
       }
 
+      console.log('Creating batch...');
       const batchId = await createBatch(
         {
           filename: selectedFile.name,
@@ -81,11 +87,19 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         entityType
       );
 
-      toast.success('File uploaded successfully!');
+      console.log('Batch created:', batchId);
+      toast.success('Archivo cargado exitosamente!');
       onUploadComplete(batchId, parsedData, entityType);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to process file');
+      console.error('Error processing file:', error);
+      toast.error(error.message || 'Error al procesar archivo');
+      setValidationErrors([{
+        message: error.message || 'Error desconocido al procesar archivo',
+        code: 'UNKNOWN_ERROR'
+      }]);
+      setShowErrorModal(true);
       setIsProcessing(false);
+      setSelectedFile(null);
     }
   };
 

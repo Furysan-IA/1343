@@ -16,6 +16,7 @@ const translations = {
     clientManagement: 'Gestión de Clientes',
     informationValidation: 'Validación de Información',
     clientDataValidation: 'Carga de Certificados',
+    dataUpload: 'Carga de Datos',
     djcManagement: 'Gestión de DJC',
     logout: 'Cerrar Sesión',
     
@@ -102,6 +103,7 @@ const translations = {
     clientManagement: 'Client Management',
     informationValidation: 'Information Validation',
     clientDataValidation: 'Certificate Upload',
+    dataUpload: 'Data Upload',
     djcManagement: 'DJC Management',
     logout: 'Logout',
     
