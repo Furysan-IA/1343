@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, UserPlus, Package, ChevronRight, Database } from 'lucide-react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, UserPlus, Package, ChevronRight, Database, History } from 'lucide-react';
 import { ParsedCertificates, categorizeExtractions } from '../../services/certificateProcessing.service';
 import { analyzeCertificateForUpdate, processAllCertificates, updateBatchStats, DualMatchResult } from '../../services/dualTableUpdate.service';
+import { BackupHistory } from '../../components/BackupHistory';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -23,6 +24,8 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   const [isProcessing, setIsProcessing] = useState(false);
   const [showNewClients, setShowNewClients] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showBackupHistory, setShowBackupHistory] = useState(false);
+  const [createBackup, setCreateBackup] = useState(true);
 
   const itemsPerPage = 10;
 
@@ -57,7 +60,12 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
         a.action !== 'needs_completion' && a.action !== 'skip'
       );
 
-      const stats = await processAllCertificates(autoProcessable);
+      const stats = await processAllCertificates(
+        autoProcessable,
+        batchId,
+        parsedData.metadata.filename,
+        createBackup
+      );
       await updateBatchStats(batchId, stats);
 
       toast.success(
@@ -102,12 +110,23 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">
-            Revisión de Certificados
-          </h1>
-          <p className="text-slate-600 mb-6">
-            Análisis completo de {parsedData.extractions.length} certificados
-          </p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 mb-2">
+                Revisión de Certificados
+              </h1>
+              <p className="text-slate-600">
+                Análisis completo de {parsedData.extractions.length} certificados
+              </p>
+            </div>
+            <button
+              onClick={() => setShowBackupHistory(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <History className="w-4 h-4" />
+              Ver Backups
+            </button>
+          </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             <div className="bg-green-50 border border-green-200 rounded-lg p-6">
@@ -306,7 +325,24 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
             </ul>
           </div>
 
-          <div className="flex justify-end gap-4 pt-6 border-t">
+          <div className="flex items-center justify-between pt-6 border-t">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createBackup}
+                onChange={(e) => setCreateBackup(e.target.checked)}
+                className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-slate-700 font-medium">
+                  Crear backup antes de procesar
+                </span>
+                <p className="text-sm text-slate-500">
+                  Podrás restaurar los datos si algo sale mal
+                </p>
+              </div>
+            </label>
+
             <button
               onClick={handleProcessAll}
               disabled={isProcessing}
@@ -318,6 +354,11 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
           </div>
         </div>
       </div>
+
+      <BackupHistory
+        isOpen={showBackupHistory}
+        onClose={() => setShowBackupHistory(false)}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ExtractionResult } from './certificateProcessing.service';
+import { createBackupSnapshot } from './backup.service';
 
 export interface ClientMatch {
   exists: boolean;
@@ -271,8 +272,19 @@ export const updateProduct = async (codificacion: string, productData: any): Pro
 };
 
 export const processAllCertificates = async (
-  analyses: DualMatchResult[]
+  analyses: DualMatchResult[],
+  batchId: string,
+  filename: string,
+  createBackup: boolean = true
 ): Promise<ProcessingStats> => {
+  if (createBackup) {
+    try {
+      await createBackupSnapshot(batchId, analyses, filename);
+    } catch (error) {
+      console.error('Error creating backup:', error);
+    }
+  }
+
   const stats: ProcessingStats = {
     totalProcessed: 0,
     clientsInserted: 0,
