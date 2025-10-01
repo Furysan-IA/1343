@@ -114,8 +114,11 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
         if (result.clientsUpdated > 0) messages.push(`${result.clientsUpdated} clientes actualizados`);
         if (result.productsInserted > 0) messages.push(`${result.productsInserted} productos nuevos`);
 
-        toast.success(`Procesado: ${messages.join(', ')}`);
-        onComplete();
+        toast.success(`✅ Procesado: ${messages.join(', ')}`, { duration: 4000 });
+
+        setTimeout(() => {
+          onComplete();
+        }, 1500);
       } else {
         toast.error(`Procesamiento completado con ${result.errors.length} errores`);
         console.error('Processing errors:', result.errors);
@@ -149,7 +152,20 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   const productsWithChanges = productMatches.filter(m => m.hasChanges);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8 relative">
+      {processing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
+            <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Procesando Datos</h2>
+            <p className="text-slate-600">Por favor espera mientras se actualizan los registros...</p>
+            <div className="mt-4 w-full bg-slate-200 rounded-full h-2">
+              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
           <h1 className="text-3xl font-bold text-slate-800 mb-4">
