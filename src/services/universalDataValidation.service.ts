@@ -634,14 +634,26 @@ export const detectDuplicates = async (
 
   const productsByCodificacion = new Map();
   (allProducts || []).forEach(product => {
-    const codStr = String(product.codificacion || '').trim().toUpperCase();
+    // Normalize: trim, uppercase, remove multiple spaces
+    const codStr = String(product.codificacion || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' ');
     if (codStr) {
       productsByCodificacion.set(codStr, product);
     }
   });
 
   console.log(`📊 Created lookup maps: ${clientsByCUIT.size} clients, ${productsByCodificacion.size} products`);
+
+  // Log sample codificaciones from DB for debugging
+  const sampleCodsFromDB = Array.from(productsByCodificacion.keys()).slice(0, 5);
+  console.log('🔍 Sample codificaciones from DB:', sampleCodsFromDB);
+
   console.log('🔄 Processing records from file...');
+
+  let sampleCodsFromFileLogged = false;
+  const sampleCodsFromFile: string[] = [];
 
   for (const record of records) {
     // Process clients
@@ -691,8 +703,21 @@ export const detectDuplicates = async (
 
     // Process products
     const codificacion = record.codificacion;
-    const codificacionStr = String(codificacion || '').trim().toUpperCase();
+    // Normalize: trim, uppercase, remove multiple spaces
+    const codificacionStr = String(codificacion || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' ');
     const isValidCodificacion = codificacionStr && codificacionStr !== 'NA' && codificacionStr !== 'N/A' && codificacionStr.length > 0;
+
+    // Collect samples for debugging
+    if (sampleCodsFromFile.length < 5 && codificacionStr) {
+      sampleCodsFromFile.push(codificacionStr);
+    }
+    if (!sampleCodsFromFileLogged && sampleCodsFromFile.length === 5) {
+      console.log('🔍 Sample codificaciones from file:', sampleCodsFromFile);
+      sampleCodsFromFileLogged = true;
+    }
 
     if (isValidCodificacion && !seenCodificaciones.has(codificacionStr)) {
       seenCodificaciones.add(codificacionStr);
