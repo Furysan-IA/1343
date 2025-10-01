@@ -8,6 +8,22 @@ interface UniversalUploadScreenProps {
   onUploadComplete: (batchId: string, parsedData: ParsedData) => void;
 }
 
+interface DuplicateCheckStats {
+  totalInFile: number;
+  withBaja: number;
+  activeRecords: number;
+  withCodificacion: number;
+  duplicatesFound: number;
+  newRecordsCount: number;
+}
+
+interface DuplicateCheckResult {
+  duplicates: Array<{ codificacion: string; existing: any; incoming: any }>;
+  newRecords: any[];
+  filtered: any[];
+  stats: DuplicateCheckStats;
+}
+
 export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ onUploadComplete }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -16,6 +32,8 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
   const [progress, setProgress] = useState(0);
   const [validationErrors, setValidationErrors] = useState<any[]>([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateCheckResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -55,6 +73,53 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
     setSelectedFile(file);
     setValidationErrors([]);
+  };
+
+  const handleContinueAfterDuplicateCheck = async () => {
+    if (!selectedFile || !duplicateCheckResult) return;
+
+    setShowDuplicateModal(false);
+    setIsProcessing(true);
+
+    try {
+      // Continuar con el paso 4: Crear batch
+      setProcessingStep('Preparando análisis...');
+      setProgress(80);
+      console.log('Creating batch...');
+
+      // Re-parsear el archivo (ya lo teníamos en memoria pero lo perdimos)
+      const parsedData = await parseFile(selectedFile);
+
+      const batchId = await createBatch({
+        filename: selectedFile.name,
+        fileSize: selectedFile.size,
+        totalRecords: duplicateCheckResult.stats.activeRecords
+      });
+
+      console.log('Batch created:', batchId);
+
+      // Paso 5: Completado
+      setProcessingStep('Análisis completado!');
+      setProgress(100);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      toast.success('Archivo validado exitosamente!');
+      onUploadComplete(batchId, parsedData);
+    } catch (error: any) {
+      console.error('❌ Error continuing after duplicate check:', error);
+      toast.error(error.message || 'Error al continuar con el proceso');
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCancelDuplicateCheck = () => {
+    console.log('❌ User cancelled upload due to duplicates');
+    setShowDuplicateModal(false);
+    setDuplicateCheckResult(null);
+    setIsProcessing(false);
+    setSelectedFile(null);
+    setProgress(0);
   };
 
   const handleUpload = async () => {
@@ -103,53 +168,12 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       console.log('Duplicate check result:', duplicateCheck.stats);
 
-      // Mostrar resumen en consola y pantalla
-      console.log('\n📊 RESUMEN PARA EL USUARIO:');
-      console.log(`Total de filas leídas: ${duplicateCheck.stats.totalInFile}`);
-      console.log(`Registros con estado "baja" (ignorados): ${duplicateCheck.stats.withBaja}`);
-      console.log(`Registros activos a procesar: ${duplicateCheck.stats.activeRecords}`);
-      console.log(`Certificados en archivo: ${duplicateCheck.stats.withCodificacion}`);
-      console.log(`Ya existen en BD: ${duplicateCheck.stats.duplicatesFound}`);
-      console.log(`Nuevos certificados: ${duplicateCheck.stats.newRecordsCount}`);
+      // Guardar resultado y mostrar modal
+      setDuplicateCheckResult(duplicateCheck);
+      setShowDuplicateModal(true);
 
-      // Si hay duplicados, mostrar advertencia detallada
-      if (duplicateCheck.duplicates.length > 0) {
-        const message =
-          `⚠️ DETECCIÓN DE CERTIFICADOS DUPLICADOS\n\n` +
-          `📊 RESUMEN:\n` +
-          `• Total filas en archivo: ${duplicateCheck.stats.totalInFile}\n` +
-          `• Registros con "baja" (ignorados): ${duplicateCheck.stats.withBaja}\n` +
-          `• Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
-          `• Certificados en archivo: ${duplicateCheck.stats.withCodificacion}\n\n` +
-          `🔍 ANÁLISIS:\n` +
-          `• YA EXISTEN en base de datos: ${duplicateCheck.stats.duplicatesFound}\n` +
-          `• NUEVOS registros: ${duplicateCheck.stats.newRecordsCount}\n\n` +
-          `📋 Ejemplos de duplicados:\n${duplicateCheck.duplicates.slice(0, 5).map(d => `  • ${d.codificacion}`).join('\n')}${duplicateCheck.duplicates.length > 5 ? '\n  ...' : ''}\n\n` +
-          `⚠️ IMPORTANTE: Los certificados duplicados aparecerán en la pantalla de revisión para que decidas qué hacer con ellos.\n\n` +
-          `¿Deseas continuar?`;
-
-        const shouldContinue = window.confirm(message);
-
-        if (!shouldContinue) {
-          console.log('❌ User cancelled upload due to duplicates');
-          setIsProcessing(false);
-          setSelectedFile(null);
-          setProgress(0);
-          return;
-        }
-      } else {
-        // No hay duplicados, mostrar mensaje informativo
-        alert(
-          `✅ ANÁLISIS COMPLETADO\n\n` +
-          `📊 RESUMEN:\n` +
-          `• Total filas en archivo: ${duplicateCheck.stats.totalInFile}\n` +
-          `• Registros con "baja" (ignorados): ${duplicateCheck.stats.withBaja}\n` +
-          `• Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
-          `• Certificados detectados: ${duplicateCheck.stats.withCodificacion}\n\n` +
-          `🎉 Todos los certificados son NUEVOS (ninguno existe en la base de datos)\n\n` +
-          `Procediendo a crear el batch...`
-        );
-      }
+      // Esperar respuesta del usuario
+      return;
 
       // Paso 4: Crear batch
       setProcessingStep('Preparando análisis...');
@@ -379,6 +403,154 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Análisis de Certificados */}
+      {showDuplicateModal && duplicateCheckResult && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className={`p-6 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  {duplicateCheckResult.stats.duplicatesFound > 0 ? (
+                    <AlertCircle className="w-8 h-8 text-white" />
+                  ) : (
+                    <CheckCircle className="w-8 h-8 text-white" />
+                  )}
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      {duplicateCheckResult.stats.duplicatesFound > 0
+                        ? 'Certificados Duplicados Detectados'
+                        : 'Análisis Completado'}
+                    </h2>
+                    <p className="text-white/90 text-sm mt-1">
+                      Revisión de certificados en base de datos
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+              {/* Resumen General */}
+              <div className="bg-slate-50 rounded-xl p-5 mb-6">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-slate-600" />
+                  Resumen del Archivo
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-lg border border-slate-200">
+                    <p className="text-sm text-slate-600">Total de filas</p>
+                    <p className="text-2xl font-bold text-slate-900">{duplicateCheckResult.stats.totalInFile.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-slate-200">
+                    <p className="text-sm text-slate-600">Registros con "baja"</p>
+                    <p className="text-2xl font-bold text-red-600">{duplicateCheckResult.stats.withBaja.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 mt-1">Ignorados automáticamente</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-slate-200">
+                    <p className="text-sm text-slate-600">Registros activos</p>
+                    <p className="text-2xl font-bold text-blue-600">{duplicateCheckResult.stats.activeRecords.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-slate-200">
+                    <p className="text-sm text-slate-600">Con codificación</p>
+                    <p className="text-2xl font-bold text-purple-600">{duplicateCheckResult.stats.withCodificacion.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Análisis de Duplicados */}
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-5 mb-6">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-slate-600" />
+                  Análisis de Certificados
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={`p-4 rounded-lg border-2 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-200'}`}>
+                    <p className="text-sm text-slate-600">Ya existen en BD</p>
+                    <p className={`text-3xl font-bold ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'text-orange-600' : 'text-slate-400'}`}>
+                      {duplicateCheckResult.stats.duplicatesFound.toLocaleString()}
+                    </p>
+                    {duplicateCheckResult.stats.duplicatesFound > 0 && (
+                      <p className="text-xs text-orange-700 mt-1 font-medium">Duplicados detectados</p>
+                    )}
+                  </div>
+                  <div className="bg-green-50 border-2 border-green-300 p-4 rounded-lg">
+                    <p className="text-sm text-slate-600">Nuevos certificados</p>
+                    <p className="text-3xl font-bold text-green-600">{duplicateCheckResult.stats.newRecordsCount.toLocaleString()}</p>
+                    <p className="text-xs text-green-700 mt-1 font-medium">Listos para cargar</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de Duplicados */}
+              {duplicateCheckResult.duplicates.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-5">
+                  <h3 className="text-lg font-semibold text-orange-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    Ejemplos de Certificados Duplicados
+                  </h3>
+                  <p className="text-sm text-orange-800 mb-4">
+                    Los siguientes certificados ya existen en la base de datos. Podrás revisarlos en la siguiente pantalla.
+                  </p>
+                  <div className="bg-white rounded-lg border border-orange-200 overflow-hidden">
+                    <div className="max-h-48 overflow-y-auto">
+                      {duplicateCheckResult.duplicates.slice(0, 10).map((dup, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 border-b border-orange-100 last:border-0 hover:bg-orange-50 transition-colors"
+                        >
+                          <p className="font-mono text-sm font-semibold text-orange-900">
+                            {dup.codificacion}
+                          </p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            {dup.incoming.titular || 'Sin titular'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {duplicateCheckResult.duplicates.length > 10 && (
+                      <div className="p-3 bg-orange-100 text-center text-sm text-orange-800 font-medium">
+                        ... y {duplicateCheckResult.duplicates.length - 10} certificados más
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensaje Informativo */}
+              <div className={`mt-6 p-4 rounded-lg border-l-4 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-orange-50 border-orange-500' : 'bg-green-50 border-green-500'}`}>
+                <p className={`text-sm ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'text-orange-800' : 'text-green-800'}`}>
+                  {duplicateCheckResult.stats.duplicatesFound > 0
+                    ? '⚠️ Los certificados duplicados aparecerán en la pantalla de revisión donde podrás decidir qué hacer con cada uno.'
+                    : '✅ Todos los certificados son nuevos y están listos para ser cargados en el sistema.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 p-6 flex gap-3 justify-end border-t border-slate-200">
+              <button
+                onClick={handleCancelDuplicateCheck}
+                className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleContinueAfterDuplicateCheck}
+                className={`px-6 py-2.5 text-white rounded-lg transition-colors font-medium ${
+                  duplicateCheckResult.stats.duplicatesFound > 0
+                    ? 'bg-orange-600 hover:bg-orange-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                Continuar
               </button>
             </div>
           </div>
