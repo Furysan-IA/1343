@@ -53,17 +53,90 @@ El sistema valida:
 - `cuit`
 - `producto`
 
-### Paso 4: Revisión de Datos
+### Paso 4: Pantalla de Revisión (IMPORTANTE) ⭐
 
-- El sistema muestra un resumen de los datos detectados
-- Muestra duplicados si los encuentra
-- Permite decidir qué hacer con cada registro
+Después de validar, el sistema **automáticamente te lleva a una pantalla de revisión** donde puedes ver y controlar exactamente qué se procesará:
+
+#### 📊 Estadísticas que verás:
+
+1. **✅ Coincidencias Exactas** (Verde)
+   - Registros que YA EXISTEN en la base de datos
+   - Se actualizarán automáticamente
+   - No requieren acción
+
+2. **🆕 Nuevos Registros** (Azul)
+   - Datos que NO EXISTEN en la base
+   - Listos para ser agregados
+   - Requieren tu aprobación
+
+3. **📈 Total de Registros**
+   - Cantidad total procesada
+
+#### ⚙️ Opciones para agregar datos:
+
+**Opción 1: Seleccionar Individualmente**
+- Marca el checkbox ☑️ de cada registro que quieras
+- Click en "Agregar Seleccionados (X)"
+- Procesa solo los que marcaste
+
+**Opción 2: Seleccionar Página Completa**
+- Click en "Seleccionar Página"
+- Marca todos los de la página actual (10 registros)
+- Click en "Agregar Seleccionados"
+
+**Opción 3: Agregar Todos de Una Vez**
+- Click en "Agregar Todos"
+- Procesa TODOS los registros nuevos
+- Más rápido para lotes grandes
+
+#### 📋 Tabla de Revisión:
+
+**Para Clientes muestra:**
+- CUIT
+- Razón Social
+- Email
+- Dirección
+
+**Para Productos muestra:**
+- Codificación
+- Producto
+- Marca
+- Modelo
+
+**Características:**
+- ✅ Paginación automática (10 registros por página)
+- ✅ Checkbox para selección individual
+- ✅ Navegación entre páginas (← →)
+- ✅ Contador de registros seleccionados
 
 ### Paso 5: Procesamiento
 
-- Los datos se insertan en la base de datos
-- Se crea un registro de auditoría
-- Se genera un batch ID para rastreo
+Cuando haces click en un botón de agregar:
+
+1. **El sistema procesa:**
+   - ✅ Inserta los registros nuevos seleccionados
+   - ✅ Actualiza duplicados automáticamente
+   - ✅ Crea registros de auditoría
+   - ✅ Genera batch ID para rastreo
+
+2. **Verás en pantalla:**
+   - Mensaje: "X registros agregados exitosamente"
+   - Los registros procesados DESAPARECEN de la tabla
+   - Quedan solo los pendientes
+
+3. **Puedes seguir agregando:**
+   - El sistema NO se cierra
+   - Puedes revisar más registros
+   - Procesar en lotes pequeños si prefieres
+
+### Paso 6: Finalizar
+
+Cuando termines de revisar todos:
+
+1. Click en **"Completar Procesamiento"**
+2. El sistema actualiza el estado del batch
+3. Muestra pantalla de éxito
+4. Opción de "Procesar Más Datos" para reiniciar
 
 ## 📊 Columnas Especiales
 
