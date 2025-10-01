@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { UniversalUploadScreen } from './UniversalUploadScreen';
-import { UniversalReviewScreen } from './UniversalReviewScreen';
-import { ParsedData, EntityType } from '../../services/universalDataValidation.service';
+import { UnifiedUploadScreen } from './UnifiedUploadScreen';
+import { UnifiedReviewScreen } from './UnifiedReviewScreen';
+import { UnifiedRecord } from '../../services/unifiedDataLoad.service';
 import { CircleCheck as CheckCircle } from 'lucide-react';
 
 type Step = 'upload' | 'review' | 'complete';
@@ -9,14 +9,12 @@ type Step = 'upload' | 'review' | 'complete';
 export const UniversalValidationPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [batchId, setBatchId] = useState<string>('');
-  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
-  const [entityType, setEntityType] = useState<EntityType>('client');
+  const [records, setRecords] = useState<UnifiedRecord[]>([]);
 
-  const handleUploadComplete = (id: string, data: ParsedData, type: EntityType) => {
-    console.log('Upload complete:', { id, recordCount: data.rows.length, type });
+  const handleDataParsed = (parsedRecords: UnifiedRecord[], id: string) => {
+    console.log('Data parsed:', { id, recordCount: parsedRecords.length });
+    setRecords(parsedRecords);
     setBatchId(id);
-    setParsedData(data);
-    setEntityType(type);
     setCurrentStep('review');
   };
 
@@ -28,21 +26,20 @@ export const UniversalValidationPage: React.FC = () => {
   const handleRestart = () => {
     console.log('Restarting validation flow');
     setBatchId('');
-    setParsedData(null);
+    setRecords([]);
     setCurrentStep('upload');
   };
 
   return (
     <>
       {currentStep === 'upload' && (
-        <UniversalUploadScreen onUploadComplete={handleUploadComplete} />
+        <UnifiedUploadScreen onDataParsed={handleDataParsed} />
       )}
 
-      {currentStep === 'review' && parsedData && (
-        <UniversalReviewScreen
-          parsedData={parsedData}
+      {currentStep === 'review' && records.length > 0 && (
+        <UnifiedReviewScreen
+          records={records}
           batchId={batchId}
-          entityType={entityType}
           onComplete={handleReviewComplete}
         />
       )}
@@ -54,13 +51,13 @@ export const UniversalValidationPage: React.FC = () => {
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
             <h1 className="text-3xl font-bold text-slate-800 mb-3">
-              {entityType === 'client' ? 'Clientes Procesados' : 'Productos Procesados'}
+              Datos Procesados Exitosamente
             </h1>
             <p className="text-slate-600 mb-2">
-              Los datos han sido procesados exitosamente
+              Clientes y productos han sido actualizados
             </p>
             <p className="text-sm text-slate-500 mb-8">
-              La información se ha actualizado en la base de datos
+              La información se ha sincronizado en la base de datos
             </p>
             <button
               onClick={handleRestart}
