@@ -7,6 +7,28 @@ export interface UniversalRecord {
   [key: string]: any;
 }
 
+export interface FieldChange {
+  field: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface ClientMatch {
+  cuit: string;
+  existing: any;
+  incoming: any;
+  changes: FieldChange[];
+  hasChanges: boolean;
+}
+
+export interface ProductMatch {
+  codificacion: string;
+  existing: any;
+  incoming: any;
+  changes: FieldChange[];
+  hasChanges: boolean;
+}
+
 export interface ValidationError {
   row: number;
   field: string;
@@ -166,65 +188,98 @@ const parseDate = (value: any): Date | null => {
   return isNaN(parsed.getTime()) ? null : parsed;
 };
 
-export const validateParsedData = (data: ParsedData, entityType: EntityType) => {
+export const validateParsedData = (data: ParsedData) => {
   const errors: ValidationError[] = [];
-  const requiredFields = entityType === 'client' ? CLIENT_REQUIRED_FIELDS : PRODUCT_REQUIRED_FIELDS;
+  const warnings: string[] = [];
 
-  const missingFields = requiredFields.filter(field => !data.headers.includes(field));
-  if (missingFields.length > 0) {
+  const hasClientFields = CLIENT_REQUIRED_FIELDS.every(field => data.headers.includes(field));
+  const hasProductFields = PRODUCT_REQUIRED_FIELDS.every(field => data.headers.includes(field));
+
+  if (!hasClientFields && !hasProductFields) {
+    const allRequired = [...new Set([...CLIENT_REQUIRED_FIELDS, ...PRODUCT_REQUIRED_FIELDS])];
+    const missing = allRequired.filter(field => !data.headers.includes(field));
     errors.push({
       row: 0,
       field: 'headers',
-      value: missingFields,
-      message: `Missing required columns: ${missingFields.join(', ')}`,
+      value: missing,
+      message: `Missing required columns. Need either client fields (${CLIENT_REQUIRED_FIELDS.join(', ')}) or product fields (${PRODUCT_REQUIRED_FIELDS.join(', ')}) or both`,
       code: 'FP-003'
     });
-    return { isValid: false, errors, warnings: [] };
+    return { isValid: false, errors, warnings, hasClientFields, hasProductFields };
   }
 
-  const seenKeys = new Set<string>();
+  const seenCUITs = new Set<string>();
+  const seenCodificaciones = new Set<string>();
 
   data.rows.forEach((row, index) => {
     const rowNumber = index + 2;
 
-    requiredFields.forEach(field => {
-      if (!row[field]) {
+    if (hasClientFields) {
+      CLIENT_REQUIRED_FIELDS.forEach(field => {
+        if (!row[field]) {
+          errors.push({
+            row: rowNumber,
+            field,
+            value: row[field],
+            message: `${field} is required`,
+            code: 'VL-004'
+          });
+        }
+      });
+
+      const cuit = String(row.cuit || '');
+      if (cuit && seenCUITs.has(cuit)) {
         errors.push({
           row: rowNumber,
-          field,
-          value: row[field],
-          message: `${field} is required`,
-          code: 'VL-004'
+          field: 'cuit',
+          value: cuit,
+          message: `Duplicate CUIT in file`,
+          code: 'VL-003'
         });
+      } else if (cuit) {
+        seenCUITs.add(cuit);
       }
-    });
+    }
 
-    const keyField = entityType === 'client' ? 'cuit' : 'codificacion';
-    const keyValue = String(row[keyField]);
-
-    if (keyValue && seenKeys.has(keyValue)) {
-      errors.push({
-        row: rowNumber,
-        field: keyField,
-        value: keyValue,
-        message: `Duplicate ${keyField} in file`,
-        code: 'VL-003'
+    if (hasProductFields) {
+      PRODUCT_REQUIRED_FIELDS.forEach(field => {
+        if (!row[field]) {
+          errors.push({
+            row: rowNumber,
+            field,
+            value: row[field],
+            message: `${field} is required`,
+            code: 'VL-004'
+          });
+        }
       });
-    } else if (keyValue) {
-      seenKeys.add(keyValue);
+
+      const codificacion = String(row.codificacion || '');
+      if (codificacion && seenCodificaciones.has(codificacion)) {
+        errors.push({
+          row: rowNumber,
+          field: 'codificacion',
+          value: codificacion,
+          message: `Duplicate codificacion in file`,
+          code: 'VL-003'
+        });
+      } else if (codificacion) {
+        seenCodificaciones.add(codificacion);
+      }
     }
   });
 
   return {
     isValid: errors.length === 0,
     errors,
-    warnings: []
+    warnings,
+    hasClientFields,
+    hasProductFields
   };
 };
 
 export const createBatch = async (
-  metadata: { filename: string; fileSize: number; totalRecords: number },
-  entityType: EntityType
+  metadata: { filename: string; fileSize: number; totalRecords: number }
 ): Promise<string> => {
   const { data: user } = await supabase.auth.getUser();
 
@@ -240,7 +295,7 @@ export const createBatch = async (
       total_records: metadata.totalRecords,
       uploaded_by: user.user.id,
       status: 'processing',
-      entity_type: entityType
+      entity_type: 'mixed'
     })
     .select()
     .single();
@@ -253,20 +308,56 @@ export const createBatch = async (
   return data.id;
 };
 
-export const detectDuplicates = async (
-  records: UniversalRecord[],
-  entityType: EntityType
-): Promise<{
-  exactMatches: Map<string, any>;
-  newRecords: UniversalRecord[];
-}> => {
-  const exactMatches = new Map<string, any>();
-  const newRecords: UniversalRecord[] = [];
+const detectFieldChanges = (existing: any, incoming: any, fieldsToCheck: string[]): FieldChange[] => {
+  const changes: FieldChange[] = [];
 
-  if (entityType === 'client') {
-    for (const record of records) {
-      const cuit = record.cuit;
-      if (!cuit) continue;
+  for (const field of fieldsToCheck) {
+    const oldVal = existing[field];
+    const newVal = incoming[field];
+
+    if (newVal !== undefined && newVal !== null && newVal !== '') {
+      const oldStr = String(oldVal || '').trim();
+      const newStr = String(newVal || '').trim();
+
+      if (oldStr !== newStr) {
+        changes.push({
+          field,
+          oldValue: oldVal,
+          newValue: newVal
+        });
+      }
+    }
+  }
+
+  return changes;
+};
+
+export const detectDuplicates = async (
+  records: UniversalRecord[]
+): Promise<{
+  clientMatches: ClientMatch[];
+  productMatches: ProductMatch[];
+  newClients: UniversalRecord[];
+  newProducts: UniversalRecord[];
+}> => {
+  const clientMatches: ClientMatch[] = [];
+  const productMatches: ProductMatch[] = [];
+  const newClients: UniversalRecord[] = [];
+  const newProducts: UniversalRecord[] = [];
+
+  const seenCUITs = new Set<string>();
+  const seenCodificaciones = new Set<string>();
+
+  const clientFieldsToCheck = ['razon_social', 'direccion', 'email'];
+  const productFieldsToCheck = [
+    'estado', 'vencimiento', 'fecha_emision', 'marca', 'modelo',
+    'producto', 'titular', 'en_proceso_renovacion', 'normas_aplicacion'
+  ];
+
+  for (const record of records) {
+    const cuit = record.cuit;
+    if (cuit && !seenCUITs.has(String(cuit))) {
+      seenCUITs.add(String(cuit));
 
       const { data } = await supabase
         .from('clients')
@@ -275,15 +366,35 @@ export const detectDuplicates = async (
         .maybeSingle();
 
       if (data) {
-        exactMatches.set(String(cuit), data);
+        const incomingClient = {
+          cuit: record.cuit,
+          razon_social: record.razon_social,
+          direccion: record.direccion,
+          email: record.email
+        };
+
+        const changes = detectFieldChanges(data, incomingClient, clientFieldsToCheck);
+
+        clientMatches.push({
+          cuit: String(cuit),
+          existing: data,
+          incoming: incomingClient,
+          changes,
+          hasChanges: changes.length > 0
+        });
       } else {
-        newRecords.push(record);
+        newClients.push({
+          cuit: record.cuit,
+          razon_social: record.razon_social,
+          direccion: record.direccion,
+          email: record.email
+        });
       }
     }
-  } else {
-    for (const record of records) {
-      const codificacion = record.codificacion;
-      if (!codificacion) continue;
+
+    const codificacion = record.codificacion;
+    if (codificacion && !seenCodificaciones.has(String(codificacion))) {
+      seenCodificaciones.add(String(codificacion));
 
       const { data } = await supabase
         .from('products')
@@ -292,59 +403,165 @@ export const detectDuplicates = async (
         .maybeSingle();
 
       if (data) {
-        exactMatches.set(String(codificacion), data);
+        const changes = detectFieldChanges(data, record, productFieldsToCheck);
+
+        productMatches.push({
+          codificacion: String(codificacion),
+          existing: data,
+          incoming: record,
+          changes,
+          hasChanges: changes.length > 0
+        });
       } else {
-        newRecords.push(record);
+        newProducts.push(record);
       }
     }
   }
 
-  return { exactMatches, newRecords };
+  return { clientMatches, productMatches, newClients, newProducts };
 };
 
-export const insertRecords = async (
-  records: UniversalRecord[],
+export const insertClientsAndProducts = async (
+  clientRecords: UniversalRecord[],
+  productRecords: UniversalRecord[],
   batchId: string,
-  entityType: EntityType
-): Promise<{ success: boolean; insertedCount: number; errors: any[] }> => {
+  updateExistingClients: boolean = true
+): Promise<{
+  success: boolean;
+  clientsInserted: number;
+  clientsUpdated: number;
+  productsInserted: number;
+  errors: any[]
+}> => {
   const errors: any[] = [];
-  let insertedCount = 0;
+  let clientsInserted = 0;
+  let clientsUpdated = 0;
+  let productsInserted = 0;
 
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) throw new Error('User not authenticated');
 
-  const chunkSize = 100;
-  const tableName = entityType === 'client' ? 'clients' : 'products';
-  const auditTable = entityType === 'client' ? 'client_audit_log' : 'product_audit_log';
+  console.log('Starting batch insert:', {
+    clients: clientRecords.length,
+    products: productRecords.length,
+    updateExistingClients,
+    batchId
+  });
 
-  for (let i = 0; i < records.length; i += chunkSize) {
-    const chunk = records.slice(i, i + chunkSize);
+  if (clientRecords.length > 0) {
+    console.log('Inserting clients...');
+    const chunkSize = 100;
 
-    const { data, error } = await supabase
-      .from(tableName)
-      .insert(chunk)
-      .select();
+    for (let i = 0; i < clientRecords.length; i += chunkSize) {
+      const chunk = clientRecords.slice(i, i + chunkSize);
 
-    if (error) {
-      errors.push({ chunk: i / chunkSize, error: error.message });
-    } else if (data) {
-      insertedCount += data.length;
+      for (const clientRecord of chunk) {
+        const { data: existing } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('cuit', clientRecord.cuit)
+          .maybeSingle();
 
-      for (const record of data) {
-        const keyField = entityType === 'client' ? 'cuit' : 'uuid';
-        await supabase.from(auditTable).insert({
-          [entityType === 'client' ? 'client_cuit' : 'product_uuid']: record[keyField],
-          batch_id: batchId,
-          operation_type: 'INSERT',
-          new_values: record,
-          performed_by: user.user.id,
-          notes: `${entityType} inserted from batch upload`
-        });
+        if (existing && updateExistingClients) {
+          const { error } = await supabase
+            .from('clients')
+            .update({
+              razon_social: clientRecord.razon_social,
+              direccion: clientRecord.direccion,
+              email: clientRecord.email,
+              updated_at: new Date().toISOString()
+            })
+            .eq('cuit', clientRecord.cuit);
+
+          if (error) {
+            errors.push({ type: 'client_update', cuit: clientRecord.cuit, error: error.message });
+          } else {
+            clientsUpdated++;
+            await supabase.from('client_audit_log').insert({
+              client_cuit: clientRecord.cuit,
+              batch_id: batchId,
+              operation_type: 'UPDATE',
+              old_values: existing,
+              new_values: clientRecord,
+              performed_by: user.user.id,
+              notes: 'Client updated from batch upload'
+            });
+          }
+        } else if (!existing) {
+          const { data, error } = await supabase
+            .from('clients')
+            .insert(clientRecord)
+            .select()
+            .single();
+
+          if (error) {
+            errors.push({ type: 'client_insert', cuit: clientRecord.cuit, error: error.message });
+          } else if (data) {
+            clientsInserted++;
+            await supabase.from('client_audit_log').insert({
+              client_cuit: data.cuit,
+              batch_id: batchId,
+              operation_type: 'INSERT',
+              new_values: data,
+              performed_by: user.user.id,
+              notes: 'Client inserted from batch upload'
+            });
+          }
+        }
       }
     }
+    console.log('Clients processed:', { inserted: clientsInserted, updated: clientsUpdated });
   }
 
-  return { success: errors.length === 0, insertedCount, errors };
+  if (productRecords.length > 0) {
+    console.log('Inserting products...');
+    const chunkSize = 50;
+
+    for (let i = 0; i < productRecords.length; i += chunkSize) {
+      const chunk = productRecords.slice(i, i + chunkSize);
+
+      for (const productRecord of chunk) {
+        const { data: existing } = await supabase
+          .from('products')
+          .select('*')
+          .eq('codificacion', productRecord.codificacion)
+          .maybeSingle();
+
+        if (!existing) {
+          const { data, error } = await supabase
+            .from('products')
+            .insert(productRecord)
+            .select()
+            .single();
+
+          if (error) {
+            errors.push({ type: 'product_insert', codificacion: productRecord.codificacion, error: error.message });
+          } else if (data) {
+            productsInserted++;
+            await supabase.from('product_audit_log').insert({
+              product_uuid: data.uuid,
+              batch_id: batchId,
+              operation_type: 'INSERT',
+              new_values: data,
+              performed_by: user.user.id,
+              notes: 'Product inserted from batch upload'
+            });
+          }
+        } else {
+          console.log(`Product ${productRecord.codificacion} already exists - SKIPPING to preserve QR/links`);
+        }
+      }
+    }
+    console.log('Products inserted:', productsInserted);
+  }
+
+  return {
+    success: errors.length === 0,
+    clientsInserted,
+    clientsUpdated,
+    productsInserted,
+    errors
+  };
 };
 
 export const updateBatchStatus = async (batchId: string, updates: any): Promise<void> => {
