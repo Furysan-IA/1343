@@ -15,9 +15,9 @@ const translations = {
     productManagement: 'Gestión de Productos',
     clientManagement: 'Gestión de Clientes',
     informationValidation: 'Validación de Información',
+    clientDataValidation: 'Validación de Datos de Clientes',
     djcManagement: 'Gestión de DJC',
     logout: 'Cerrar Sesión',
-    generateDJC: 'Gestión de DJC',
     
     // Auth
     signIn: 'Iniciar Sesión',
@@ -101,9 +101,9 @@ const translations = {
     productManagement: 'Product Management',
     clientManagement: 'Client Management',
     informationValidation: 'Information Validation',
+    clientDataValidation: 'Client Data Validation',
     djcManagement: 'DJC Management',
     logout: 'Logout',
-    generateDJC: 'DJC Management',
     
     // Auth
     signIn: 'Sign In',

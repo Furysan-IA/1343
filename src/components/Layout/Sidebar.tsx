@@ -1,13 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { 
-  BarChart3, 
-  Package, 
-  Users, 
-  CheckCircle, 
+import {
+  BarChart3,
+  Package,
+  Users,
+  CheckCircle,
   FileText,
   Home,
-  FileCheck
+  FileCheck,
+  Upload
 } from 'lucide-react';
 
 const navigation = [
@@ -15,6 +16,7 @@ const navigation = [
   { name: 'productManagement', href: '/products', icon: Package },
   { name: 'clientManagement', href: '/clients', icon: Users },
   { name: 'informationValidation', href: '/validation', icon: CheckCircle },
+  { name: 'clientDataValidation', href: '/client-validation', icon: Upload },
   { name: 'djcManagement', href: '/djc', icon: FileText },
   { name: 'generateDJC', href: '/djc-generator', icon: FileCheck },
 ];
