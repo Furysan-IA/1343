@@ -36,16 +36,29 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   const analyzeAllCertificates = async () => {
     setIsAnalyzing(true);
     try {
+      if (!parsedData || !parsedData.extractions || parsedData.extractions.length === 0) {
+        throw new Error('No hay certificados para analizar');
+      }
+
       const results: DualMatchResult[] = [];
 
       for (const extraction of parsedData.extractions) {
-        const analysis = await analyzeCertificateForUpdate(extraction);
-        results.push(analysis);
+        try {
+          const analysis = await analyzeCertificateForUpdate(extraction);
+          results.push(analysis);
+        } catch (err: any) {
+          console.error('Error analyzing extraction:', err);
+        }
+      }
+
+      if (results.length === 0) {
+        throw new Error('No se pudo analizar ningún certificado');
       }
 
       setAnalyses(results);
-      toast.success('Análisis completado');
+      toast.success(`Análisis completado: ${results.length} certificados`);
     } catch (error: any) {
+      console.error('Error in analyzeAllCertificates:', error);
       toast.error(error.message || 'Error al analizar certificados');
     } finally {
       setIsAnalyzing(false);

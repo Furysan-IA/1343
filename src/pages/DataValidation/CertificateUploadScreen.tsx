@@ -66,32 +66,50 @@ export const CertificateUploadScreen: React.FC<CertificateUploadScreenProps> = (
 
     try {
       const data = await parseCertificateFile(selectedFile);
-      setParsedData(data);
 
+      if (!data || !data.records || data.records.length === 0) {
+        throw new Error('No se encontraron certificados válidos en el archivo');
+      }
+
+      setParsedData(data);
       toast.success(`Archivo parseado: ${data.records.length} certificados encontrados`);
       setShowDateFilter(true);
-      setIsProcessing(false);
     } catch (error: any) {
+      console.error('Error in handleUpload:', error);
       toast.error(error.message || 'Error al procesar archivo');
+      setSelectedFile(null);
+      setParsedData(null);
+      setShowDateFilter(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } finally {
       setIsProcessing(false);
     }
   };
 
   const handleConfirmDate = async () => {
-    if (!parsedData) return;
+    if (!parsedData) {
+      toast.error('No hay datos para procesar');
+      return;
+    }
 
     setIsProcessing(true);
 
     try {
       const filtered = filterByEmissionDate(parsedData.extractions, referenceDate);
 
-      if (filtered.length === 0) {
+      if (!filtered || filtered.length === 0) {
         toast.error('No hay certificados después de la fecha seleccionada');
         setIsProcessing(false);
         return;
       }
 
       const batchId = await createBatchRecord(selectedFile!.name, filtered.length);
+
+      if (!batchId) {
+        throw new Error('No se pudo crear el registro del lote');
+      }
 
       const updatedData: ParsedCertificates = {
         ...parsedData,
@@ -105,7 +123,9 @@ export const CertificateUploadScreen: React.FC<CertificateUploadScreenProps> = (
       toast.success(`${filtered.length} certificados seleccionados`);
       onUploadComplete(batchId, updatedData, referenceDate);
     } catch (error: any) {
+      console.error('Error in handleConfirmDate:', error);
       toast.error(error.message || 'Error al crear lote');
+    } finally {
       setIsProcessing(false);
     }
   };

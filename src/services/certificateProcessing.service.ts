@@ -129,22 +129,46 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
+    reader.onerror = () => {
+      reject(new Error('Error al leer el archivo. Por favor intenta de nuevo.'));
+    };
+
     reader.onload = (e) => {
       try {
-        const data = e.target?.result;
+        if (!e.target?.result) {
+          reject(new Error('No se pudo leer el contenido del archivo'));
+          return;
+        }
+
+        const data = e.target.result;
         const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+          reject(new Error('El archivo no contiene hojas de cálculo'));
+          return;
+        }
 
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
 
+        if (!worksheet) {
+          reject(new Error('No se pudo leer la primera hoja del archivo'));
+          return;
+        }
+
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
-        if (jsonData.length === 0) {
+        if (!jsonData || jsonData.length === 0) {
           reject(new Error('El archivo está vacío'));
           return;
         }
 
-        const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h)));
+        if (jsonData.length === 1) {
+          reject(new Error('El archivo solo contiene encabezados, no hay datos'));
+          return;
+        }
+
+        const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h || '')));
 
         if (!headers.includes('fecha_emision')) {
           reject(new Error('El archivo debe contener la columna "fecha_emision"'));
@@ -184,6 +208,11 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
           return;
         }
 
+        if (records.length === 0) {
+          reject(new Error('No se encontraron registros válidos con fecha_emision en el archivo'));
+          return;
+        }
+
         resolve({
           headers,
           records,
@@ -196,13 +225,10 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
             uploadedAt: new Date()
           }
         });
-      } catch (error) {
-        reject(error);
+      } catch (error: any) {
+        console.error('Error parsing certificate file:', error);
+        reject(new Error(error.message || 'Error al procesar el archivo. Verifica el formato.'));
       }
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Error al leer el archivo'));
     };
 
     reader.readAsBinaryString(file);
