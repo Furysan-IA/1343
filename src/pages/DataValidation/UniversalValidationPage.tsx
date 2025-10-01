@@ -3,7 +3,6 @@ import { UniversalUploadScreen } from './UniversalUploadScreen';
 import { UniversalReviewScreen } from './UniversalReviewScreen';
 import { ParsedData, DuplicateCheckResult, createBatch } from '../../services/universalDataValidation.service';
 import { CircleCheck as CheckCircle, CircleAlert as AlertCircle, FileText, CircleCheck as Check, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 
 type Step = 'upload' | 'review' | 'complete';
@@ -180,10 +179,10 @@ export const UniversalValidationPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Confirmación - Renderizado en el nivel superior para evitar desmontaje */}
+      {/* Modal de Confirmación - SIN createPortal para evitar problemas en StackBlitz */}
       {(() => {
         console.log('🔍 Modal render check:', { showConfirmModal, hasPendingData: !!pendingUploadData });
-        return showConfirmModal && pendingUploadData && createPortal(
+        return showConfirmModal && pendingUploadData && (
         <div
           className="fixed inset-0 flex items-center justify-center p-4"
           style={{
@@ -297,8 +296,7 @@ export const UniversalValidationPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       );
       })()}
     </>
