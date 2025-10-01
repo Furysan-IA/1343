@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, X, Award, Calendar } from 'lucide-react';
+import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, X, Award, Calendar } from 'lucide-react';
 import { validateFile, parseCertificateFile, filterByEmissionDate, categorizeExtractions, ParsedCertificates } from '../../services/certificateProcessing.service';
 import { createBatchRecord } from '../../services/dualTableUpdate.service';
 import { subDays } from 'date-fns';

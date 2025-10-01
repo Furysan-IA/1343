@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, UserPlus, Package, ChevronRight, Database } from 'lucide-react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, UserPlus, Package, ChevronRight, Database } from 'lucide-react';
 import { ParsedCertificates, categorizeExtractions } from '../../services/certificateProcessing.service';
 import { analyzeCertificateForUpdate, processAllCertificates, updateBatchStats, DualMatchResult } from '../../services/dualTableUpdate.service';
 import { format } from 'date-fns';
