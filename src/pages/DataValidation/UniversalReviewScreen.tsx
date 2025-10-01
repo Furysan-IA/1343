@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   ParsedData,
   detectDuplicates,
@@ -30,10 +30,6 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   const [productMatches, setProductMatches] = useState<ProductMatch[]>([]);
   const [newClients, setNewClients] = useState<UniversalRecord[]>([]);
   const [newProducts, setNewProducts] = useState<UniversalRecord[]>([]);
-
-  const [insertNewClients, setInsertNewClients] = useState(true);
-  const [updateExistingClients, setUpdateExistingClients] = useState(true);
-  const [insertNewProducts, setInsertNewProducts] = useState(true);
 
   const [expandedClientChanges, setExpandedClientChanges] = useState(false);
   const [expandedProductChanges, setExpandedProductChanges] = useState(false);
@@ -68,34 +64,20 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   };
 
   const handleProcess = async () => {
-    if (!insertNewClients && !updateExistingClients && !insertNewProducts) {
-      toast.error('Debes seleccionar al menos una acción para procesar');
-      return;
-    }
-
     setProcessing(true);
 
     try {
-      const clientsToProcess = insertNewClients ? newClients : [];
-      const productsToProcess = insertNewProducts ? newProducts : [];
-
       console.log('Processing data...', {
-        newClients: clientsToProcess.length,
-        newProducts: productsToProcess.length,
-        updateExisting: updateExistingClients
+        newClients: newClients.length,
+        newProducts: newProducts.length,
+        clientsWithChanges: clientMatches.filter(m => m.hasChanges).length
       });
 
-      if (clientsToProcess.length === 0 && productsToProcess.length === 0 && !updateExistingClients) {
-        toast.error('No hay datos para procesar con las opciones seleccionadas');
-        setProcessing(false);
-        return;
-      }
-
       const result = await insertClientsAndProducts(
-        clientsToProcess,
-        productsToProcess,
+        newClients,
+        newProducts,
         batchId,
-        updateExistingClients
+        true
       );
 
       console.log('Processing result:', result);
@@ -148,7 +130,6 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   }
 
   const clientsWithChanges = clientMatches.filter(m => m.hasChanges);
-  const clientsWithoutChanges = clientMatches.filter(m => !m.hasChanges);
   const productsWithChanges = productMatches.filter(m => m.hasChanges);
 
   return (
@@ -169,11 +150,17 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
           <h1 className="text-3xl font-bold text-slate-800 mb-4">
-            Revisar Datos Antes de Procesar
+            Verificación de Datos
           </h1>
           <p className="text-slate-600 mb-6">
-            {parsedData.metadata.filename} - {parsedData.rows.length} registros totales
+            {parsedData.metadata.filename} - {parsedData.rows.length} registros analizados
           </p>
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+            <p className="text-blue-900 font-medium">
+              Analizamos tu archivo y detectamos qué hay de nuevo o qué cambió.
+              Revisa el resumen y confirma para procesar automáticamente.
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -214,73 +201,74 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
           </div>
 
           <div className="bg-slate-50 rounded-lg p-6 border-2 border-slate-200 mb-6">
-            <h3 className="font-semibold text-slate-800 mb-4 text-lg">
-              Selecciona qué deseas procesar:
+            <h3 className="font-semibold text-slate-800 mb-4 text-lg flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-blue-600" />
+              Qué se procesará automáticamente
             </h3>
             <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
-                <input
-                  type="checkbox"
-                  checked={insertNewClients}
-                  onChange={(e) => setInsertNewClients(e.target.checked)}
-                  disabled={newClients.length === 0}
-                  className="w-5 h-5 text-blue-600 rounded"
-                />
-                <div className="flex-1">
-                  <span className="font-medium text-slate-800">
-                    Insertar {newClients.length} clientes nuevos
-                  </span>
-                </div>
-              </label>
-
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
-                <input
-                  type="checkbox"
-                  checked={updateExistingClients}
-                  onChange={(e) => setUpdateExistingClients(e.target.checked)}
-                  disabled={clientMatches.length === 0}
-                  className="w-5 h-5 text-yellow-600 rounded"
-                />
-                <div className="flex-1">
-                  <span className="font-medium text-slate-800">
-                    Actualizar {clientMatches.length} clientes existentes
-                  </span>
-                  {clientsWithChanges.length > 0 && (
-                    <span className="text-sm text-yellow-600 ml-2">
-                      ({clientsWithChanges.length} con cambios)
-                    </span>
-                  )}
-                </div>
-              </label>
-
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
-                <input
-                  type="checkbox"
-                  checked={insertNewProducts}
-                  onChange={(e) => setInsertNewProducts(e.target.checked)}
-                  disabled={newProducts.length === 0}
-                  className="w-5 h-5 text-green-600 rounded"
-                />
-                <div className="flex-1">
-                  <span className="font-medium text-slate-800">
-                    Insertar {newProducts.length} productos nuevos
-                  </span>
-                </div>
-              </label>
-
-              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
-                  <div>
-                    <span className="font-medium text-slate-800">
-                      Productos existentes ({productMatches.length}) se omiten
-                    </span>
-                    <p className="text-sm text-orange-700 mt-1">
-                      Para preservar QR y enlaces
-                    </p>
+              {newClients.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <div className="flex items-start gap-2">
+                    <Users className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {newClients.length} Cliente{newClients.length !== 1 ? 's' : ''} Nuevo{newClients.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se crearán con los datos del archivo. Los campos faltantes quedarán vacíos para completar después en Gestión de Clientes.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+              {clientMatches.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-yellow-200">
+                  <div className="flex items-start gap-2">
+                    <RefreshCw className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {clientMatches.length} Cliente{clientMatches.length !== 1 ? 's' : ''} Existente{clientMatches.length !== 1 ? 's' : ''}
+                        {clientsWithChanges.length > 0 && (
+                          <span className="text-yellow-600"> ({clientsWithChanges.length} con cambios detectados)</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se actualizarán con los nuevos datos del archivo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {newProducts.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <div className="flex items-start gap-2">
+                    <Package className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {newProducts.length} Producto{newProducts.length !== 1 ? 's' : ''} Nuevo{newProducts.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se crearán y se les asignará un código QR automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {productMatches.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-orange-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {productMatches.length} Producto{productMatches.length !== 1 ? 's' : ''} Existente{productMatches.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        NO se modificarán para preservar sus códigos QR y enlaces generados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -396,7 +384,7 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
             </button>
             <button
               onClick={handleProcess}
-              disabled={processing || (!insertNewClients && !updateExistingClients && !insertNewProducts)}
+              disabled={processing}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center gap-2"
             >
               {processing ? (
@@ -407,7 +395,7 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
               ) : (
                 <>
                   <CheckCircle className="w-5 h-5" />
-                  Confirmar y Procesar
+                  Confirmar y Procesar Todo
                 </>
               )}
             </button>
