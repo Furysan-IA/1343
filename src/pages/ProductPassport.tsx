@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabasePublic } from '../lib/supabase-public';
+import { supabasePublic } from '../lib/supabase';
 import { 
   Package, Shield, Factory, Calendar, MapPin, User, 
   FileText, Award, Globe, Phone, Mail, Building2,
