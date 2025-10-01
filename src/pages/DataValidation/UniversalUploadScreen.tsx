@@ -186,27 +186,29 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
             )}
           </div>
 
-          <div className={`mt-8 rounded-lg p-6 border-2 ${
-            entityType === 'client' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'
-          }`}>
-            <h4 className={`font-semibold mb-3 ${
-              entityType === 'client' ? 'text-blue-900' : 'text-green-900'
-            }`}>
-              Columnas Requeridas para {entityType === 'client' ? 'Clientes' : 'Productos'}:
+          <div className="mt-8 bg-slate-50 rounded-lg p-6 border-2 border-slate-200">
+            <h4 className="font-semibold text-slate-800 mb-3">
+              📋 Columnas que puede contener tu archivo
             </h4>
-            <div className="grid grid-cols-2 gap-3">
-              {getRequiredColumns().map((col) => (
-                <div key={col} className="flex items-center gap-2">
-                  <CheckCircle className={`w-4 h-4 ${
-                    entityType === 'client' ? 'text-blue-600' : 'text-green-600'
-                  }`} />
-                  <span className={`text-sm ${
-                    entityType === 'client' ? 'text-blue-800' : 'text-green-800'
-                  }`}>
-                    {col}
-                  </span>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium text-blue-700 mb-2">Para Clientes:</p>
+                <ul className="space-y-1 text-slate-600">
+                  <li>• CUIT (requerido)</li>
+                  <li>• Razón Social</li>
+                  <li>• Dirección</li>
+                  <li>• Email</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-green-700 mb-2">Para Productos:</p>
+                <ul className="space-y-1 text-slate-600">
+                  <li>• Codificación (requerido)</li>
+                  <li>• CUIT</li>
+                  <li>• Producto</li>
+                  <li>• Marca / Modelo</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
