@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   ParsedData,
   detectDuplicates,
