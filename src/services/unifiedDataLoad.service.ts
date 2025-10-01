@@ -196,6 +196,13 @@ export const processUnifiedData = async (
           result.clientsProcessed.updated++;
         }
       } else {
+        // Validar campos requeridos antes de insertar
+        if (!clientData.razon_social || !clientData.direccion || !clientData.email) {
+          console.warn(`Skipping client ${cuit} - missing required fields`);
+          result.clientsProcessed.skipped++;
+          continue;
+        }
+
         const { error } = await supabase
           .from('clients')
           .insert(clientData);
@@ -255,6 +262,13 @@ export const processUnifiedData = async (
           result.productsProcessed.updated++;
         }
       } else {
+        // Validar campos requeridos antes de insertar
+        if (!productData.codificacion || !productData.cuit) {
+          console.warn(`Skipping product - missing required fields`);
+          result.productsProcessed.skipped++;
+          continue;
+        }
+
         const { error } = await supabase
           .from('products')
           .insert(productData);
