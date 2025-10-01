@@ -837,17 +837,27 @@ export const insertClientsAndProducts = async (
             errors.push({ type: 'client_update', cuit: clientRecord.cuit, error: error.message });
           } else {
             clientsUpdated++;
-            await supabase.from('client_audit_log').insert({
-              client_cuit: clientRecord.cuit,
-              batch_id: batchId,
-              operation_type: 'UPDATE',
-              old_values: existing,
-              new_values: clientRecord,
-              performed_by: user.user.id,
-              notes: 'Client updated from batch upload'
-            });
+            try {
+              await supabase.from('client_audit_log').insert({
+                client_cuit: clientRecord.cuit,
+                batch_id: batchId,
+                operation_type: 'UPDATE',
+                previous_values: existing,
+                new_values: clientRecord,
+                performed_by: user.user.id,
+                notes: 'Client updated from batch upload'
+              });
+            } catch (auditError) {
+              console.warn('Failed to log audit for client update:', auditError);
+            }
           }
         } else if (!existing) {
+          // Validar campos requeridos antes de insertar
+          if (!clientRecord.razon_social || !clientRecord.direccion || !clientRecord.email) {
+            console.warn(`Skipping client ${clientRecord.cuit} - missing required fields`);
+            continue;
+          }
+
           const { data, error } = await supabase
             .from('clients')
             .insert(clientRecord)
@@ -858,14 +868,18 @@ export const insertClientsAndProducts = async (
             errors.push({ type: 'client_insert', cuit: clientRecord.cuit, error: error.message });
           } else if (data) {
             clientsInserted++;
-            await supabase.from('client_audit_log').insert({
-              client_cuit: data.cuit,
-              batch_id: batchId,
-              operation_type: 'INSERT',
-              new_values: data,
-              performed_by: user.user.id,
-              notes: 'Client inserted from batch upload'
-            });
+            try {
+              await supabase.from('client_audit_log').insert({
+                client_cuit: data.cuit,
+                batch_id: batchId,
+                operation_type: 'INSERT',
+                new_values: data,
+                performed_by: user.user.id,
+                notes: 'Client inserted from batch upload'
+              });
+            } catch (auditError) {
+              console.warn('Failed to log audit for client insert:', auditError);
+            }
           }
         }
       }
@@ -888,6 +902,12 @@ export const insertClientsAndProducts = async (
           .maybeSingle();
 
         if (!existing) {
+          // Validar campos requeridos antes de insertar
+          if (!productRecord.codificacion || !productRecord.cuit) {
+            console.warn(`Skipping product - missing required fields`);
+            continue;
+          }
+
           const { data, error } = await supabase
             .from('products')
             .insert(productRecord)
@@ -898,14 +918,18 @@ export const insertClientsAndProducts = async (
             errors.push({ type: 'product_insert', codificacion: productRecord.codificacion, error: error.message });
           } else if (data) {
             productsInserted++;
-            await supabase.from('product_audit_log').insert({
-              product_uuid: data.uuid,
-              batch_id: batchId,
-              operation_type: 'INSERT',
-              new_values: data,
-              performed_by: user.user.id,
-              notes: 'Product inserted from batch upload'
-            });
+            try {
+              await supabase.from('product_audit_log').insert({
+                product_uuid: data.uuid,
+                batch_id: batchId,
+                operation_type: 'INSERT',
+                new_values: data,
+                performed_by: user.user.id,
+                notes: 'Product inserted from batch upload'
+              });
+            } catch (auditError) {
+              console.warn('Failed to log audit for product insert:', auditError);
+            }
           }
         } else {
           console.log(`Product ${productRecord.codificacion} already exists - SKIPPING to preserve QR/links`);
