@@ -196,22 +196,26 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       // Guardar datos parseados y resultado del check
       console.log('💾 Saving parsed data and duplicate check results to state...');
+      console.log('📊 Duplicate check stats:', duplicateCheck.stats);
+      console.log('📋 Has duplicateCheckResult:', !!duplicateCheck);
+
       setParsedDataCache(parsedData);
       setDuplicateCheckResult(duplicateCheck);
 
-      // Delay para asegurar que el estado se actualice
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Ahora sí, cerrar el spinner y mostrar el modal
+      // Cerrar spinner primero
       console.log('🎯 Closing spinner...');
       setIsProcessing(false);
       setProgress(0);
       setProcessingStep('');
 
-      // Delay adicional antes de mostrar el modal
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Usar requestAnimationFrame para asegurar que el DOM se actualice
+      await new Promise(resolve => requestAnimationFrame(() => {
+        setTimeout(resolve, 100);
+      }));
 
+      // Mostrar modal
       console.log('🎯 Showing duplicate modal NOW');
+      console.log('📊 duplicateCheckResult before showing modal:', duplicateCheckResult);
       setShowDuplicateModal(true);
       console.log('🎯 showDuplicateModal state set to TRUE');
 
@@ -453,9 +457,10 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       )}
 
       {/* Modal de Análisis de Certificados */}
+      {console.log('🔍 Render check - showDuplicateModal:', showDuplicateModal, 'duplicateCheckResult:', !!duplicateCheckResult)}
       {showDuplicateModal && duplicateCheckResult && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          {console.log('🎨 RENDERING DUPLICATE MODAL', { showDuplicateModal, hasResult: !!duplicateCheckResult })}
+          {console.log('🎨 RENDERING DUPLICATE MODAL', { showDuplicateModal, hasResult: !!duplicateCheckResult, stats: duplicateCheckResult?.stats })}
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className={`p-6 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
