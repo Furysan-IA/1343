@@ -103,9 +103,14 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     setValidationErrors([]);
   };
 
-  const handleContinueAfterDuplicateCheck = async () => {
-    if (!selectedFile || !duplicateCheckResult || !parsedDataCache) {
-      console.error('Missing required data:', { selectedFile, duplicateCheckResult, parsedDataCache });
+  const handleContinueAfterDuplicateCheck = async (file?: File, parsedData?: ParsedData, duplicateCheck?: any) => {
+    // Usar parámetros o state
+    const fileToUse = file || selectedFile;
+    const parsedDataToUse = parsedData || parsedDataCache;
+    const duplicateCheckToUse = duplicateCheck || duplicateCheckResult;
+
+    if (!fileToUse || !duplicateCheckToUse || !parsedDataToUse) {
+      console.error('Missing required data:', { file: fileToUse, duplicateCheck: duplicateCheckToUse, parsedData: parsedDataToUse });
       toast.error('Error: Datos faltantes. Por favor vuelve a cargar el archivo.');
       setShowDuplicateModal(false);
       setIsProcessing(false);
@@ -122,9 +127,9 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       console.log('Creating batch...');
 
       const batchId = await createBatch({
-        filename: selectedFile.name,
-        fileSize: selectedFile.size,
-        totalRecords: duplicateCheckResult.stats.activeRecords
+        filename: fileToUse.name,
+        fileSize: fileToUse.size,
+        totalRecords: duplicateCheckToUse.stats.activeRecords
       });
 
       console.log('Batch created:', batchId);
@@ -136,7 +141,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       await new Promise(resolve => setTimeout(resolve, 500));
 
       toast.success('Archivo validado exitosamente!');
-      onUploadComplete(batchId, parsedDataCache);
+      onUploadComplete(batchId, parsedDataToUse);
     } catch (error: any) {
       console.error('❌ Error continuing after duplicate check:', error);
       toast.error(error.message || 'Error al continuar con el proceso');
@@ -258,8 +263,8 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       }
 
       console.log('✅ User confirmed via confirm dialog, continuing...');
-      // Continuar con el flujo
-      await handleContinueAfterDuplicateCheck();
+      // Continuar con el flujo pasando los datos directamente
+      await handleContinueAfterDuplicateCheck(selectedFile, parsedData, duplicateCheck);
       return;
 
       // TODO: Restaurar modal React cuando se solucione el problema de visualización
