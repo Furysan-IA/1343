@@ -122,6 +122,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
     try {
       // Continuar con el paso 4: Crear batch
+      console.log('🎯 Starting batch creation process...');
       setProcessingStep('Preparando análisis...');
       setProgress(80);
       console.log('Creating batch...');
@@ -132,18 +133,25 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         totalRecords: duplicateCheckToUse.stats.activeRecords
       });
 
-      console.log('Batch created:', batchId);
+      console.log('✅✅✅ Batch created successfully:', batchId);
 
       // Paso 5: Completado
+      console.log('📊 Setting completion status...');
       setProcessingStep('Análisis completado!');
       setProgress(100);
 
+      console.log('⏳ Waiting 500ms before completing...');
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      console.log('🎉 Showing success toast...');
       toast.success('Archivo validado exitosamente!');
+
+      console.log('🚀 Calling onUploadComplete with:', { batchId, recordCount: parsedDataToUse.rows.length });
       onUploadComplete(batchId, parsedDataToUse);
+      console.log('✅ onUploadComplete called successfully');
     } catch (error: any) {
       console.error('❌ Error continuing after duplicate check:', error);
+      console.error('❌ Error stack:', error?.stack);
       toast.error(error.message || 'Error al continuar con el proceso');
       setIsProcessing(false);
     }
