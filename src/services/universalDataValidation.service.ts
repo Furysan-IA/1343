@@ -101,28 +101,42 @@ export const validateFile = (file: File) => {
 };
 
 export const parseFile = async (file: File): Promise<ParsedData> => {
+  console.log('📁 parseFile started for:', file.name);
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onload = (e) => {
       try {
+        console.log('📖 FileReader onload triggered');
         const data = e.target?.result;
+
+        if (!data) {
+          throw new Error('No data read from file');
+        }
+
+        console.log('📊 Reading workbook...');
         const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
 
         const firstSheetName = workbook.SheetNames[0];
+        console.log('📄 Sheet name:', firstSheetName);
         const worksheet = workbook.Sheets[firstSheetName];
 
+        console.log('🔄 Converting to JSON...');
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
         if (jsonData.length === 0) {
-          reject(new Error('File is empty'));
+          reject(new Error('El archivo está vacío'));
           return;
         }
 
+        console.log('✅ JSON data extracted, rows:', jsonData.length);
         const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h)));
+        console.log('📋 Headers:', headers);
 
         const rows: UniversalRecord[] = [];
 
+        console.log('🔄 Processing rows...');
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
           if (!row || row.every(cell => !cell)) continue;
@@ -146,11 +160,14 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
           rows.push(record);
         }
 
+        console.log('✅ Processed rows:', rows.length);
+
         if (rows.length > MAX_ROWS) {
-          reject(new Error(`File contains ${rows.length} rows. Maximum allowed is ${MAX_ROWS}`));
+          reject(new Error(`El archivo contiene ${rows.length} filas. El máximo permitido es ${MAX_ROWS}`));
           return;
         }
 
+        console.log('🎉 parseFile completed successfully');
         resolve({
           headers,
           rows,
@@ -162,15 +179,19 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
             uploadedAt: new Date()
           }
         });
-      } catch (error) {
-        reject(error);
+      } catch (error: any) {
+        console.error('❌ Error in parseFile:', error);
+        console.error('Error stack:', error?.stack);
+        reject(new Error(`Error al procesar archivo: ${error?.message || 'Desconocido'}`));
       }
     };
 
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
+    reader.onerror = (error) => {
+      console.error('❌ FileReader error:', error);
+      reject(new Error('Error al leer el archivo'));
     };
 
+    console.log('🚀 Starting to read file as binary string...');
     reader.readAsBinaryString(file);
   });
 };
