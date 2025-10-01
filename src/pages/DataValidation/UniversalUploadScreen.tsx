@@ -34,6 +34,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateCheckResult | null>(null);
+  const [parsedDataCache, setParsedDataCache] = useState<ParsedData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -76,7 +77,13 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
   };
 
   const handleContinueAfterDuplicateCheck = async () => {
-    if (!selectedFile || !duplicateCheckResult) return;
+    if (!selectedFile || !duplicateCheckResult || !parsedDataCache) {
+      console.error('Missing required data:', { selectedFile, duplicateCheckResult, parsedDataCache });
+      toast.error('Error: Datos faltantes. Por favor vuelve a cargar el archivo.');
+      setShowDuplicateModal(false);
+      setIsProcessing(false);
+      return;
+    }
 
     setShowDuplicateModal(false);
     setIsProcessing(true);
@@ -86,9 +93,6 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       setProcessingStep('Preparando análisis...');
       setProgress(80);
       console.log('Creating batch...');
-
-      // Re-parsear el archivo (ya lo teníamos en memoria pero lo perdimos)
-      const parsedData = await parseFile(selectedFile);
 
       const batchId = await createBatch({
         filename: selectedFile.name,
@@ -105,7 +109,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       await new Promise(resolve => setTimeout(resolve, 500));
 
       toast.success('Archivo validado exitosamente!');
-      onUploadComplete(batchId, parsedData);
+      onUploadComplete(batchId, parsedDataCache);
     } catch (error: any) {
       console.error('❌ Error continuing after duplicate check:', error);
       toast.error(error.message || 'Error al continuar con el proceso');
@@ -114,12 +118,15 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
   };
 
   const handleCancelDuplicateCheck = () => {
-    console.log('❌ User cancelled upload due to duplicates');
+    console.log('❌ User cancelled upload');
     setShowDuplicateModal(false);
     setDuplicateCheckResult(null);
+    setParsedDataCache(null);
     setIsProcessing(false);
     setSelectedFile(null);
     setProgress(0);
+    setProcessingStep('');
+    toast.info('Carga cancelada');
   };
 
   const handleUpload = async () => {
@@ -168,11 +175,19 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       console.log('Duplicate check result:', duplicateCheck.stats);
 
-      // Guardar resultado y mostrar modal
+      // Guardar datos parseados y resultado del check
+      setParsedDataCache(parsedData);
       setDuplicateCheckResult(duplicateCheck);
+
+      // Resetear estado de procesamiento ANTES de mostrar el modal
+      setIsProcessing(false);
+      setProgress(0);
+      setProcessingStep('');
+
+      // Mostrar modal para que el usuario decida
       setShowDuplicateModal(true);
 
-      // Esperar respuesta del usuario
+      // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
       return;
 
       // Paso 4: Crear batch
