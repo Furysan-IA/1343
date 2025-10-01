@@ -17,5 +17,8 @@ export default defineConfig({
   },
   server: {
     strictPort: false,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
   },
 });
