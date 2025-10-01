@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle, Database } from 'lucide-react';
+import { Upload, FileText, CircleAlert as AlertCircle, Database } from 'lucide-react';
 import { parseUnifiedFile, UnifiedRecord } from '../../services/unifiedDataLoad.service';
 import { createBatch } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Users, Package, RefreshCw } from 'lucide-react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Users, Package, RefreshCw } from 'lucide-react';
 import { UnifiedRecord, processUnifiedData } from '../../services/unifiedDataLoad.service';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
