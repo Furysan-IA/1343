@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
@@ -129,22 +129,31 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     toast.info('Carga cancelada');
   };
 
+  const progressCallback = useCallback((progressPercent: number, message: string) => {
+    console.log(`📊 Progress update: ${progressPercent}% - ${message}`);
+    setProgress(Math.round(progressPercent));
+    setProcessingStep(message);
+  }, []);
+
   const handleUpload = async () => {
     if (!selectedFile) return;
 
     setIsProcessing(true);
     setProgress(0);
+    setShowDuplicateModal(false);
+    setDuplicateCheckResult(null);
+    setParsedDataCache(null);
 
     try {
-      console.log('Starting file processing...', { fileName: selectedFile.name });
+      console.log('🚀 Starting file processing...', { fileName: selectedFile.name });
 
       // Paso 1: Leer archivo
       setProcessingStep('Leyendo archivo...');
       setProgress(20);
 
-      console.log('About to parse file...');
+      console.log('📖 About to parse file...');
       const parsedData = await parseFile(selectedFile);
-      console.log('File parsed successfully:', {
+      console.log('✅ File parsed successfully:', {
         rowCount: parsedData.rows.length,
         headers: parsedData.headers,
         sampleRow: parsedData.rows[0]
@@ -156,7 +165,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       const dataValidation = validateParsedData(parsedData);
 
       if (!dataValidation.isValid) {
-        console.error('Validation failed:', dataValidation.errors);
+        console.error('❌ Validation failed:', dataValidation.errors);
         setValidationErrors([...dataValidation.errors, ...dataValidation.warnings]);
         setShowErrorModal(true);
         setIsProcessing(false);
@@ -168,34 +177,43 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       // Paso 3: Verificar certificados duplicados
       setProcessingStep('Verificando certificados existentes...');
       setProgress(60);
-      console.log('Checking for existing certificates...');
+      console.log('✅ Step 3: Checking for existing certificates...');
 
       const duplicateCheck = await checkExistingCertificates(
         parsedData.rows,
-        (progressPercent: number, message: string) => {
-          setProgress(progressPercent);
-          setProcessingStep(message);
-        }
+        progressCallback
       );
 
-      console.log('Duplicate check result:', duplicateCheck.stats);
+      console.log('✅ Duplicate check completed!');
+      console.log('📊 Duplicate check result:', duplicateCheck.stats);
+      console.log('📋 Duplicates found:', duplicateCheck.duplicates.length);
+      console.log('📋 New records:', duplicateCheck.newRecords.length);
+
+      // Cambiar el mensaje del spinner mientras preparamos el modal
+      console.log('📝 Preparing summary modal...');
+      setProcessingStep('Preparando resumen...');
+      setProgress(75);
 
       // Guardar datos parseados y resultado del check
+      console.log('💾 Saving parsed data and duplicate check results to state...');
       setParsedDataCache(parsedData);
       setDuplicateCheckResult(duplicateCheck);
 
-      // Cambiar el mensaje del spinner mientras preparamos el modal
-      setProcessingStep('Preparando resumen...');
-      setProgress(70);
-
-      // Pequeño delay para asegurar que el estado se actualice
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Delay para asegurar que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Ahora sí, cerrar el spinner y mostrar el modal
+      console.log('🎯 Closing spinner...');
       setIsProcessing(false);
       setProgress(0);
       setProcessingStep('');
+
+      // Delay adicional antes de mostrar el modal
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      console.log('🎯 Showing duplicate modal NOW');
       setShowDuplicateModal(true);
+      console.log('🎯 showDuplicateModal state set to TRUE');
 
       // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
       return;
@@ -437,6 +455,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       {/* Modal de Análisis de Certificados */}
       {showDuplicateModal && duplicateCheckResult && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          {console.log('🎨 RENDERING DUPLICATE MODAL', { showDuplicateModal, hasResult: !!duplicateCheckResult })}
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className={`p-6 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
