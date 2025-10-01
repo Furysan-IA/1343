@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { X, Home, Users, Package, FileText, FileCheck, Database } from 'lucide-react';
+import { X, Chrome as Home, Users, Package, FileText, FileCheck, Database } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface MobileSidebarProps {
