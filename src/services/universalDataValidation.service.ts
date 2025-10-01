@@ -473,36 +473,61 @@ export const checkExistingCertificates = async (
 export const createBatch = async (
   metadata: { filename: string; fileSize: number; totalRecords: number }
 ): Promise<string> => {
-  console.log('📦 createBatch started:', metadata);
+  try {
+    console.log('📦 createBatch started:', metadata);
 
-  const { data: user } = await supabase.auth.getUser();
+    console.log('🔐 Getting authenticated user...');
+    const { data: user, error: authError } = await supabase.auth.getUser();
 
-  if (!user.user) {
-    throw new Error('Usuario no autenticado');
+    console.log('🔐 Auth response:', { hasUser: !!user?.user, authError });
+
+    if (authError) {
+      console.error('❌ Auth error:', authError);
+      throw new Error(`Error de autenticación: ${authError.message}`);
+    }
+
+    if (!user?.user) {
+      console.error('❌ No user found in auth response');
+      throw new Error('Usuario no autenticado');
+    }
+
+    console.log('👤 User authenticated:', user.user.id);
+
+    console.log('💾 Inserting batch into database...');
+    const { data, error } = await supabase
+      .from('upload_batches')
+      .insert({
+        filename: metadata.filename,
+        file_size: metadata.fileSize,
+        total_records: metadata.totalRecords,
+        uploaded_by: user.user.id,
+        status: 'processing',
+        entity_type: 'mixed'
+      })
+      .select()
+      .single();
+
+    console.log('💾 Database response:', { hasData: !!data, error });
+
+    if (error) {
+      console.error('❌ Database error creating batch:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      throw new Error(`Error al crear batch: ${error.message}`);
+    }
+
+    if (!data) {
+      console.error('❌ No data returned from batch insert');
+      throw new Error('No se recibió respuesta al crear el batch');
+    }
+
+    console.log('✅✅✅ Batch created successfully with ID:', data.id);
+    return data.id;
+  } catch (error: any) {
+    console.error('❌❌❌ FATAL ERROR in createBatch:', error);
+    console.error('❌ Error message:', error?.message);
+    console.error('❌ Error stack:', error?.stack);
+    throw error;
   }
-
-  console.log('👤 User authenticated:', user.user.id);
-
-  const { data, error } = await supabase
-    .from('upload_batches')
-    .insert({
-      filename: metadata.filename,
-      file_size: metadata.fileSize,
-      total_records: metadata.totalRecords,
-      uploaded_by: user.user.id,
-      status: 'processing',
-      entity_type: 'mixed'
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('❌ Error creating batch:', error);
-    throw new Error(`Error al crear batch: ${error.message}`);
-  }
-
-  console.log('✅ Batch created successfully:', data.id);
-  return data.id;
 };
 
 const detectFieldChanges = (existing: any, incoming: any, fieldsToCheck: string[]): FieldChange[] => {
