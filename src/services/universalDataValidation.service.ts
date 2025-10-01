@@ -582,6 +582,8 @@ export const detectDuplicates = async (
   incompleteClients: UniversalRecord[];
   incompleteProducts: UniversalRecord[];
 }> => {
+  console.log('🔍 Starting detectDuplicates - Loading all existing data from DB...');
+
   const clientMatches: ClientMatch[] = [];
   const productMatches: ProductMatch[] = [];
   const newClients: UniversalRecord[] = [];
@@ -598,7 +600,51 @@ export const detectDuplicates = async (
     'producto', 'titular', 'en_proceso_renovacion', 'normas_aplicacion'
   ];
 
+  // OPTIMIZATION: Load ALL clients and products from database ONCE
+  console.log('📥 Loading all clients from database...');
+  const { data: allClients, error: clientsError } = await supabase
+    .from('clients')
+    .select('*');
+
+  if (clientsError) {
+    console.error('❌ Error loading clients:', clientsError);
+    throw new Error(`Error cargando clientes: ${clientsError.message}`);
+  }
+
+  console.log('📥 Loading all products from database...');
+  const { data: allProducts, error: productsError } = await supabase
+    .from('products')
+    .select('*');
+
+  if (productsError) {
+    console.error('❌ Error loading products:', productsError);
+    throw new Error(`Error cargando productos: ${productsError.message}`);
+  }
+
+  console.log(`✅ Loaded ${allClients?.length || 0} clients and ${allProducts?.length || 0} products from DB`);
+
+  // Create lookup maps for fast access
+  const clientsByCUIT = new Map();
+  (allClients || []).forEach(client => {
+    const cuitStr = String(client.cuit || '').trim();
+    if (cuitStr) {
+      clientsByCUIT.set(cuitStr, client);
+    }
+  });
+
+  const productsByCodificacion = new Map();
+  (allProducts || []).forEach(product => {
+    const codStr = String(product.codificacion || '').trim().toUpperCase();
+    if (codStr) {
+      productsByCodificacion.set(codStr, product);
+    }
+  });
+
+  console.log(`📊 Created lookup maps: ${clientsByCUIT.size} clients, ${productsByCodificacion.size} products`);
+  console.log('🔄 Processing records from file...');
+
   for (const record of records) {
+    // Process clients
     const cuit = record.cuit;
     const cuitStr = String(cuit || '').trim();
     const isValidCuit = cuitStr && cuitStr !== 'NA' && cuitStr !== 'N/A' && cuitStr !== '0' && cuitStr.length > 0;
@@ -606,13 +652,9 @@ export const detectDuplicates = async (
     if (isValidCuit && !seenCUITs.has(cuitStr)) {
       seenCUITs.add(cuitStr);
 
-      const { data } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('cuit', cuit)
-        .maybeSingle();
+      const existingClient = clientsByCUIT.get(cuitStr);
 
-      if (data) {
+      if (existingClient) {
         const incomingClient = {
           cuit: record.cuit,
           razon_social: record.razon_social,
@@ -620,11 +662,11 @@ export const detectDuplicates = async (
           email: record.email
         };
 
-        const changes = detectFieldChanges(data, incomingClient, clientFieldsToCheck);
+        const changes = detectFieldChanges(existingClient, incomingClient, clientFieldsToCheck);
 
         clientMatches.push({
           cuit: String(cuit),
-          existing: data,
+          existing: existingClient,
           incoming: incomingClient,
           changes,
           hasChanges: changes.length > 0
@@ -638,7 +680,6 @@ export const detectDuplicates = async (
         });
       }
     } else if (cuitStr) {
-      // CUIT is present but invalid (NA, N/A, 0, etc.)
       incompleteClients.push({
         cuit: record.cuit,
         razon_social: record.razon_social,
@@ -648,25 +689,22 @@ export const detectDuplicates = async (
       });
     }
 
+    // Process products
     const codificacion = record.codificacion;
-    const codificacionStr = String(codificacion || '').trim();
+    const codificacionStr = String(codificacion || '').trim().toUpperCase();
     const isValidCodificacion = codificacionStr && codificacionStr !== 'NA' && codificacionStr !== 'N/A' && codificacionStr.length > 0;
 
     if (isValidCodificacion && !seenCodificaciones.has(codificacionStr)) {
       seenCodificaciones.add(codificacionStr);
 
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('codificacion', codificacion)
-        .maybeSingle();
+      const existingProduct = productsByCodificacion.get(codificacionStr);
 
-      if (data) {
-        const changes = detectFieldChanges(data, record, productFieldsToCheck);
+      if (existingProduct) {
+        const changes = detectFieldChanges(existingProduct, record, productFieldsToCheck);
 
         productMatches.push({
           codificacion: String(codificacion),
-          existing: data,
+          existing: existingProduct,
           incoming: record,
           changes,
           hasChanges: changes.length > 0
@@ -675,13 +713,21 @@ export const detectDuplicates = async (
         newProducts.push(record);
       }
     } else if (codificacionStr) {
-      // Codificacion is present but invalid (NA, N/A, etc.)
       incompleteProducts.push({
         ...record,
         _validation_warning: 'Codificación inválida o incompleta'
       });
     }
   }
+
+  console.log('✅ Detection complete:', {
+    clientMatches: clientMatches.length,
+    productMatches: productMatches.length,
+    newClients: newClients.length,
+    newProducts: newProducts.length,
+    incompleteClients: incompleteClients.length,
+    incompleteProducts: incompleteProducts.length
+  });
 
   return { clientMatches, productMatches, newClients, newProducts, incompleteClients, incompleteProducts };
 };
