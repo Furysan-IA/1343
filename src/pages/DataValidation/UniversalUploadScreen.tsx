@@ -170,14 +170,14 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
                   <button
                     onClick={handleUpload}
                     disabled={isProcessing}
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-slate-400"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-slate-400 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? 'Procesando...' : 'Subir y Validar'}
+                    {isProcessing ? 'Analizando...' : '🔍 Validar Datos'}
                   </button>
                   <button
                     onClick={() => setSelectedFile(null)}
                     disabled={isProcessing}
-                    className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium disabled:bg-slate-100"
+                    className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium disabled:bg-slate-100 disabled:cursor-not-allowed"
                   >
                     Cancelar
                   </button>

@@ -121,9 +121,11 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center bg-white rounded-xl shadow-lg p-8">
           <LoadingSpinner />
-          <p className="mt-4 text-slate-600">Analizando datos...</p>
+          <h2 className="mt-4 text-2xl font-bold text-slate-800">🔍 Validando Archivo</h2>
+          <p className="mt-2 text-slate-600">Analizando datos sin modificar la base de datos...</p>
+          <p className="mt-2 text-sm text-slate-500">Detectando clientes y productos nuevos/existentes</p>
         </div>
       </div>
     );
@@ -138,8 +140,9 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
             <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Procesando Datos</h2>
-            <p className="text-slate-600">Por favor espera mientras se actualizan los registros...</p>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">💾 Actualizando Base de Datos</h2>
+            <p className="text-slate-600 mb-2">Guardando cambios en el sistema...</p>
+            <p className="text-sm text-slate-500">Esto puede tomar unos segundos</p>
             <div className="mt-4 w-full bg-slate-200 rounded-full h-2">
               <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
             </div>
@@ -149,16 +152,19 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
 
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <h1 className="text-3xl font-bold text-slate-800 mb-4">
-            Verificación de Datos
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">
+            📋 Resumen de Validación
           </h1>
+          <p className="text-slate-600 mb-4">
+            Revisa qué se encontró en tu archivo antes de actualizar la base de datos
+          </p>
           <p className="text-slate-600 mb-6">
             {parsedData.metadata.filename} - {parsedData.rows.length} registros analizados
           </p>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-            <p className="text-blue-900 font-medium">
-              Analizamos tu archivo y detectamos qué hay de nuevo o qué cambió.
-              Revisa el resumen y confirma para procesar automáticamente.
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+            <p className="text-yellow-900 font-medium">
+              ⚠️ <strong>Importante:</strong> Los datos AÚN NO se han guardado en la base de datos.
+              Revisa el resumen abajo y presiona "Confirmar" cuando estés listo para actualizar.
             </p>
           </div>
 
@@ -390,12 +396,12 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
               {processing ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  Procesando...
+                  Actualizando Base de Datos...
                 </>
               ) : (
                 <>
                   <CheckCircle className="w-5 h-5" />
-                  Confirmar y Procesar Todo
+                  ✅ Confirmar y Actualizar Base de Datos
                 </>
               )}
             </button>
