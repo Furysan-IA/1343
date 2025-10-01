@@ -31,8 +31,11 @@ export const UniversalValidationPage: React.FC = () => {
     metadata: { filename: string; fileSize: number }
   ) => {
     console.log('🎯 Upload ready for confirmation:', { id, recordCount: data.rows.length, stats });
+    console.log('📊 Setting pendingUploadData...');
     setPendingUploadData({ id, data, stats, filename: metadata.filename, fileSize: metadata.fileSize });
+    console.log('🚪 Setting showConfirmModal to TRUE...');
     setShowConfirmModal(true);
+    console.log('✅ Modal state updated, should render now');
   };
 
   const handleConfirmUpload = async () => {
@@ -69,6 +72,7 @@ export const UniversalValidationPage: React.FC = () => {
 
   const handleCancelUpload = () => {
     console.log('❌ User cancelled upload');
+    console.log('🚪 Setting showConfirmModal to FALSE...');
     setShowConfirmModal(false);
     setPendingUploadData(null);
   };
@@ -140,7 +144,9 @@ export const UniversalValidationPage: React.FC = () => {
       )}
 
       {/* Modal de Confirmación - Renderizado en el nivel superior para evitar desmontaje */}
-      {showConfirmModal && pendingUploadData && createPortal(
+      {(() => {
+        console.log('🔍 Modal render check:', { showConfirmModal, hasPendingData: !!pendingUploadData });
+        return showConfirmModal && pendingUploadData && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center p-4"
           style={{
@@ -256,7 +262,8 @@ export const UniversalValidationPage: React.FC = () => {
           </div>
         </div>,
         document.body
-      )}
+      );
+      })()}
     </>
   );
 };
