@@ -29,6 +29,14 @@ export const UniversalValidationPage: React.FC = () => {
     console.log('📍 currentStep changed to:', currentStep);
   }, [currentStep]);
 
+  // Log para detectar montaje/desmontaje del componente
+  React.useEffect(() => {
+    console.log('🟢 UniversalValidationPage MOUNTED');
+    return () => {
+      console.log('🔴 UniversalValidationPage UNMOUNTED - Navigation away from /data-upload');
+    };
+  }, []);
+
   const handleUploadReadyForConfirmation = (
     id: string,
     data: ParsedData,
