@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
-import { jsPDF } from 'jspdf';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
+import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
 
 interface Client {
   id: string;
@@ -308,7 +308,7 @@ const DJCGenerator: React.FC = () => {
     try {
       // Obtener el usuario actual
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         toast.error('Debe estar autenticado para generar DJCs');
         setGenerating(false);
@@ -316,273 +316,9 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
-      // Crear el PDF
-      const pdf = new jsPDF();
-      
-      // Configurar fuente
-      pdf.setFont('helvetica');
-      
-      // Título principal
-      pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('DECLARACIÓN JURADA DE CONFORMIDAD (DJC)', 105, 20, { align: 'center' });
-      
-      // Resolución
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.resolucion, 105, 30, { align: 'center' });
-      
-      // Número de identificación
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Número de Identificación de DJC:', 105, 40, { align: 'center' });
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.numero_djc, 105, 47, { align: 'center' });
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(número único de identificación autodeterminado)', 105, 53, { align: 'center' });
-
-      // Línea separadora
-      pdf.line(20, 60, 190, 60);
-
-      // Información del Fabricante o Importador
-      let yPos = 70;
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Información del Fabricante o Importador:', 20, yPos);
-      
-      yPos += 10;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'normal');
-      
-      // Razón Social
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Razón Social: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.razon_social, 55, yPos);
-      
-      // CUIT
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• C.U.I.T. N°', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('(cuando fuera aplicable)', 45, yPos);
-      pdf.text(': ' + previewData.cuit, 85, yPos);
-      
-      // Nombre Comercial o Marca
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Nombre Comercial o Marca Registrada: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.marca, 100, yPos);
-      
-      // Domicilio Legal
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Domicilio Legal: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.domicilio_legal, 60, yPos);
-      
-      // Domicilio de la planta
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Domicilio de la planta de producción o del depósito: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      yPos += 6;
-      pdf.text(previewData.domicilio_planta, 25, yPos);
-      
-      // Teléfono
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Teléfono: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      if (!previewData.telefono) {
-        pdf.setTextColor(255, 0, 0);
-        pdf.text('CAMPO NO ENCONTRADO', 50, yPos);
-        pdf.setTextColor(0, 0, 0);
-      } else {
-        pdf.text(previewData.telefono, 50, yPos);
-      }
-      
-      // Correo Electrónico
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Correo Electrónico: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.email, 65, yPos);
-
-      // Representante Autorizado
-      yPos += 15;
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Representante Autorizado (si corresponde):', 20, yPos);
-      
-      yPos += 8;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Nombre y Apellido / Razón Social: ', 25, yPos);
-      pdf.setFont('helvetica', 'italic');
-      pdf.text(previewData.representante_nombre || 'No aplica', 85, yPos);
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Domicilio Legal: ', 25, yPos);
-      pdf.setFont('helvetica', 'italic');
-      pdf.text(previewData.representante_domicilio || 'No aplica', 60, yPos);
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• C.U.I.T. N°: ', 25, yPos);
-      pdf.setFont('helvetica', 'italic');
-      pdf.text(previewData.representante_cuit || 'No aplica', 55, yPos);
-
-      // Información del Producto
-      yPos += 15;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Información del Producto ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('(por producto o familia de productos):', 75, yPos);
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Código de Identificación Único del Producto ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('(autodeterminado): ', 115, yPos);
-      pdf.text(previewData.codigo_producto, 155, yPos);
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Fabricante', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('(Incluir domicilio de la planta de producción): ', 50, yPos);
-      pdf.text(previewData.fabricante, 140, yPos);
-      
-      if (previewData.domicilio_planta && previewData.domicilio_planta !== 'No especificado') {
-        yPos += 6;
-        pdf.text(previewData.domicilio_planta, 25, yPos);
-      }
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Identificación del producto ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('(marca, modelo, características técnicas): ', 80, yPos);
-      yPos += 6;
-      pdf.text(previewData.identificacion_producto, 25, yPos);
-
-      // Nueva página para Normas y Evaluación
-      pdf.addPage();
-      yPos = 30;
-      
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Normas y Evaluación de la Conformidad:', 20, yPos);
-      
-      yPos += 10;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Reglamento/s Aplicable/s: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.resolucion, 75, yPos);
-      yPos += 6;
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(Detallar el o los reglamentos bajo los cuales se encuentra alcanzado el producto)', 25, yPos);
-      
-      yPos += 10;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Norma/s Técnica/s: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      if (!previewData.normas_tecnicas) {
-        pdf.setTextColor(255, 0, 0);
-        pdf.text('CAMPO NO ENCONTRADO', 65, yPos);
-        pdf.setTextColor(0, 0, 0);
-      } else {
-        pdf.text(previewData.normas_tecnicas, 65, yPos);
-      }
-      yPos += 6;
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(Incluir normas técnicas específicas a las que se ajusta el producto)', 25, yPos);
-      
-      yPos += 10;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Referencia al Documento de Evaluación de la Conformidad: ', 25, yPos);
-      pdf.setFont('helvetica', 'normal');
-      yPos += 6;
-      if (!previewData.documento_evaluacion) {
-        pdf.setTextColor(255, 0, 0);
-        pdf.text('CAMPO NO ENCONTRADO', 25, yPos);
-        pdf.setTextColor(0, 0, 0);
-      } else {
-        pdf.text(previewData.documento_evaluacion, 25, yPos);
-      }
-      yPos += 6;
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(Emitido por un OEC, especificar el número de referencia)', 25, yPos);
-
-      // Otros Datos
-      yPos += 15;
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Otros Datos:', 20, yPos);
-      
-      yPos += 10;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('• Enlace a la copia de la Declaración de la Conformidad en Internet: ', 25, yPos);
-      yPos += 6;
-      pdf.setTextColor(0, 0, 255);
-      pdf.text(previewData.enlace_declaracion, 25, yPos);
-      pdf.setTextColor(0, 0, 0);
-      yPos += 6;
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(Si está disponible, incluir el enlace al documento en línea)', 25, yPos);
-
-      // Texto legal
-      yPos += 15;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      const textoLegal = 'La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.';
-      const lines = pdf.splitTextToSize(textoLegal, 165);
-      lines.forEach((line: string) => {
-        pdf.text(line, 22, yPos);
-        yPos += 6;
-      });
-
-      // Fecha
-      yPos += 10;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Fecha:', 20, yPos);
-      yPos += 6;
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(previewData.fecha_lugar, 20, yPos);
-
-      // Firma
-      yPos += 15;
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Firma:', 20, yPos);
-      yPos += 6;
-      pdf.setFont('helvetica', 'italic');
-      pdf.text('(Firma del responsable)', 20, yPos);
-      
-      // Línea para firma
-      yPos += 20;
-      pdf.line(20, yPos, 80, yPos);
-      
-      // Línea para aclaración
-      yPos += 15;
-      pdf.text('Aclaración:', 20, yPos);
-      yPos += 10;
-      pdf.line(20, yPos, 80, yPos);
-
-      // Nota de documento preliminar
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'italic');
-      pdf.setTextColor(128, 128, 128);
-      pdf.text('DOCUMENTO PRELIMINAR - PENDIENTE DE FIRMA', 105, 280, { align: 'center' });
-      pdf.setTextColor(0, 0, 0);
+      // Generar el PDF usando el nuevo servicio
+      const pdfGenerator = new DJCPdfGenerator();
+      const pdf = pdfGenerator.generate(previewData);
 
       // Convertir PDF a blob
       const pdfBlob = pdf.output('blob');
@@ -627,19 +363,18 @@ const DJCGenerator: React.FC = () => {
           identificacion_producto: previewData.identificacion_producto,
           reglamentos: previewData.resolucion,
           normas_tecnicas: previewData.normas_tecnicas,
-          documento_evaluacion: previewData.documento_evaluacion,
+          documento_evaluacion: previewData.informe_ensayos,
           enlace_declaracion: previewData.enlace_declaracion,
           fecha_lugar: previewData.fecha_lugar,
           pdf_url: urlData.publicUrl,
-          created_by: user.id, // Campo requerido
+          created_by: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
 
       if (djcError) {
         console.error('Error saving DJC:', djcError);
-        
-        // Si el error es de RLS, dar instrucciones específicas
+
         if (djcError.code === '42501') {
           toast.error('Error de permisos. Verifique las políticas RLS en Supabase');
           throw new Error('Row Level Security error - check database policies');
@@ -665,11 +400,11 @@ const DJCGenerator: React.FC = () => {
       pdf.save(`DJC_${previewData.numero_djc}.pdf`);
 
       toast.success('DJC generada y guardada exitosamente');
-      
+
       // Limpiar formulario y cerrar preview
       setShowPreview(false);
       handleClear();
-      
+
     } catch (error) {
       console.error('Error generating DJC:', error);
       toast.error('Error al generar la DJC. Verifique los permisos en la base de datos.');
