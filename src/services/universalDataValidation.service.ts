@@ -165,15 +165,12 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
           headers.forEach((header, index) => {
             const value = row[index];
 
-            if (value !== undefined && value !== null && value !== '') {
-              if (header.includes('fecha') || header.includes('vencimiento') || header.includes('emision')) {
-                const parsed = parseDate(value);
-                record[header] = parsed ? parsed.toISOString() : value;
-              } else if (header === 'cuit' || header.includes('cod_')) {
-                record[header] = parseInt(String(value).replace(/\D/g, '')) || value;
-              } else {
-                record[header] = value;
-              }
+            // Aplicar conversión de tipos para cada campo
+            const converted = convertToDbType(value, header);
+
+            // Solo agregar al record si no es null
+            if (converted !== null) {
+              record[header] = converted;
             }
           });
 
@@ -227,6 +224,43 @@ const parseDate = (value: any): Date | null => {
 
   const parsed = new Date(value);
   return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+// Convierte valores del Excel a tipos compatibles con PostgreSQL
+const convertToDbType = (value: any, fieldName: string): any => {
+  // Si es null, undefined o string vacío, retornar null
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  // BIGINT: cuit
+  if (fieldName === 'cuit') {
+    const cleaned = String(value).replace(/\D/g, '');
+    const parsed = parseInt(cleaned, 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  // INTEGER: cod_rubro, cod_subrubro, dias_para_vencer
+  if (fieldName === 'cod_rubro' || fieldName === 'cod_subrubro' || fieldName === 'dias_para_vencer') {
+    const cleaned = String(value).replace(/\D/g, '');
+    const parsed = parseInt(cleaned, 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  // DATE: todas las fechas
+  if (fieldName.includes('fecha') || fieldName === 'vencimiento') {
+    const parsed = parseDate(value);
+    if (!parsed) return null;
+
+    // Formatear como YYYY-MM-DD para PostgreSQL date type
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // TEXT: todo lo demás se mantiene como string
+  return String(value).trim();
 };
 
 export const validateParsedData = (data: ParsedData) => {
