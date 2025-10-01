@@ -4,11 +4,10 @@ import { validateFile, parseFile, validateParsedData, createBatch, ParsedData, E
 import toast from 'react-hot-toast';
 
 interface UniversalUploadScreenProps {
-  onUploadComplete: (batchId: string, parsedData: ParsedData, entityType: EntityType) => void;
+  onUploadComplete: (batchId: string, parsedData: ParsedData) => void;
 }
 
 export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ onUploadComplete }) => {
-  const [entityType, setEntityType] = useState<EntityType>('client');
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -61,12 +60,12 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     setIsProcessing(true);
 
     try {
-      console.log('Starting file processing...', { fileName: selectedFile.name, entityType });
+      console.log('Starting file processing...', { fileName: selectedFile.name });
 
       const parsedData = await parseFile(selectedFile);
       console.log('File parsed successfully:', { rowCount: parsedData.rows.length });
 
-      const dataValidation = validateParsedData(parsedData, entityType);
+      const dataValidation = validateParsedData(parsedData, 'mixed');
 
       if (!dataValidation.isValid) {
         console.error('Validation failed:', dataValidation.errors);
@@ -84,12 +83,12 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
           fileSize: selectedFile.size,
           totalRecords: parsedData.rows.length
         },
-        entityType
+        'mixed'
       );
 
       console.log('Batch created:', batchId);
       toast.success('Archivo cargado exitosamente!');
-      onUploadComplete(batchId, parsedData, entityType);
+      onUploadComplete(batchId, parsedData);
     } catch (error: any) {
       console.error('Error processing file:', error);
       toast.error(error.message || 'Error al procesar archivo');
@@ -103,12 +102,6 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     }
   };
 
-  const getRequiredColumns = () => {
-    if (entityType === 'client') {
-      return ['cuit', 'razon_social', 'direccion', 'email'];
-    }
-    return ['codificacion', 'cuit', 'producto', 'marca', 'modelo'];
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
@@ -116,45 +109,16 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-800 mb-2">
-              Sistema de Validación de Datos
+              Carga de Datos
             </h1>
             <p className="text-slate-600">
-              Carga archivos Excel para validar y actualizar clientes o productos
+              Sube tu archivo Excel con clientes y/o productos
             </p>
-          </div>
-
-          <div className="flex gap-4 mb-8">
-            <button
-              onClick={() => setEntityType('client')}
-              className={`flex-1 p-6 rounded-xl border-2 transition-all ${
-                entityType === 'client'
-                  ? 'border-blue-600 bg-blue-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <Users className={`w-12 h-12 ${entityType === 'client' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <span className={`font-semibold ${entityType === 'client' ? 'text-blue-900' : 'text-slate-600'}`}>
-                  Clientes
-                </span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setEntityType('product')}
-              className={`flex-1 p-6 rounded-xl border-2 transition-all ${
-                entityType === 'product'
-                  ? 'border-green-600 bg-green-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <Package className={`w-12 h-12 ${entityType === 'product' ? 'text-green-600' : 'text-slate-400'}`} />
-                <span className={`font-semibold ${entityType === 'product' ? 'text-green-900' : 'text-slate-600'}`}>
-                  Productos
-                </span>
-              </div>
-            </button>
+            <div className="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4 text-left">
+              <p className="text-sm text-blue-900">
+                El sistema detectará automáticamente qué hay en tu archivo (clientes, productos o ambos) y procesará todo de forma inteligente.
+              </p>
+            </div>
           </div>
 
           <div
