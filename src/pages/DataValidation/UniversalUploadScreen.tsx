@@ -64,6 +64,14 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     }
   };
 
+  // Detectar cuando el componente se monta/desmonta
+  useEffect(() => {
+    console.log('🟢 UniversalUploadScreen MOUNTED');
+    return () => {
+      console.log('🔴 UniversalUploadScreen UNMOUNTED - This should NOT happen while modal is open!');
+    };
+  }, []);
+
   // Bloquear scroll del body cuando el modal esté abierto
   useEffect(() => {
     if (showDuplicateModal) {
@@ -232,6 +240,29 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       console.log('🎯 Data saved, now showing modal...');
 
+      // TEMPORAL: Usar confirm nativo para probar el flujo
+      const userWantsToContinue = window.confirm(
+        `📊 ANÁLISIS COMPLETADO\n\n` +
+        `Total de filas: ${duplicateCheck.stats.totalInFile}\n` +
+        `Con "baja": ${duplicateCheck.stats.withBaja}\n` +
+        `Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
+        `Duplicados encontrados: ${duplicateCheck.stats.duplicatesFound}\n` +
+        `Nuevos certificados: ${duplicateCheck.stats.newRecordsCount}\n\n` +
+        `¿Deseas continuar con la carga?`
+      );
+
+      if (!userWantsToContinue) {
+        console.log('❌ User cancelled via confirm dialog');
+        handleCancelDuplicateCheck();
+        return;
+      }
+
+      console.log('✅ User confirmed via confirm dialog, continuing...');
+      // Continuar con el flujo
+      await handleContinueAfterDuplicateCheck();
+      return;
+
+      // TODO: Restaurar modal React cuando se solucione el problema de visualización
       // Mostrar modal en una actualización separada
       flushSync(() => {
         console.log('🎯 About to show duplicate modal');
