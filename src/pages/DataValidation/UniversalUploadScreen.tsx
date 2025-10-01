@@ -12,6 +12,8 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
+  const [progress, setProgress] = useState(0);
   const [validationErrors, setValidationErrors] = useState<any[]>([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,14 +61,21 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
     if (!selectedFile) return;
 
     setIsProcessing(true);
+    setProgress(0);
 
     try {
       console.log('Starting file processing...', { fileName: selectedFile.name });
 
+      // Paso 1: Leer archivo
+      setProcessingStep('Leyendo archivo...');
+      setProgress(20);
       const parsedData = await parseFile(selectedFile);
       console.log('File parsed successfully:', { rowCount: parsedData.rows.length });
 
-      const dataValidation = validateParsedData(parsedData, 'mixed');
+      // Paso 2: Validar estructura
+      setProcessingStep('Validando estructura...');
+      setProgress(40);
+      const dataValidation = validateParsedData(parsedData);
 
       if (!dataValidation.isValid) {
         console.error('Validation failed:', dataValidation.errors);
@@ -74,9 +83,13 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         setShowErrorModal(true);
         setIsProcessing(false);
         setSelectedFile(null);
+        setProgress(0);
         return;
       }
 
+      // Paso 3: Crear batch
+      setProcessingStep('Preparando análisis...');
+      setProgress(60);
       console.log('Creating batch...');
       const batchId = await createBatch({
         filename: selectedFile.name,
@@ -85,7 +98,15 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       });
 
       console.log('Batch created:', batchId);
-      toast.success('Archivo cargado exitosamente!');
+
+      // Paso 4: Completado
+      setProcessingStep('Análisis completado!');
+      setProgress(100);
+
+      // Pequeño delay para que el usuario vea el 100%
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      toast.success('Archivo validado exitosamente!');
       onUploadComplete(batchId, parsedData);
     } catch (error: any) {
       console.error('Error processing file:', error);
@@ -97,6 +118,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       setShowErrorModal(true);
       setIsProcessing(false);
       setSelectedFile(null);
+      setProgress(0);
     }
   };
 
@@ -109,11 +131,15 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
           <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
             <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-slate-800 mb-2">🔍 Validando Archivo</h2>
-            <p className="text-slate-600 mb-2">Analizando datos sin modificar la base de datos...</p>
-            <p className="text-sm text-slate-500">Detectando clientes y productos nuevos/existentes</p>
-            <div className="mt-4 w-full bg-slate-200 rounded-full h-2">
-              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+            <p className="text-slate-600 mb-2">{processingStep || 'Iniciando...'}</p>
+            <p className="text-sm text-slate-500 mb-4">Sin modificar la base de datos</p>
+            <div className="mt-4 w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              ></div>
             </div>
+            <p className="text-sm text-slate-700 font-medium mt-2">{progress}%</p>
           </div>
         </div>
       )}
