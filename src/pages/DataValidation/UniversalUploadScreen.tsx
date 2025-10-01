@@ -199,25 +199,27 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       console.log('📊 Duplicate check stats:', duplicateCheck.stats);
       console.log('📋 Has duplicateCheckResult:', !!duplicateCheck);
 
-      setParsedDataCache(parsedData);
-      setDuplicateCheckResult(duplicateCheck);
+      // Usar setTimeout con 0ms para asegurar que el estado se actualice en el siguiente tick
+      setTimeout(() => {
+        console.log('🎯 Setting all states in next tick...');
 
-      // Cerrar spinner primero
-      console.log('🎯 Closing spinner...');
-      setIsProcessing(false);
-      setProgress(0);
-      setProcessingStep('');
+        // Primero guardar los datos
+        setParsedDataCache(parsedData);
+        setDuplicateCheckResult(duplicateCheck);
 
-      // Usar requestAnimationFrame para asegurar que el DOM se actualice
-      await new Promise(resolve => requestAnimationFrame(() => {
-        setTimeout(resolve, 100);
-      }));
+        // Cerrar spinner
+        setIsProcessing(false);
+        setProgress(0);
+        setProcessingStep('');
 
-      // Mostrar modal
-      console.log('🎯 Showing duplicate modal NOW');
-      console.log('📊 duplicateCheckResult before showing modal:', duplicateCheckResult);
-      setShowDuplicateModal(true);
-      console.log('🎯 showDuplicateModal state set to TRUE');
+        // Mostrar modal en otro tick para asegurar que los datos están guardados
+        setTimeout(() => {
+          console.log('🎯 Showing duplicate modal NOW');
+          console.log('📊 duplicateCheckResult exists:', !!duplicateCheck);
+          setShowDuplicateModal(true);
+          console.log('🎯 showDuplicateModal state set to TRUE');
+        }, 50);
+      }, 0);
 
       // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
       return;
