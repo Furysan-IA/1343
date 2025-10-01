@@ -186,14 +186,20 @@ Después de cargar:
 2. Busca los registros recién cargados
 3. Verifica que los datos sean correctos
 
-## 🆚 Diferencias con Otros Sistemas
+## ℹ️ Sistema Único
 
-| Sistema | Propósito | Ubicación |
-|---------|-----------|-----------|
-| **Carga de Datos** | Insertar/actualizar clientes y productos | `/data-upload` |
-| **Validación de Información** | Solo validar estructura (no procesa) | `/validation` |
-| **Carga de Certificados** | Procesar certificados específicos | `/client-validation` |
+**"Carga de Datos"** es el único sistema de carga en la aplicación.
 
+Se han **eliminado del menú** las opciones antiguas:
+- ❌ "Validación de Información" (solo validaba, no procesaba)
+- ❌ "Carga de Certificados" (sistema antiguo)
+
+**"Carga de Datos"** es el sistema completo que:
+- ✅ Valida archivos
+- ✅ Detecta duplicados
+- ✅ Permite revisión antes de procesar
+- ✅ Inserta/actualiza datos
+- ✅ Maneja clientes Y productos
 ## 💡 Tips
 
 1. **Siempre revisa la consola** (F12) para ver el progreso
