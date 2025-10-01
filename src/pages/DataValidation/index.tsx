@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { UniversalUploadScreen } from './UniversalUploadScreen';
-import { UniversalReviewScreen } from './UniversalReviewScreen';
-import { ParsedData, EntityType } from '../../services/universalDataValidation.service';
+import { CertificateUploadScreen } from './CertificateUploadScreen';
+import { CertificateReviewScreen } from './CertificateReviewScreen';
+import { ParsedCertificates } from '../../services/certificateProcessing.service';
 
 type Step = 'upload' | 'review' | 'complete';
 
 export const DataValidation: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [batchId, setBatchId] = useState<string>('');
-  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
-  const [entityType, setEntityType] = useState<EntityType>('client');
+  const [parsedData, setParsedData] = useState<ParsedCertificates | null>(null);
+  const [referenceDate, setReferenceDate] = useState<Date>(new Date());
 
-  const handleUploadComplete = (id: string, data: ParsedData, type: EntityType) => {
+  const handleUploadComplete = (id: string, data: ParsedCertificates, refDate: Date) => {
     setBatchId(id);
     setParsedData(data);
-    setEntityType(type);
+    setReferenceDate(refDate);
     setCurrentStep('review');
   };
 
@@ -31,14 +31,14 @@ export const DataValidation: React.FC = () => {
   return (
     <>
       {currentStep === 'upload' && (
-        <UniversalUploadScreen onUploadComplete={handleUploadComplete} />
+        <CertificateUploadScreen onUploadComplete={handleUploadComplete} />
       )}
 
       {currentStep === 'review' && parsedData && (
-        <UniversalReviewScreen
+        <CertificateReviewScreen
           parsedData={parsedData}
           batchId={batchId}
-          entityType={entityType}
+          referenceDate={referenceDate}
           onComplete={handleReviewComplete}
         />
       )}
@@ -52,16 +52,19 @@ export const DataValidation: React.FC = () => {
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-slate-800 mb-3">
-              Proceso Completado
+              Certificados Procesados
             </h1>
-            <p className="text-slate-600 mb-8">
-              Los datos han sido procesados y guardados exitosamente
+            <p className="text-slate-600 mb-2">
+              Los certificados han sido procesados exitosamente
+            </p>
+            <p className="text-sm text-slate-500 mb-8">
+              Los datos de clientes y productos se han actualizado en sus respectivas tablas
             </p>
             <button
               onClick={handleRestart}
               className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
-              Procesar Otro Archivo
+              Procesar Más Certificados
             </button>
           </div>
         </div>
