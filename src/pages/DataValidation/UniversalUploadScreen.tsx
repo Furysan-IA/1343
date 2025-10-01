@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
-import { validateFile, parseFile, validateParsedData, createBatch, ParsedData, EntityType } from '../../services/universalDataValidation.service';
+import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
 import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
@@ -170,7 +170,6 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       setProgress(60);
       console.log('Checking for existing certificates...');
 
-      const { checkExistingCertificates } = await import('../../services/universalDataValidation.service');
       const duplicateCheck = await checkExistingCertificates(parsedData.rows);
 
       console.log('Duplicate check result:', duplicateCheck.stats);
