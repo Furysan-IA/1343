@@ -364,19 +364,53 @@ export const checkExistingCertificates = async (records: UniversalRecord[]): Pro
     };
   }
 
-  // PASO 3: Buscar en la base de datos
+  // PASO 3: Buscar en la base de datos (en lotes si hay muchos)
   console.log('🔎 Searching database for existing certificates...');
-  const { data: existingCerts, error } = await supabase
-    .from('product_certificates')
-    .select('codificacion, titular, estado, created_at')
-    .in('codificacion', codificaciones);
 
-  if (error) {
+  let existingCerts: any[] = [];
+  const BATCH_SIZE = 100; // Supabase tiene límite en el operador 'in'
+
+  try {
+    // Si hay pocos códigos, hacer una sola consulta
+    if (codificaciones.length <= BATCH_SIZE) {
+      const { data, error } = await supabase
+        .from('product_certificates')
+        .select('codificacion, titular, estado, created_at')
+        .in('codificacion', codificaciones);
+
+      if (error) throw error;
+      existingCerts = data || [];
+    } else {
+      // Si hay muchos, dividir en lotes
+      console.log(`📦 Processing ${codificaciones.length} codes in batches of ${BATCH_SIZE}...`);
+
+      for (let i = 0; i < codificaciones.length; i += BATCH_SIZE) {
+        const batch = codificaciones.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(codificaciones.length / BATCH_SIZE);
+        console.log(`  Batch ${batchNum}/${totalBatches}: ${batch.length} codes`);
+
+        const { data, error } = await supabase
+          .from('product_certificates')
+          .select('codificacion, titular, estado, created_at')
+          .in('codificacion', batch);
+
+        if (error) {
+          console.error(`❌ Error in batch ${batchNum}:`, error);
+          throw error;
+        }
+
+        if (data) {
+          existingCerts.push(...data);
+        }
+      }
+    }
+  } catch (error: any) {
     console.error('❌ Error checking certificates:', error);
     throw new Error(`Error al verificar certificados: ${error.message}`);
   }
 
-  console.log(`✅ Found ${existingCerts?.length || 0} existing certificates in database`);
+  console.log(`✅ Found ${existingCerts.length} existing certificates in database`);
 
   // Mostrar certificados existentes en BD
   if (existingCerts && existingCerts.length > 0) {

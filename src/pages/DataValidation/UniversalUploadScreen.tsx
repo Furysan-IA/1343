@@ -178,12 +178,17 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       setParsedDataCache(parsedData);
       setDuplicateCheckResult(duplicateCheck);
 
-      // Resetear estado de procesamiento ANTES de mostrar el modal
+      // Cambiar el mensaje del spinner mientras preparamos el modal
+      setProcessingStep('Preparando resumen...');
+      setProgress(70);
+
+      // Pequeño delay para asegurar que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Ahora sí, cerrar el spinner y mostrar el modal
       setIsProcessing(false);
       setProgress(0);
       setProcessingStep('');
-
-      // Mostrar modal para que el usuario decida
       setShowDuplicateModal(true);
 
       // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
