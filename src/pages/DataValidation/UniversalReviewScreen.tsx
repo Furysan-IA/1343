@@ -1,314 +1,399 @@
 import React, { useState, useEffect } from 'react';
-import { CircleCheck as CheckCircle, UserPlus, Package, ChevronLeft, ChevronRight } from 'lucide-react';
-import { EntityType, UniversalRecord, ParsedData, detectDuplicates, insertRecords, updateBatchStatus } from '../../services/universalDataValidation.service';
+import { CheckCircle, AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ParsedData,
+  detectDuplicates,
+  insertClientsAndProducts,
+  updateBatchStatus,
+  UniversalRecord,
+  ClientMatch,
+  ProductMatch
+} from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
+import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
 interface UniversalReviewScreenProps {
   parsedData: ParsedData;
   batchId: string;
-  entityType: EntityType;
   onComplete: () => void;
 }
 
 export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   parsedData,
   batchId,
-  entityType,
   onComplete
 }) => {
-  const [isAnalyzing, setIsAnalyzing] = useState(true);
-  const [exactMatches, setExactMatches] = useState<Map<string, any>>(new Map());
-  const [newRecords, setNewRecords] = useState<UniversalRecord[]>([]);
-  const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
 
-  const itemsPerPage = 10;
+  const [clientMatches, setClientMatches] = useState<ClientMatch[]>([]);
+  const [productMatches, setProductMatches] = useState<ProductMatch[]>([]);
+  const [newClients, setNewClients] = useState<UniversalRecord[]>([]);
+  const [newProducts, setNewProducts] = useState<UniversalRecord[]>([]);
+
+  const [insertNewClients, setInsertNewClients] = useState(true);
+  const [updateExistingClients, setUpdateExistingClients] = useState(true);
+  const [insertNewProducts, setInsertNewProducts] = useState(true);
+
+  const [expandedClientChanges, setExpandedClientChanges] = useState(false);
+  const [expandedProductChanges, setExpandedProductChanges] = useState(false);
 
   useEffect(() => {
-    analyzeRecords();
+    analyzeData();
   }, []);
 
-  const analyzeRecords = async () => {
-    setIsAnalyzing(true);
+  const analyzeData = async () => {
     try {
-      const result = await detectDuplicates(parsedData.rows, entityType);
-      setExactMatches(result.exactMatches);
-      setNewRecords(result.newRecords);
-      toast.success('Análisis completo!');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al analizar registros');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+      console.log('Analyzing data for duplicates...');
 
-  const toggleSelection = (index: number) => {
-    const newSelection = new Set(selectedRecords);
-    if (newSelection.has(index)) {
-      newSelection.delete(index);
-    } else {
-      newSelection.add(index);
-    }
-    setSelectedRecords(newSelection);
-  };
+      const result = await detectDuplicates(parsedData.rows);
 
-  const handleSelectAll = () => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, newRecords.length);
-    const newSelection = new Set(selectedRecords);
-
-    for (let i = startIndex; i < endIndex; i++) {
-      newSelection.add(i);
-    }
-
-    setSelectedRecords(newSelection);
-  };
-
-  const handleAddSelected = async () => {
-    if (selectedRecords.size === 0) return;
-
-    setIsProcessing(true);
-    try {
-      const recordsToAdd = Array.from(selectedRecords).map(i => newRecords[i]);
-      const result = await insertRecords(recordsToAdd, batchId, entityType);
-
-      if (result.success) {
-        toast.success(`${result.insertedCount} registros agregados exitosamente`);
-
-        const remainingRecords = newRecords.filter((_, i) => !selectedRecords.has(i));
-        setNewRecords(remainingRecords);
-        setSelectedRecords(new Set());
-
-        if (currentPage > 1 && remainingRecords.length <= (currentPage - 1) * itemsPerPage) {
-          setCurrentPage(currentPage - 1);
-        }
-      } else {
-        toast.error('Algunos registros fallaron al agregarse');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Error al agregar registros');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleAddAll = async () => {
-    setIsProcessing(true);
-    try {
-      const result = await insertRecords(newRecords, batchId, entityType);
-
-      if (result.success) {
-        toast.success(`${result.insertedCount} registros agregados exitosamente`);
-        setNewRecords([]);
-      } else {
-        toast.error('Algunos registros fallaron al agregarse');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Error al agregar registros');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleFinish = async () => {
-    try {
-      await updateBatchStatus(batchId, {
-        status: 'completed',
-        processed_records: parsedData.rows.length,
-        new_records: parsedData.rows.length - newRecords.length,
-        updated_records: exactMatches.size
+      console.log('Analysis complete:', {
+        clientMatches: result.clientMatches.length,
+        productMatches: result.productMatches.length,
+        newClients: result.newClients.length,
+        newProducts: result.newProducts.length
       });
-      onComplete();
+
+      setClientMatches(result.clientMatches);
+      setProductMatches(result.productMatches);
+      setNewClients(result.newClients);
+      setNewProducts(result.newProducts);
+      setLoading(false);
     } catch (error: any) {
-      toast.error('Error al finalizar el proceso');
+      console.error('Error analyzing data:', error);
+      toast.error('Error al analizar datos: ' + error.message);
+      setLoading(false);
     }
   };
 
-  if (isAnalyzing) {
+  const handleProcess = async () => {
+    if (!insertNewClients && !updateExistingClients && !insertNewProducts) {
+      toast.error('Debes seleccionar al menos una acción para procesar');
+      return;
+    }
+
+    setProcessing(true);
+
+    try {
+      const clientsToProcess = insertNewClients ? newClients : [];
+      const productsToProcess = insertNewProducts ? newProducts : [];
+
+      console.log('Processing data...', {
+        newClients: clientsToProcess.length,
+        newProducts: productsToProcess.length,
+        updateExisting: updateExistingClients
+      });
+
+      if (clientsToProcess.length === 0 && productsToProcess.length === 0 && !updateExistingClients) {
+        toast.error('No hay datos para procesar con las opciones seleccionadas');
+        setProcessing(false);
+        return;
+      }
+
+      const result = await insertClientsAndProducts(
+        clientsToProcess,
+        productsToProcess,
+        batchId,
+        updateExistingClients
+      );
+
+      console.log('Processing result:', result);
+
+      await updateBatchStatus(batchId, {
+        status: result.success ? 'completed' : 'failed',
+        processed_records: result.clientsInserted + result.clientsUpdated + result.productsInserted,
+        new_records: result.clientsInserted + result.productsInserted,
+        updated_records: result.clientsUpdated,
+        error_count: result.errors.length
+      });
+
+      if (result.success) {
+        const messages = [];
+        if (result.clientsInserted > 0) messages.push(`${result.clientsInserted} clientes nuevos`);
+        if (result.clientsUpdated > 0) messages.push(`${result.clientsUpdated} clientes actualizados`);
+        if (result.productsInserted > 0) messages.push(`${result.productsInserted} productos nuevos`);
+
+        toast.success(`Procesado: ${messages.join(', ')}`);
+        onComplete();
+      } else {
+        toast.error(`Procesamiento completado con ${result.errors.length} errores`);
+        console.error('Processing errors:', result.errors);
+      }
+    } catch (error: any) {
+      console.error('Error processing records:', error);
+      toast.error('Error al procesar: ' + error.message);
+
+      await updateBatchStatus(batchId, {
+        status: 'failed',
+        error_count: 1
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 text-lg">Analizando registros para duplicados...</p>
+          <LoadingSpinner />
+          <p className="mt-4 text-slate-600">Analizando datos...</p>
         </div>
       </div>
     );
   }
 
-  const totalPages = Math.ceil(newRecords.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentPageRecords = newRecords.slice(startIndex, startIndex + itemsPerPage);
-  const keyField = entityType === 'client' ? 'razon_social' : 'producto';
+  const clientsWithChanges = clientMatches.filter(m => m.hasChanges);
+  const clientsWithoutChanges = clientMatches.filter(m => !m.hasChanges);
+  const productsWithChanges = productMatches.filter(m => m.hasChanges);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <h1 className="text-3xl font-bold text-slate-800 mb-6">
-            Revisar Resultados - {entityType === 'client' ? 'Clientes' : 'Productos'}
+          <h1 className="text-3xl font-bold text-slate-800 mb-4">
+            Revisar Datos Antes de Procesar
           </h1>
+          <p className="text-slate-600 mb-6">
+            {parsedData.metadata.filename} - {parsedData.rows.length} registros totales
+          </p>
 
-          <div className="grid md:grid-cols-2 gap-4 mb-8">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-                <h3 className="font-semibold text-green-900">Coincidencias Exactas</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Clientes Nuevos</span>
               </div>
-              <p className="text-3xl font-bold text-green-700">
-                {exactMatches.size}
-              </p>
-              <p className="text-sm text-green-600 mt-1">Se actualizarán automáticamente</p>
+              <div className="text-2xl font-bold text-blue-900">{newClients.length}</div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <div className="flex items-center gap-3 mb-2">
-                {entityType === 'client' ? (
-                  <UserPlus className="w-6 h-6 text-blue-600" />
-                ) : (
-                  <Package className="w-6 h-6 text-blue-600" />
-                )}
-                <h3 className="font-semibold text-blue-900">
-                  Nuevos {entityType === 'client' ? 'Clientes' : 'Productos'}
-                </h3>
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Package className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Productos Nuevos</span>
               </div>
-              <p className="text-3xl font-bold text-blue-700">
-                {newRecords.length}
-              </p>
-              <p className="text-sm text-blue-600 mt-1">Listos para agregar</p>
+              <div className="text-2xl font-bold text-green-900">{newProducts.length}</div>
+            </div>
+
+            <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-700">Clientes Existentes</span>
+              </div>
+              <div className="text-2xl font-bold text-yellow-900">{clientMatches.length}</div>
+              {clientsWithChanges.length > 0 && (
+                <p className="text-xs text-yellow-600 mt-1">{clientsWithChanges.length} con cambios</p>
+              )}
+            </div>
+
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Package className="w-5 h-5 text-orange-600" />
+                <span className="text-sm font-medium text-orange-700">Productos Existentes</span>
+              </div>
+              <div className="text-2xl font-bold text-orange-900">{productMatches.length}</div>
+              <p className="text-xs text-orange-600 mt-1">Se omitirán</p>
             </div>
           </div>
 
-          {newRecords.length > 0 && (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-slate-800">
-                  Nuevos Registros por Agregar
-                </h2>
-
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={handleSelectAll}
-                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
-                  >
-                    Seleccionar Página
-                  </button>
-
-                  <button
-                    onClick={handleAddSelected}
-                    disabled={selectedRecords.size === 0 || isProcessing}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-slate-400"
-                  >
-                    Agregar Seleccionados ({selectedRecords.size})
-                  </button>
-
-                  <button
-                    onClick={handleAddAll}
-                    disabled={isProcessing}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-slate-400"
-                  >
-                    Agregar Todos
-                  </button>
+          <div className="bg-slate-50 rounded-lg p-6 border-2 border-slate-200 mb-6">
+            <h3 className="font-semibold text-slate-800 mb-4 text-lg">
+              Selecciona qué deseas procesar:
+            </h3>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
+                <input
+                  type="checkbox"
+                  checked={insertNewClients}
+                  onChange={(e) => setInsertNewClients(e.target.checked)}
+                  disabled={newClients.length === 0}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-slate-800">
+                    Insertar {newClients.length} clientes nuevos
+                  </span>
                 </div>
-              </div>
+              </label>
 
-              <div className="overflow-x-auto rounded-lg border border-slate-200 mb-6">
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left w-12">
-                        <input type="checkbox" className="rounded" />
-                      </th>
-                      {entityType === 'client' ? (
-                        <>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CUIT</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Razón Social</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Email</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Dirección</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Codificación</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Producto</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Marca</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Modelo</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {currentPageRecords.map((record, idx) => {
-                      const globalIndex = startIndex + idx;
-                      return (
-                        <tr key={globalIndex} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedRecords.has(globalIndex)}
-                              onChange={() => toggleSelection(globalIndex)}
-                              className="rounded"
-                            />
-                          </td>
-                          {entityType === 'client' ? (
-                            <>
-                              <td className="px-4 py-3 text-sm text-slate-900">{record.cuit}</td>
-                              <td className="px-4 py-3 text-sm text-slate-900 font-medium">{record.razon_social}</td>
-                              <td className="px-4 py-3 text-sm text-slate-600">{record.email}</td>
-                              <td className="px-4 py-3 text-sm text-slate-600">{record.direccion}</td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-4 py-3 text-sm text-slate-900">{record.codificacion}</td>
-                              <td className="px-4 py-3 text-sm text-slate-900 font-medium">{record.producto}</td>
-                              <td className="px-4 py-3 text-sm text-slate-600">{record.marca}</td>
-                              <td className="px-4 py-3 text-sm text-slate-600">{record.modelo}</td>
-                            </>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-600">
-                    Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, newRecords.length)} de {newRecords.length}
-                  </p>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-
-                    <span className="text-sm text-slate-600">
-                      Página {currentPage} de {totalPages}
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
+                <input
+                  type="checkbox"
+                  checked={updateExistingClients}
+                  onChange={(e) => setUpdateExistingClients(e.target.checked)}
+                  disabled={clientMatches.length === 0}
+                  className="w-5 h-5 text-yellow-600 rounded"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-slate-800">
+                    Actualizar {clientMatches.length} clientes existentes
+                  </span>
+                  {clientsWithChanges.length > 0 && (
+                    <span className="text-sm text-yellow-600 ml-2">
+                      ({clientsWithChanges.length} con cambios)
                     </span>
+                  )}
+                </div>
+              </label>
 
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-colors">
+                <input
+                  type="checkbox"
+                  checked={insertNewProducts}
+                  onChange={(e) => setInsertNewProducts(e.target.checked)}
+                  disabled={newProducts.length === 0}
+                  className="w-5 h-5 text-green-600 rounded"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-slate-800">
+                    Insertar {newProducts.length} productos nuevos
+                  </span>
+                </div>
+              </label>
+
+              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium text-slate-800">
+                      Productos existentes ({productMatches.length}) se omiten
+                    </span>
+                    <p className="text-sm text-orange-700 mt-1">
+                      Para preservar QR y enlaces
+                    </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {clientsWithChanges.length > 0 && (
+            <div className="mb-6">
+              <button
+                onClick={() => setExpandedClientChanges(!expandedClientChanges)}
+                className="w-full flex items-center justify-between p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg hover:bg-yellow-100"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-yellow-900">
+                      {clientsWithChanges.length} Clientes con Cambios Detectados
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      Click para ver detalles
+                    </p>
+                  </div>
+                </div>
+                {expandedClientChanges ? (
+                  <ChevronUp className="w-5 h-5 text-yellow-600" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-yellow-600" />
+                )}
+              </button>
+
+              {expandedClientChanges && (
+                <div className="mt-2 bg-yellow-50 rounded-lg p-4 space-y-4 max-h-96 overflow-y-auto">
+                  {clientsWithChanges.map((match, idx) => (
+                    <div key={idx} className="bg-white rounded-lg p-4">
+                      <div className="font-medium text-slate-800 mb-3">
+                        CUIT: {match.cuit} - {match.existing.razon_social}
+                      </div>
+                      <div className="space-y-2">
+                        {match.changes.map((change, cIdx) => (
+                          <div key={cIdx} className="text-sm">
+                            <span className="font-medium text-slate-600">{change.field}:</span>
+                            <div className="line-through text-red-600">
+                              {String(change.oldValue || '(vacío)')}
+                            </div>
+                            <div className="text-green-600 font-medium">
+                              → {String(change.newValue)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </>
+            </div>
           )}
 
-          <div className="flex justify-end pt-6 border-t mt-8">
+          {productsWithChanges.length > 0 && (
+            <div className="mb-6">
+              <button
+                onClick={() => setExpandedProductChanges(!expandedProductChanges)}
+                className="w-full flex items-center justify-between p-4 bg-orange-50 border-2 border-orange-300 rounded-lg hover:bg-orange-100"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-orange-900">
+                      {productsWithChanges.length} Productos con Diferencias
+                    </h3>
+                    <p className="text-sm text-orange-700">
+                      NO se actualizarán
+                    </p>
+                  </div>
+                </div>
+                {expandedProductChanges ? (
+                  <ChevronUp className="w-5 h-5 text-orange-600" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-orange-600" />
+                )}
+              </button>
+
+              {expandedProductChanges && (
+                <div className="mt-2 bg-orange-50 rounded-lg p-4 space-y-4 max-h-96 overflow-y-auto">
+                  {productsWithChanges.slice(0, 10).map((match, idx) => (
+                    <div key={idx} className="bg-white rounded-lg p-4">
+                      <div className="font-medium text-slate-800 mb-3">
+                        {match.codificacion} - {match.existing.producto}
+                      </div>
+                      <div className="space-y-2">
+                        {match.changes.map((change, cIdx) => (
+                          <div key={cIdx} className="text-sm">
+                            <span className="font-medium text-slate-600">{change.field}:</span>
+                            <div className="text-slate-600">
+                              BD: {String(change.oldValue || '(vacío)')}
+                            </div>
+                            <div className="text-slate-500">
+                              Archivo: {String(change.newValue)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end gap-4">
             <button
-              onClick={handleFinish}
-              className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              onClick={() => window.location.reload()}
+              disabled={processing}
+              className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-medium disabled:opacity-50"
             >
-              Completar Procesamiento
+              Cancelar
+            </button>
+            <button
+              onClick={handleProcess}
+              disabled={processing || (!insertNewClients && !updateExistingClients && !insertNewProducts)}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              {processing ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Confirmar y Procesar
+                </>
+              )}
             </button>
           </div>
         </div>
