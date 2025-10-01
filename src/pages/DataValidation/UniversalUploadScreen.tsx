@@ -170,7 +170,13 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       setProgress(60);
       console.log('Checking for existing certificates...');
 
-      const duplicateCheck = await checkExistingCertificates(parsedData.rows);
+      const duplicateCheck = await checkExistingCertificates(
+        parsedData.rows,
+        (progressPercent: number, message: string) => {
+          setProgress(progressPercent);
+          setProcessingStep(message);
+        }
+      );
 
       console.log('Duplicate check result:', duplicateCheck.stats);
 
