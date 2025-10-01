@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package } from 'lucide-react';
+import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
+import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
 interface UniversalUploadScreenProps {
   onUploadComplete: (batchId: string, parsedData: ParsedData) => void;
@@ -77,14 +78,11 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       }
 
       console.log('Creating batch...');
-      const batchId = await createBatch(
-        {
-          filename: selectedFile.name,
-          fileSize: selectedFile.size,
-          totalRecords: parsedData.rows.length
-        },
-        'mixed'
-      );
+      const batchId = await createBatch({
+        filename: selectedFile.name,
+        fileSize: selectedFile.size,
+        totalRecords: parsedData.rows.length
+      });
 
       console.log('Batch created:', batchId);
       toast.success('Archivo cargado exitosamente!');
@@ -104,7 +102,22 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8 relative">
+      {/* Modal de Progreso */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
+            <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">🔍 Validando Archivo</h2>
+            <p className="text-slate-600 mb-2">Analizando datos sin modificar la base de datos...</p>
+            <p className="text-sm text-slate-500">Detectando clientes y productos nuevos/existentes</p>
+            <div className="mt-4 w-full bg-slate-200 rounded-full h-2">
+              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
