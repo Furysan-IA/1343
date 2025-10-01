@@ -391,7 +391,7 @@ export const checkExistingCertificates = async (
   console.log('🔎 Searching database for existing certificates...');
 
   let existingCerts: any[] = [];
-  const BATCH_SIZE = 500; // Increased from 100 to 500 for better performance
+  const BATCH_SIZE = 200; // Reduced from 500 to 200 for better stability
 
   try {
     // Si hay pocos códigos, hacer una sola consulta
@@ -410,48 +410,49 @@ export const checkExistingCertificates = async (
 
       existingCerts = data || [];
     } else {
-      // Si hay muchos, dividir en lotes y procesarlos EN PARALELO
+      // Si hay muchos, dividir en lotes y procesarlos SECUENCIALMENTE
       const totalBatches = Math.ceil(codificaciones.length / BATCH_SIZE);
-      console.log(`📦 Processing ${codificaciones.length} codes in ${totalBatches} batches of ${BATCH_SIZE} (PARALLEL)...`);
+      console.log(`📦 Processing ${codificaciones.length} codes in ${totalBatches} batches of ${BATCH_SIZE} (SEQUENTIAL)...`);
 
-      // Crear array de promesas para procesar en paralelo
-      const batchPromises: Promise<any[]>[] = [];
-
+      // Procesar lotes uno por uno (secuencial)
       for (let i = 0; i < codificaciones.length; i += BATCH_SIZE) {
         const batch = codificaciones.slice(i, i + BATCH_SIZE);
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
-        const batchPromise = retryWithBackoff(async () => {
-          console.log(`  🚀 Starting batch ${batchNum}/${totalBatches}: ${batch.length} codes`);
+        console.log(`  🚀 Starting batch ${batchNum}/${totalBatches}: ${batch.length} codes`);
 
-          const { data, error } = await supabase
+        // Update progress: 60% + (batch progress * 10%)
+        const progressPercent = 60 + ((batchNum / totalBatches) * 10);
+        onProgress?.(progressPercent, `Verificando lote ${batchNum} de ${totalBatches}...`);
+
+        const { data, error } = await retryWithBackoff(async () => {
+          const result = await supabase
             .from('product_certificates')
             .select('codificacion, titular, estado, created_at')
             .in('codificacion', batch);
 
-          if (error) {
-            console.error(`❌ Error in batch ${batchNum}:`, error);
-            throw error;
-          }
-
-          console.log(`  ✅ Completed batch ${batchNum}/${totalBatches}: found ${data?.length || 0} existing certs`);
-
-          // Update progress: 60% + (batch progress * 10%)
-          const progressPercent = 60 + ((batchNum / totalBatches) * 10);
-          onProgress?.(progressPercent, `Verificando lote ${batchNum} de ${totalBatches}...`);
-
-          return data || [];
+          if (result.error) throw result.error;
+          return result;
         });
 
-        batchPromises.push(batchPromise);
+        if (error) {
+          console.error(`❌ Error in batch ${batchNum}:`, error);
+          throw error;
+        }
+
+        // Agregar resultados de este lote
+        if (data && data.length > 0) {
+          existingCerts.push(...data);
+        }
+
+        console.log(`  ✅ Completed batch ${batchNum}/${totalBatches}: found ${data?.length || 0} existing certs (Total so far: ${existingCerts.length})`);
+
+        // Pequeña pausa entre lotes para no sobrecargar
+        if (i + BATCH_SIZE < codificaciones.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
-      // Ejecutar todas las consultas en paralelo con Promise.all
-      console.log(`⚡ Executing ${batchPromises.length} batch queries in parallel...`);
-      const batchResults = await Promise.all(batchPromises);
-
-      // Combinar todos los resultados
-      existingCerts = batchResults.flat();
       console.log(`✅ All batches completed! Total existing certificates found: ${existingCerts.length}`);
     }
   } catch (error: any) {
