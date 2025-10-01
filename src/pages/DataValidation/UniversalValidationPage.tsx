@@ -24,6 +24,11 @@ export const UniversalValidationPage: React.FC = () => {
     fileSize: number;
   } | null>(null);
 
+  // Log para detectar cambios en currentStep
+  React.useEffect(() => {
+    console.log('📍 currentStep changed to:', currentStep);
+  }, [currentStep]);
+
   const handleUploadReadyForConfirmation = (
     id: string,
     data: ParsedData,
