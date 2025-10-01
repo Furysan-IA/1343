@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Download, Loader2 } from 'lucide-react';
+import { X, Download, Loader as Loader2 } from 'lucide-react';
 
 interface DJCPreviewData {
   numero_djc: string;

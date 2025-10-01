@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
-import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
+import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
 
