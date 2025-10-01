@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, RotateCcw, Trash2, X, AlertCircle, CheckCircle, Clock, Users, Package } from 'lucide-react';
+import { Database, RotateCcw, Trash2, X, CircleAlert as AlertCircle, CircleCheck as CheckCircle, Clock, Users, Package } from 'lucide-react';
 import { getBackupHistory, restoreFromSnapshot, deleteSnapshot, BackupSnapshot } from '../services/backup.service';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
