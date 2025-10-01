@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync, createPortal } from 'react-dom';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
@@ -63,6 +63,24 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       handleFileSelection(file);
     }
   };
+
+  // Bloquear scroll del body cuando el modal esté abierto
+  useEffect(() => {
+    if (showDuplicateModal) {
+      console.log('🔒 Blocking body scroll for modal');
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+    } else {
+      console.log('🔓 Restoring body scroll');
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    };
+  }, [showDuplicateModal]);
 
   const handleFileSelection = (file: File) => {
     const validation = validateFile(file);
@@ -462,11 +480,28 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       {console.log('🔍 Render check - showDuplicateModal:', showDuplicateModal, 'duplicateCheckResult:', !!duplicateCheckResult)}
       {showDuplicateModal && duplicateCheckResult && createPortal(
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          style={{ zIndex: 9999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            zIndex: 999999,
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={(e) => {
+            console.log('🎯 MODAL OVERLAY CLICKED!');
+            e.stopPropagation();
+          }}
         >
           {console.log('🎨 RENDERING DUPLICATE MODAL IN PORTAL', { showDuplicateModal, hasResult: !!duplicateCheckResult, stats: duplicateCheckResult?.stats })}
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden" style={{ zIndex: 10000 }}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden"
+            style={{ zIndex: 1000000, position: 'relative' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className={`p-6 ${duplicateCheckResult.stats.duplicatesFound > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
               <div className="flex items-start justify-between">
