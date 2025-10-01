@@ -579,11 +579,15 @@ export const detectDuplicates = async (
   productMatches: ProductMatch[];
   newClients: UniversalRecord[];
   newProducts: UniversalRecord[];
+  incompleteClients: UniversalRecord[];
+  incompleteProducts: UniversalRecord[];
 }> => {
   const clientMatches: ClientMatch[] = [];
   const productMatches: ProductMatch[] = [];
   const newClients: UniversalRecord[] = [];
   const newProducts: UniversalRecord[] = [];
+  const incompleteClients: UniversalRecord[] = [];
+  const incompleteProducts: UniversalRecord[] = [];
 
   const seenCUITs = new Set<string>();
   const seenCodificaciones = new Set<string>();
@@ -596,7 +600,6 @@ export const detectDuplicates = async (
 
   for (const record of records) {
     const cuit = record.cuit;
-    // Skip invalid or missing CUIT values
     const cuitStr = String(cuit || '').trim();
     const isValidCuit = cuitStr && cuitStr !== 'NA' && cuitStr !== 'N/A' && cuitStr !== '0' && cuitStr.length > 0;
 
@@ -634,10 +637,18 @@ export const detectDuplicates = async (
           email: record.email
         });
       }
+    } else if (cuitStr) {
+      // CUIT is present but invalid (NA, N/A, 0, etc.)
+      incompleteClients.push({
+        cuit: record.cuit,
+        razon_social: record.razon_social,
+        direccion: record.direccion,
+        email: record.email,
+        _validation_warning: 'CUIT inválido o incompleto'
+      });
     }
 
     const codificacion = record.codificacion;
-    // Skip invalid or missing codificacion values
     const codificacionStr = String(codificacion || '').trim();
     const isValidCodificacion = codificacionStr && codificacionStr !== 'NA' && codificacionStr !== 'N/A' && codificacionStr.length > 0;
 
@@ -663,10 +674,16 @@ export const detectDuplicates = async (
       } else {
         newProducts.push(record);
       }
+    } else if (codificacionStr) {
+      // Codificacion is present but invalid (NA, N/A, etc.)
+      incompleteProducts.push({
+        ...record,
+        _validation_warning: 'Codificación inválida o incompleta'
+      });
     }
   }
 
-  return { clientMatches, productMatches, newClients, newProducts };
+  return { clientMatches, productMatches, newClients, newProducts, incompleteClients, incompleteProducts };
 };
 
 export const insertClientsAndProducts = async (

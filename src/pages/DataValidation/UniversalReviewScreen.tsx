@@ -30,9 +30,14 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
   const [productMatches, setProductMatches] = useState<ProductMatch[]>([]);
   const [newClients, setNewClients] = useState<UniversalRecord[]>([]);
   const [newProducts, setNewProducts] = useState<UniversalRecord[]>([]);
+  const [incompleteClients, setIncompleteClients] = useState<UniversalRecord[]>([]);
+  const [incompleteProducts, setIncompleteProducts] = useState<UniversalRecord[]>([]);
+  const [includeIncomplete, setIncludeIncomplete] = useState(false);
 
   const [expandedClientChanges, setExpandedClientChanges] = useState(false);
   const [expandedProductChanges, setExpandedProductChanges] = useState(false);
+  const [expandedIncompleteClients, setExpandedIncompleteClients] = useState(false);
+  const [expandedIncompleteProducts, setExpandedIncompleteProducts] = useState(false);
 
   useEffect(() => {
     analyzeData();
@@ -48,13 +53,17 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
         clientMatches: result.clientMatches.length,
         productMatches: result.productMatches.length,
         newClients: result.newClients.length,
-        newProducts: result.newProducts.length
+        newProducts: result.newProducts.length,
+        incompleteClients: result.incompleteClients.length,
+        incompleteProducts: result.incompleteProducts.length
       });
 
       setClientMatches(result.clientMatches);
       setProductMatches(result.productMatches);
       setNewClients(result.newClients);
       setNewProducts(result.newProducts);
+      setIncompleteClients(result.incompleteClients);
+      setIncompleteProducts(result.incompleteProducts);
       setLoading(false);
     } catch (error: any) {
       console.error('Error analyzing data:', error);
@@ -67,15 +76,25 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
     setProcessing(true);
 
     try {
+      // Combine normal clients with incomplete ones if user opted in
+      const allClientsToProcess = includeIncomplete
+        ? [...newClients, ...incompleteClients]
+        : newClients;
+
+      const allProductsToProcess = includeIncomplete
+        ? [...newProducts, ...incompleteProducts]
+        : newProducts;
+
       console.log('Processing data...', {
-        newClients: newClients.length,
-        newProducts: newProducts.length,
-        clientsWithChanges: clientMatches.filter(m => m.hasChanges).length
+        newClients: allClientsToProcess.length,
+        newProducts: allProductsToProcess.length,
+        clientsWithChanges: clientMatches.filter(m => m.hasChanges).length,
+        includingIncomplete: includeIncomplete
       });
 
       const result = await insertClientsAndProducts(
-        newClients,
-        newProducts,
+        allClientsToProcess,
+        allProductsToProcess,
         batchId,
         true
       );
@@ -377,6 +396,135 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {(incompleteClients.length > 0 || incompleteProducts.length > 0) && (
+            <div className="mb-6">
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-red-900 text-lg mb-2">
+                      ⚠️ Registros con Datos Incompletos o Inválidos
+                    </h3>
+                    <p className="text-red-800 mb-3">
+                      Se encontraron <strong>{incompleteClients.length + incompleteProducts.length}</strong> registros con campos CUIT o Codificación inválidos (como "NA", "N/A", vacíos, etc.).
+                    </p>
+                    <div className="space-y-2 mb-4">
+                      {incompleteClients.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-red-700">
+                          <Users className="w-4 h-4" />
+                          <span><strong>{incompleteClients.length}</strong> cliente{incompleteClients.length !== 1 ? 's' : ''} con CUIT inválido</span>
+                        </div>
+                      )}
+                      {incompleteProducts.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-red-700">
+                          <Package className="w-4 h-4" />
+                          <span><strong>{incompleteProducts.length}</strong> producto{incompleteProducts.length !== 1 ? 's' : ''} con codificación inválida</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white rounded-lg p-4 border border-red-200 mb-4">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={includeIncomplete}
+                          onChange={(e) => setIncludeIncomplete(e.target.checked)}
+                          className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div>
+                          <span className="font-medium text-slate-800 block mb-1">
+                            Sí, incluir estos registros de todas formas
+                          </span>
+                          <span className="text-sm text-slate-600">
+                            Los campos incompletos quedarán vacíos o con el valor actual, y podrás completarlos manualmente después en la sección de Gestión de Clientes/Productos.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {incompleteClients.length > 0 && (
+                      <button
+                        onClick={() => setExpandedIncompleteClients(!expandedIncompleteClients)}
+                        className="w-full flex items-center justify-between p-3 bg-white border border-red-300 rounded-lg hover:bg-red-50 mb-2"
+                      >
+                        <span className="text-sm font-medium text-red-900">
+                          Ver clientes con datos incompletos ({incompleteClients.length})
+                        </span>
+                        {expandedIncompleteClients ? (
+                          <ChevronUp className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    )}
+
+                    {expandedIncompleteClients && (
+                      <div className="mt-2 bg-white rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto border border-red-200 mb-2">
+                        {incompleteClients.slice(0, 20).map((client, idx) => (
+                          <div key={idx} className="text-sm border-b border-red-100 pb-2 last:border-0">
+                            <div className="font-medium text-slate-800">
+                              CUIT: <span className="text-red-600">{client.cuit || '(vacío)'}</span>
+                            </div>
+                            <div className="text-slate-600">
+                              Razón Social: {client.razon_social || '(vacío)'}
+                            </div>
+                            <div className="text-xs text-red-600 mt-1">
+                              {client._validation_warning}
+                            </div>
+                          </div>
+                        ))}
+                        {incompleteClients.length > 20 && (
+                          <p className="text-sm text-slate-500 text-center pt-2">
+                            ... y {incompleteClients.length - 20} cliente{incompleteClients.length - 20 !== 1 ? 's' : ''} más
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {incompleteProducts.length > 0 && (
+                      <button
+                        onClick={() => setExpandedIncompleteProducts(!expandedIncompleteProducts)}
+                        className="w-full flex items-center justify-between p-3 bg-white border border-red-300 rounded-lg hover:bg-red-50"
+                      >
+                        <span className="text-sm font-medium text-red-900">
+                          Ver productos con datos incompletos ({incompleteProducts.length})
+                        </span>
+                        {expandedIncompleteProducts ? (
+                          <ChevronUp className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    )}
+
+                    {expandedIncompleteProducts && (
+                      <div className="mt-2 bg-white rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto border border-red-200">
+                        {incompleteProducts.slice(0, 20).map((product, idx) => (
+                          <div key={idx} className="text-sm border-b border-red-100 pb-2 last:border-0">
+                            <div className="font-medium text-slate-800">
+                              Codificación: <span className="text-red-600">{product.codificacion || '(vacío)'}</span>
+                            </div>
+                            <div className="text-slate-600">
+                              Producto: {product.producto || '(vacío)'}
+                            </div>
+                            <div className="text-xs text-red-600 mt-1">
+                              {product._validation_warning}
+                            </div>
+                          </div>
+                        ))}
+                        {incompleteProducts.length > 20 && (
+                          <p className="text-sm text-slate-500 text-center pt-2">
+                            ... y {incompleteProducts.length - 20} producto{incompleteProducts.length - 20 !== 1 ? 's' : ''} más
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
