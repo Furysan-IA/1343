@@ -476,9 +476,33 @@ export const createBatch = async (
   try {
     console.log('📦 createBatch started:', metadata);
 
-    console.log('🔐 Getting authenticated user...');
+    console.log('🔐 Refreshing session and getting authenticated user...');
 
-    // Agregar timeout de 5 segundos para evitar que se cuelgue
+    // PASO 1: Intentar refrescar la sesión primero
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData?.session) {
+        console.warn('⚠️ No active session found, will attempt refresh...');
+
+        // Intentar refrescar la sesión
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError) {
+          console.error('❌ Session refresh failed:', refreshError);
+          throw new Error('Tu sesión ha expirado. Por favor, cierra sesión y vuelve a ingresar.');
+        }
+
+        console.log('✅ Session refreshed successfully');
+      } else {
+        console.log('✅ Active session found');
+      }
+    } catch (sessionCheckError: any) {
+      console.error('❌ Error checking/refreshing session:', sessionCheckError);
+      throw new Error('Error de autenticación. Por favor, recarga la página e intenta nuevamente.');
+    }
+
+    // PASO 2: Obtener el usuario autenticado con timeout
     const getUserWithTimeout = async () => {
       const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Auth timeout after 5 seconds')), 5000)
@@ -501,12 +525,12 @@ export const createBatch = async (
 
     if (authError) {
       console.error('❌ Auth error:', authError);
-      throw new Error(`Error de autenticación: ${authError.message}`);
+      throw new Error(`Tu sesión ha expirado. Por favor, cierra sesión y vuelve a ingresar.`);
     }
 
     if (!user?.user) {
       console.error('❌ No user found in auth response');
-      throw new Error('Usuario no autenticado');
+      throw new Error('Usuario no autenticado. Por favor, recarga la página.');
     }
 
     console.log('👤 User authenticated:', user.user.id);
