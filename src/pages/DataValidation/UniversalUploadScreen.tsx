@@ -69,8 +69,14 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       // Paso 1: Leer archivo
       setProcessingStep('Leyendo archivo...');
       setProgress(20);
+
+      console.log('About to parse file...');
       const parsedData = await parseFile(selectedFile);
-      console.log('File parsed successfully:', { rowCount: parsedData.rows.length });
+      console.log('File parsed successfully:', {
+        rowCount: parsedData.rows.length,
+        headers: parsedData.headers,
+        sampleRow: parsedData.rows[0]
+      });
 
       // Paso 2: Validar estructura
       setProcessingStep('Validando estructura...');
@@ -109,11 +115,20 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       toast.success('Archivo validado exitosamente!');
       onUploadComplete(batchId, parsedData);
     } catch (error: any) {
-      console.error('Error processing file:', error);
-      toast.error(error.message || 'Error al procesar archivo');
+      console.error('❌ Error processing file:', error);
+      console.error('Error stack:', error?.stack);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        cause: error?.cause
+      });
+
+      const errorMessage = error?.message || 'Error desconocido al procesar archivo';
+      toast.error(errorMessage);
+
       setValidationErrors([{
-        message: error.message || 'Error desconocido al procesar archivo',
-        code: 'UNKNOWN_ERROR'
+        message: errorMessage,
+        code: error?.code || 'UNKNOWN_ERROR'
       }]);
       setShowErrorModal(true);
       setIsProcessing(false);
