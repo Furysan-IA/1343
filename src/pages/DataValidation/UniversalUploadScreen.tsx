@@ -7,7 +7,12 @@ import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
 interface UniversalUploadScreenProps {
   onUploadComplete: (batchId: string, parsedData: ParsedData) => void;
-  onReadyForConfirmation?: (batchId: string, parsedData: ParsedData, stats: DuplicateCheckStats) => void;
+  onReadyForConfirmation?: (
+    batchId: string,
+    parsedData: ParsedData,
+    stats: DuplicateCheckStats,
+    metadata: { filename: string; fileSize: number }
+  ) => void;
 }
 
 interface DuplicateCheckStats {
@@ -257,26 +262,19 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
 
       console.log('🎯 Data saved, now showing confirmation...');
 
-      // Si hay callback de confirmación, mostrar modal PRIMERO
-      // El batch se creará DESPUÉS cuando el usuario confirme
+      // Si hay callback de confirmación, mostrar modal INMEDIATAMENTE
+      // NO crear batch aquí - el componente padre lo creará cuando el usuario confirme
       if (onReadyForConfirmation) {
-        console.log('🎯 Showing confirmation modal (batch will be created after user confirms)...');
+        console.log('🎯 Showing confirmation modal immediately (skipping batch creation)...');
+        console.log('✅ Calling onReadyForConfirmation with temporary batch ID...');
 
-        // Crear batch ahora de forma rápida
-        try {
-          const batchId = await createBatch({
-            filename: selectedFile.name,
-            fileSize: selectedFile.size,
-            totalRecords: duplicateCheck.stats.activeRecords
-          });
-          console.log('✅ Batch created successfully:', batchId);
-          console.log('🎯 Calling onReadyForConfirmation callback...');
-          onReadyForConfirmation(batchId, parsedData, duplicateCheck.stats);
-        } catch (batchError: any) {
-          console.error('❌ Error creating batch:', batchError);
-          toast.error('Error al crear el batch: ' + batchError.message);
-          setIsProcessing(false);
-        }
+        // Llamar al callback con un batch ID temporal
+        // El componente padre creará el batch real cuando el usuario confirme
+        const tempBatchId = 'temp-' + Date.now();
+        onReadyForConfirmation(tempBatchId, parsedData, duplicateCheck.stats, {
+          filename: selectedFile.name,
+          fileSize: selectedFile.size
+        });
         return;
       }
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { UniversalUploadScreen } from './UniversalUploadScreen';
 import { UniversalReviewScreen } from './UniversalReviewScreen';
-import { ParsedData, DuplicateCheckResult } from '../../services/universalDataValidation.service';
+import { ParsedData, DuplicateCheckResult, createBatch } from '../../services/universalDataValidation.service';
 import { CircleCheck as CheckCircle, CircleAlert as AlertCircle, FileText, CircleCheck as Check, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 
 type Step = 'upload' | 'review' | 'complete';
 
@@ -14,31 +15,56 @@ export const UniversalValidationPage: React.FC = () => {
 
   // Estado para el modal de confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
   const [pendingUploadData, setPendingUploadData] = useState<{
     id: string;
     data: ParsedData;
     stats: DuplicateCheckResult['stats'];
+    filename: string;
+    fileSize: number;
   } | null>(null);
 
   const handleUploadReadyForConfirmation = (
     id: string,
     data: ParsedData,
-    stats: DuplicateCheckResult['stats']
+    stats: DuplicateCheckResult['stats'],
+    metadata: { filename: string; fileSize: number }
   ) => {
     console.log('🎯 Upload ready for confirmation:', { id, recordCount: data.rows.length, stats });
-    setPendingUploadData({ id, data, stats });
+    setPendingUploadData({ id, data, stats, filename: metadata.filename, fileSize: metadata.fileSize });
     setShowConfirmModal(true);
   };
 
-  const handleConfirmUpload = () => {
-    console.log('✅ User confirmed upload, proceeding to review');
+  const handleConfirmUpload = async () => {
+    console.log('✅ User confirmed upload, creating batch and proceeding to review');
     if (!pendingUploadData) return;
 
-    setBatchId(pendingUploadData.id);
-    setParsedData(pendingUploadData.data);
-    setShowConfirmModal(false);
-    setPendingUploadData(null);
-    setCurrentStep('review');
+    try {
+      setIsCreatingBatch(true);
+
+      // Crear el batch AHORA que el usuario confirmó
+      console.log('📦 Creating batch...');
+      const realBatchId = await createBatch({
+        filename: pendingUploadData.filename,
+        fileSize: pendingUploadData.fileSize,
+        totalRecords: pendingUploadData.stats.activeRecords
+      });
+
+      console.log('✅ Batch created successfully:', realBatchId);
+
+      // Guardar datos y navegar a la pantalla de revisión
+      setBatchId(realBatchId);
+      setParsedData(pendingUploadData.data);
+      setShowConfirmModal(false);
+      setPendingUploadData(null);
+      setIsCreatingBatch(false);
+      setCurrentStep('review');
+    } catch (error: any) {
+      console.error('❌ Error creating batch:', error);
+      toast.error('Error al crear el batch: ' + error.message);
+      setIsCreatingBatch(false);
+      // No cerrar el modal, dar oportunidad de reintentar
+    }
   };
 
   const handleCancelUpload = () => {
@@ -207,15 +233,24 @@ export const UniversalValidationPage: React.FC = () => {
             <div className="bg-slate-50 p-6 flex gap-3 justify-end border-t border-slate-200">
               <button
                 onClick={handleCancelUpload}
-                className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                disabled={isCreatingBatch}
+                className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleConfirmUpload}
-                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                disabled={isCreatingBatch}
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Continuar
+                {isCreatingBatch ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Creando...
+                  </>
+                ) : (
+                  'Continuar'
+                )}
               </button>
             </div>
           </div>
