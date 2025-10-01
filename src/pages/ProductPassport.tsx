@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabasePublic } from '../lib/supabase';
-import { 
-  Package, Shield, Factory, Calendar, MapPin, User, 
-  FileText, Award, Globe, Phone, Mail, Building2,
-  CheckCircle, AlertCircle, Clock, ArrowLeft, ExternalLink,
-  QrCode, Download, Eye, Loader2, AlertTriangle, Home
-} from 'lucide-react';
+import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home } from 'lucide-react';
 
 interface Product {
   codificacion: string;
