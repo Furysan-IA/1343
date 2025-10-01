@@ -1,31 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import {
-  Upload,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  FileText,
-  Download,
-  RefreshCw,
-  Filter,
-  Users,
-  BarChart3,
-  Clock,
-  Undo2,
-  ChevronRight,
-  ChevronLeft,
-  Eye,
-  Edit2,
-  Check,
-  X as XIcon,
-  Plus,
-  Minus,
-  Info,
-  ArrowRight,
-} from 'lucide-react';
+import { Upload, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, TriangleAlert as AlertTriangle, FileText, Download, RefreshCw, ListFilter as Filter, Users, ChartBar as BarChart3, Clock, Undo2, ChevronRight, ChevronLeft, Eye, CreditCard as Edit2, Check, X as XIcon, Plus, Minus, Info, ArrowRight } from 'lucide-react';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import {

@@ -1,15 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
-import {
-  BarChart3,
-  Package,
-  Users,
-  CheckCircle,
-  FileText,
-  Home,
-  FileCheck,
-  Upload
-} from 'lucide-react';
+import { ChartBar as BarChart3, Package, Users, CircleCheck as CheckCircle, FileText, Chrome as Home, FileCheck, Upload } from 'lucide-react';
 
 const navigation = [
   { name: 'dashboard', href: '/', icon: Home },
