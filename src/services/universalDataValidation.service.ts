@@ -79,13 +79,15 @@ const normalizeHeader = (header: string): string => {
   return header
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '_')
+    .replace(/\./g, '')           // Quitar puntos
+    .replace(/\s+/g, '_')         // Espacios a guiones bajos
     .replace(/[áàäâ]/g, 'a')
     .replace(/[éèëê]/g, 'e')
     .replace(/[íìïî]/g, 'i')
     .replace(/[óòöô]/g, 'o')
     .replace(/[úùüû]/g, 'u')
-    .replace(/ñ/g, 'n');
+    .replace(/ñ/g, 'n')
+    .replace(/[^a-z0-9_]/g, '');  // Quitar cualquier otro caracter especial
 };
 
 export const validateFile = (file: File) => {
@@ -151,8 +153,10 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
         }
 
         console.log('✅ JSON data extracted, rows:', jsonData.length);
-        const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h)));
-        console.log('📋 Headers:', headers);
+        const originalHeaders = jsonData[0] as any[];
+        const headers = originalHeaders.map(h => normalizeHeader(String(h)));
+        console.log('📋 Original headers:', originalHeaders);
+        console.log('📋 Normalized headers:', headers);
 
         const rows: UniversalRecord[] = [];
 
