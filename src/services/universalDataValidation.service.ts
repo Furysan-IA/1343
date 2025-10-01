@@ -477,7 +477,25 @@ export const createBatch = async (
     console.log('📦 createBatch started:', metadata);
 
     console.log('🔐 Getting authenticated user...');
-    const { data: user, error: authError } = await supabase.auth.getUser();
+
+    // Agregar timeout de 5 segundos para evitar que se cuelgue
+    const getUserWithTimeout = async () => {
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Auth timeout after 5 seconds')), 5000)
+      );
+      const getUserPromise = supabase.auth.getUser();
+      return Promise.race([getUserPromise, timeout]);
+    };
+
+    let authResult;
+    try {
+      authResult = await getUserWithTimeout();
+    } catch (timeoutError: any) {
+      console.error('❌ Auth timeout or error:', timeoutError);
+      throw new Error(`Error de autenticación: ${timeoutError.message}`);
+    }
+
+    const { data: user, error: authError } = authResult as any;
 
     console.log('🔐 Auth response:', { hasUser: !!user?.user, authError });
 

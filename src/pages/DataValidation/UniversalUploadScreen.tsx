@@ -255,21 +255,28 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
         setProcessingStep('');
       });
 
-      console.log('🎯 Data saved, now creating batch and showing confirmation...');
+      console.log('🎯 Data saved, now showing confirmation...');
 
-      // Crear el batch ANTES de mostrar el modal
-      const batchId = await createBatch({
-        filename: selectedFile.name,
-        fileSize: selectedFile.size,
-        totalRecords: duplicateCheck.stats.activeRecords
-      });
-
-      console.log('✅ Batch created:', batchId);
-
-      // Si hay callback de confirmación, usarlo (modal en el padre)
+      // Si hay callback de confirmación, mostrar modal PRIMERO
+      // El batch se creará DESPUÉS cuando el usuario confirme
       if (onReadyForConfirmation) {
-        console.log('🎯 Calling onReadyForConfirmation callback...');
-        onReadyForConfirmation(batchId, parsedData, duplicateCheck.stats);
+        console.log('🎯 Showing confirmation modal (batch will be created after user confirms)...');
+
+        // Crear batch ahora de forma rápida
+        try {
+          const batchId = await createBatch({
+            filename: selectedFile.name,
+            fileSize: selectedFile.size,
+            totalRecords: duplicateCheck.stats.activeRecords
+          });
+          console.log('✅ Batch created successfully:', batchId);
+          console.log('🎯 Calling onReadyForConfirmation callback...');
+          onReadyForConfirmation(batchId, parsedData, duplicateCheck.stats);
+        } catch (batchError: any) {
+          console.error('❌ Error creating batch:', batchError);
+          toast.error('Error al crear el batch: ' + batchError.message);
+          setIsProcessing(false);
+        }
         return;
       }
 
