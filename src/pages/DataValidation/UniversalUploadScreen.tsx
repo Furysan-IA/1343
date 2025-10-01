@@ -253,43 +253,21 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       console.log('🎯 Data saved, now showing modal...');
 
-      // TEMPORAL: Usar confirm nativo para probar el flujo
-      const userWantsToContinue = window.confirm(
-        `📊 ANÁLISIS COMPLETADO\n\n` +
-        `Total de filas: ${duplicateCheck.stats.totalInFile}\n` +
-        `Con "baja": ${duplicateCheck.stats.withBaja}\n` +
-        `Registros activos: ${duplicateCheck.stats.activeRecords}\n` +
-        `Duplicados encontrados: ${duplicateCheck.stats.duplicatesFound}\n` +
-        `Nuevos certificados: ${duplicateCheck.stats.newRecordsCount}\n\n` +
-        `¿Deseas continuar con la carga?`
-      );
-
-      if (!userWantsToContinue) {
-        console.log('❌ User cancelled via confirm dialog');
-        handleCancelDuplicateCheck();
-        return;
-      }
-
-      console.log('✅ User confirmed via confirm dialog, continuing...');
-      // Continuar con el flujo pasando los datos directamente
-      await handleContinueAfterDuplicateCheck(selectedFile, parsedData, duplicateCheck);
-      return;
-
-      // TODO: Restaurar modal React cuando se solucione el problema de visualización
-      // Mostrar modal en una actualización separada
+      // Mostrar el modal React
       flushSync(() => {
-        console.log('🎯 About to show duplicate modal');
         setShowDuplicateModal(true);
-        console.log('🎯 showDuplicateModal state set to TRUE');
       });
 
-      // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
+      console.log('✅ Modal shown, waiting for user interaction...');
       return;
 
-      // Paso 4: Crear batch
-      setProcessingStep('Preparando análisis...');
-      setProgress(80);
-      console.log('Creating batch...');
+      // El resto del código NO se ejecuta aquí - el flujo continúa cuando el usuario hace clic en:
+      // - "Continuar" -> handleContinueAfterDuplicateCheck()
+      // - "Cancelar" -> handleCancelDuplicateCheck()
+
+      // ==========================================
+      // CÓDIGO MUERTO - NUNCA SE EJECUTA
+      // ==========================================
       const batchId = await createBatch({
         filename: selectedFile.name,
         fileSize: selectedFile.size,
@@ -676,7 +654,15 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
                 Cancelar
               </button>
               <button
-                onClick={handleContinueAfterDuplicateCheck}
+                onClick={() => {
+                  console.log('🎯 Modal "Continuar" button clicked');
+                  console.log('📦 Current state:', {
+                    hasFile: !!selectedFile,
+                    hasParsedData: !!parsedDataCache,
+                    hasDuplicateResult: !!duplicateCheckResult
+                  });
+                  handleContinueAfterDuplicateCheck();
+                }}
                 className={`px-6 py-2.5 text-white rounded-lg transition-colors font-medium ${
                   duplicateCheckResult.stats.duplicatesFound > 0
                     ? 'bg-orange-600 hover:bg-orange-700'
