@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { Layout } from './components/Layout/Layout';
@@ -18,8 +18,20 @@ import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
 import { QRModTool } from './components/QRModTool';
 
+function RouteLogger() {
+  const location = useLocation();
+
+  useEffect(() => {
+    console.log('🛣️ ROUTE CHANGED TO:', location.pathname);
+  }, [location]);
+
+  return null;
+}
+
 function AppContent() {
   const { user, loading } = useAuth();
+
+  console.log('🏢 AppContent render, user:', !!user, 'loading:', loading);
 
   if (loading) {
     return (
@@ -35,6 +47,7 @@ function AppContent() {
 
   return (
     <Layout>
+      <RouteLogger />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />

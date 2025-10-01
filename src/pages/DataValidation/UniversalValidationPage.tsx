@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 type Step = 'upload' | 'review' | 'complete';
 
 export const UniversalValidationPage: React.FC = () => {
+  console.log('🔄 UniversalValidationPage RENDER CALLED');
+
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [batchId, setBatchId] = useState<string>('');
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
@@ -24,10 +26,27 @@ export const UniversalValidationPage: React.FC = () => {
     fileSize: number;
   } | null>(null);
 
+  console.log('📊 Current State:', {
+    currentStep,
+    showConfirmModal,
+    hasPendingData: !!pendingUploadData,
+    isCreatingBatch
+  });
+
   // Log para detectar cambios en currentStep
   React.useEffect(() => {
     console.log('📍 currentStep changed to:', currentStep);
   }, [currentStep]);
+
+  // Log para detectar cambios en showConfirmModal
+  React.useEffect(() => {
+    console.log('🚪 showConfirmModal changed to:', showConfirmModal);
+  }, [showConfirmModal]);
+
+  // Log para detectar cambios en pendingUploadData
+  React.useEffect(() => {
+    console.log('📦 pendingUploadData changed:', !!pendingUploadData);
+  }, [pendingUploadData]);
 
   // Log para detectar montaje/desmontaje del componente
   React.useEffect(() => {
@@ -109,14 +128,19 @@ export const UniversalValidationPage: React.FC = () => {
     setCurrentStep('upload');
   };
 
+  console.log('🎨 About to render JSX, currentStep:', currentStep, 'showConfirmModal:', showConfirmModal);
+
   return (
     <>
-      {currentStep === 'upload' && (
-        <UniversalUploadScreen
-          onUploadComplete={handleUploadComplete}
-          onReadyForConfirmation={handleUploadReadyForConfirmation}
-        />
-      )}
+      {(() => {
+        console.log('❓ Evaluating upload screen render condition:', currentStep === 'upload');
+        return currentStep === 'upload' && (
+          <UniversalUploadScreen
+            onUploadComplete={handleUploadComplete}
+            onReadyForConfirmation={handleUploadReadyForConfirmation}
+          />
+        );
+      })()}
 
       {currentStep === 'review' && parsedData && (
         <UniversalReviewScreen
