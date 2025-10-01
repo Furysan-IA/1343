@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UniversalUploadScreen } from './UniversalUploadScreen';
 import { UniversalReviewScreen } from './UniversalReviewScreen';
 import { ParsedData, DuplicateCheckResult } from '../../services/universalDataValidation.service';
-import { CircleCheck as CheckCircle, AlertCircle, FileText, CheckCircle as Check, X } from 'lucide-react';
+import { CircleCheck as CheckCircle, CircleAlert as AlertCircle, FileText, CircleCheck as Check, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 type Step = 'upload' | 'review' | 'complete';
