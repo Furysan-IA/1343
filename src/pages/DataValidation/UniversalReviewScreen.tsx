@@ -164,7 +164,7 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
           <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
             <p className="text-yellow-900 font-medium">
               ⚠️ <strong>Importante:</strong> Los datos AÚN NO se han guardado en la base de datos.
-              Revisa el resumen abajo y presiona "Confirmar" cuando estés listo para actualizar.
+              Revisa el resumen abajo y presiona "Confirmar\" cuando estés listo para actualizar.
             </p>
           </div>
 
