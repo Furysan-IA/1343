@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UniversalUploadScreen } from './UniversalUploadScreen';
 import { UniversalReviewScreen } from './UniversalReviewScreen';
 import { ParsedData, EntityType } from '../../services/universalDataValidation.service';
-import { CheckCircle } from 'lucide-react';
+import { CircleCheck as CheckCircle } from 'lucide-react';
 
 type Step = 'upload' | 'review' | 'complete';
 
