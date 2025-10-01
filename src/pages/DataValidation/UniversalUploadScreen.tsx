@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
 import toast from 'react-hot-toast';
@@ -199,11 +200,9 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
       console.log('📊 Duplicate check stats:', duplicateCheck.stats);
       console.log('📋 Has duplicateCheckResult:', !!duplicateCheck);
 
-      // Usar setTimeout con 0ms para asegurar que el estado se actualice en el siguiente tick
-      setTimeout(() => {
-        console.log('🎯 Setting all states in next tick...');
-
-        // Primero guardar los datos
+      // Usar flushSync para forzar actualizaciones síncronas
+      flushSync(() => {
+        // Guardar los datos primero
         setParsedDataCache(parsedData);
         setDuplicateCheckResult(duplicateCheck);
 
@@ -211,15 +210,16 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         setIsProcessing(false);
         setProgress(0);
         setProcessingStep('');
+      });
 
-        // Mostrar modal en otro tick para asegurar que los datos están guardados
-        setTimeout(() => {
-          console.log('🎯 Showing duplicate modal NOW');
-          console.log('📊 duplicateCheckResult exists:', !!duplicateCheck);
-          setShowDuplicateModal(true);
-          console.log('🎯 showDuplicateModal state set to TRUE');
-        }, 50);
-      }, 0);
+      console.log('🎯 Data saved, now showing modal...');
+
+      // Mostrar modal en una actualización separada
+      flushSync(() => {
+        console.log('🎯 About to show duplicate modal');
+        setShowDuplicateModal(true);
+        console.log('🎯 showDuplicateModal state set to TRUE');
+      });
 
       // Esperar respuesta del usuario (el flujo continúa en handleContinueAfterDuplicateCheck)
       return;
