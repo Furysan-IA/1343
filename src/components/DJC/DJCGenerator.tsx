@@ -4,6 +4,7 @@ import { formatCuit } from '../../utils/formatters';
 import { jsPDF } from 'jspdf';
 import { AlertCircle, Download, FileText, Search, User, Package, CheckCircle, XCircle, Loader2, AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DJCPreviewModal } from './DJCPreview';
 
 interface Client {
   id: string;
@@ -33,10 +34,13 @@ interface Product {
   normas_aplicacion?: string;
   informe_ensayo_nro?: string;
   fecha_emision?: string;
-  fecha_vencimiento?: string;
+  vencimiento?: string;
   caracteristicas_tecnicas?: string;
   laboratorio?: string;
   direccion_legal_empresa?: string;
+  organismo_certificacion?: string;
+  esquema_certificacion?: string;
+  fecha_proxima_vigilancia?: string;
 }
 
 interface DJCHistory {
@@ -64,156 +68,21 @@ interface DJCPreviewData {
   codigo_producto: string;
   fabricante: string;
   identificacion_producto: string;
+  producto_marca: string;
+  producto_modelo: string;
+  caracteristicas_tecnicas: string;
+  reglamento_alcanzado: string;
   normas_tecnicas: string;
-  documento_evaluacion: string;
+  numero_certificado: string;
+  organismo_certificacion: string;
+  esquema_certificacion: string;
+  fecha_emision_certificado: string;
+  fecha_proxima_vigilancia: string;
+  laboratorio_ensayos: string;
+  informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
 }
-
-// Componente de Preview
-const DJCPreviewModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  djcData: DJCPreviewData | null;
-  onConfirm: () => void;
-  isGenerating: boolean;
-}> = ({ isOpen, onClose, djcData, onConfirm, isGenerating }) => {
-  if (!isOpen || !djcData) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Vista Previa DJC</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            disabled={isGenerating}
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-        
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <div className="max-w-3xl mx-auto">
-            <div className="text-center mb-8">
-              <h1 className="text-2xl font-bold mb-2">DECLARACIÓN JURADA DE CONFORMIDAD (DJC)</h1>
-              <p className="text-lg">{djcData.resolucion}</p>
-              <p className="mt-4 font-semibold">Número de Identificación de DJC:</p>
-              <p className="text-blue-600">{djcData.numero_djc}</p>
-              <p className="text-sm italic text-gray-600">(número único de identificación autodeterminado)</p>
-            </div>
-
-            <hr className="my-6" />
-
-            <div className="space-y-6">
-              <section>
-                <h3 className="font-bold text-lg mb-3">Información del Fabricante o Importador:</h3>
-                <div className="space-y-2 pl-4">
-                  <p>• <strong>Razón Social:</strong> {djcData.razon_social}</p>
-                  <p>• <strong>C.U.I.T. N°</strong> <span className="italic text-sm">(cuando fuera aplicable)</span>: {djcData.cuit}</p>
-                  <p>• <strong>Nombre Comercial o Marca:</strong> {djcData.marca}</p>
-                  <p>• <strong>Domicilio Legal:</strong> {djcData.domicilio_legal}</p>
-                  <p>• <strong>Domicilio de la planta:</strong> {djcData.domicilio_planta}</p>
-                  <p>• <strong>Teléfono:</strong> {djcData.telefono || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
-                  <p>• <strong>Correo Electrónico:</strong> {djcData.email}</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="font-bold text-lg mb-3">Representante Autorizado (si corresponde):</h3>
-                <div className="space-y-2 pl-4 text-gray-500 italic">
-                  <p>• <strong>Nombre y Apellido / Razón Social:</strong> {djcData.representante_nombre || 'No aplica'}</p>
-                  <p>• <strong>Domicilio Legal:</strong> {djcData.representante_domicilio || 'No aplica'}</p>
-                  <p>• <strong>C.U.I.T. N°:</strong> {djcData.representante_cuit || 'No aplica'}</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="font-bold text-lg mb-3">Información del Producto:</h3>
-                <div className="space-y-2 pl-4">
-                  <p>• <strong>Código de Identificación:</strong> {djcData.codigo_producto}</p>
-                  <p>• <strong>Fabricante:</strong> {djcData.fabricante}</p>
-                  <p>• <strong>Identificación del producto:</strong> {djcData.identificacion_producto}</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="font-bold text-lg mb-3">Normas y Evaluación de la Conformidad:</h3>
-                <div className="space-y-3 pl-4">
-                  <p>• <strong>Reglamento/s Aplicable/s:</strong> {djcData.resolucion}</p>
-                  <p>• <strong>Norma/s Técnica/s:</strong> {djcData.normas_tecnicas || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
-                  <p>• <strong>Documento de Evaluación:</strong> {djcData.documento_evaluacion || <span className="text-red-600">CAMPO NO ENCONTRADO</span>}</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="font-bold text-lg mb-3">Otros Datos:</h3>
-                <div className="pl-4">
-                  <p>• <strong>Enlace a la Declaración:</strong></p>
-                  <p className="text-blue-600 text-sm break-all">{djcData.enlace_declaracion}</p>
-                </div>
-              </section>
-
-              <div className="mt-8 pt-6 border-t">
-                <p className="italic text-sm text-gray-700 text-justify">
-                  La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los 
-                  Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa 
-                  por los datos declarados, así como por la conformidad del producto.
-                </p>
-                
-                <div className="mt-8">
-                  <p><strong>Fecha y Lugar:</strong> {djcData.fecha_lugar}</p>
-                  
-                  <div className="mt-12">
-                    <p className="italic text-gray-500">Espacio para firma y aclaración</p>
-                  </div>
-                </div>
-                
-                <div className="mt-8 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-700 text-center">
-                    DOCUMENTO PRELIMINAR - PENDIENTE DE FIRMA
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 border-t flex justify-end gap-4">
-          <button
-            onClick={onClose}
-            disabled={isGenerating}
-            className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isGenerating}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-              isGenerating 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Generando y Guardando...
-              </>
-            ) : (
-              <>
-                <Download className="h-5 w-5" />
-                Confirmar y Generar PDF
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const DJCGenerator: React.FC = () => {
   const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
@@ -375,8 +244,25 @@ const DJCGenerator: React.FC = () => {
     });
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
-    const identificacion = `${selectedProduct.marca || ''} - ${selectedProduct.modelo || ''} - ${selectedProduct.caracteristicas_tecnicas || ''}`;
     const qrLink = `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+
+    // Formatear fecha de emisión del certificado
+    const fechaEmisionCertificado = selectedProduct.fecha_emision
+      ? new Date(selectedProduct.fecha_emision).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : '';
+
+    // Formatear fecha de próxima vigilancia
+    const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
+      ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : '';
 
     const data: DJCPreviewData = {
       numero_djc: djcNumber,
@@ -385,7 +271,7 @@ const DJCGenerator: React.FC = () => {
       cuit: formatCuit(selectedClient.cuit || ''),
       marca: selectedProduct.marca || selectedProduct.titular || '',
       domicilio_legal: domicilio,
-      domicilio_planta: selectedProduct.planta_fabricacion || 'No especificado',
+      domicilio_planta: selectedProduct.planta_fabricacion || selectedProduct.fabricante || 'No especificado',
       telefono: selectedClient.telefono || '',
       email: selectedClient.email || '',
       representante_nombre: representante.nombre,
@@ -393,9 +279,19 @@ const DJCGenerator: React.FC = () => {
       representante_cuit: representante.cuit,
       codigo_producto: selectedProduct.codificacion,
       fabricante: selectedProduct.fabricante || '',
-      identificacion_producto: identificacion,
+      identificacion_producto: selectedProduct.producto || '',
+      producto_marca: selectedProduct.marca || '',
+      producto_modelo: selectedProduct.modelo || '',
+      caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
+      reglamento_alcanzado: selectedResolution,
       normas_tecnicas: selectedProduct.normas_aplicacion || '',
-      documento_evaluacion: selectedProduct.informe_ensayo_nro || '',
+      numero_certificado: selectedProduct.codificacion,
+      organismo_certificacion: selectedProduct.organismo_certificacion || '',
+      esquema_certificacion: selectedProduct.esquema_certificacion || '',
+      fecha_emision_certificado: fechaEmisionCertificado,
+      fecha_proxima_vigilancia: fechaProximaVigilancia,
+      laboratorio_ensayos: selectedProduct.laboratorio || '',
+      informe_ensayos: selectedProduct.informe_ensayo_nro || '',
       enlace_declaracion: qrLink,
       fecha_lugar: currentDate
     };
