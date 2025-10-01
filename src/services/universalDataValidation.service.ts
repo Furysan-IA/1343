@@ -596,8 +596,12 @@ export const detectDuplicates = async (
 
   for (const record of records) {
     const cuit = record.cuit;
-    if (cuit && !seenCUITs.has(String(cuit))) {
-      seenCUITs.add(String(cuit));
+    // Skip invalid or missing CUIT values
+    const cuitStr = String(cuit || '').trim();
+    const isValidCuit = cuitStr && cuitStr !== 'NA' && cuitStr !== 'N/A' && cuitStr !== '0' && cuitStr.length > 0;
+
+    if (isValidCuit && !seenCUITs.has(cuitStr)) {
+      seenCUITs.add(cuitStr);
 
       const { data } = await supabase
         .from('clients')
@@ -633,8 +637,12 @@ export const detectDuplicates = async (
     }
 
     const codificacion = record.codificacion;
-    if (codificacion && !seenCodificaciones.has(String(codificacion))) {
-      seenCodificaciones.add(String(codificacion));
+    // Skip invalid or missing codificacion values
+    const codificacionStr = String(codificacion || '').trim();
+    const isValidCodificacion = codificacionStr && codificacionStr !== 'NA' && codificacionStr !== 'N/A' && codificacionStr.length > 0;
+
+    if (isValidCodificacion && !seenCodificaciones.has(codificacionStr)) {
+      seenCodificaciones.add(codificacionStr);
 
       const { data } = await supabase
         .from('products')
