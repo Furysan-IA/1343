@@ -299,14 +299,78 @@ export const validateParsedData = (data: ParsedData) => {
   };
 };
 
+// Función para detectar certificados duplicados en la base de datos
+export const checkExistingCertificates = async (records: UniversalRecord[]): Promise<{
+  duplicates: Array<{ codificacion: string; existing: any; incoming: any }>;
+  newRecords: UniversalRecord[];
+}> => {
+  console.log('🔍 Checking for existing certificates...');
+
+  // Extraer todas las codificaciones únicas del archivo
+  const codificaciones = records
+    .map(r => r.codificacion)
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i); // Únicos
+
+  if (codificaciones.length === 0) {
+    console.log('⚠️ No certificate codes found in file');
+    return { duplicates: [], newRecords: records };
+  }
+
+  console.log(`📋 Found ${codificaciones.length} unique certificate codes in file`);
+
+  // Buscar en la base de datos
+  const { data: existingCerts, error } = await supabase
+    .from('product_certificates')
+    .select('*')
+    .in('codificacion', codificaciones);
+
+  if (error) {
+    console.error('❌ Error checking certificates:', error);
+    throw new Error(`Error al verificar certificados: ${error.message}`);
+  }
+
+  console.log(`✅ Found ${existingCerts?.length || 0} existing certificates in database`);
+
+  if (!existingCerts || existingCerts.length === 0) {
+    return { duplicates: [], newRecords: records };
+  }
+
+  // Crear mapa de certificados existentes por codificación
+  const existingMap = new Map(existingCerts.map(cert => [cert.codificacion, cert]));
+
+  const duplicates: Array<{ codificacion: string; existing: any; incoming: any }> = [];
+  const newRecords: UniversalRecord[] = [];
+
+  records.forEach(record => {
+    if (record.codificacion && existingMap.has(record.codificacion)) {
+      duplicates.push({
+        codificacion: record.codificacion,
+        existing: existingMap.get(record.codificacion),
+        incoming: record
+      });
+    } else {
+      newRecords.push(record);
+    }
+  });
+
+  console.log(`🔍 Analysis complete: ${duplicates.length} duplicates, ${newRecords.length} new records`);
+
+  return { duplicates, newRecords };
+};
+
 export const createBatch = async (
   metadata: { filename: string; fileSize: number; totalRecords: number }
 ): Promise<string> => {
+  console.log('📦 createBatch started:', metadata);
+
   const { data: user } = await supabase.auth.getUser();
 
   if (!user.user) {
-    throw new Error('User not authenticated');
+    throw new Error('Usuario no autenticado');
   }
+
+  console.log('👤 User authenticated:', user.user.id);
 
   const { data, error } = await supabase
     .from('upload_batches')
@@ -322,10 +386,11 @@ export const createBatch = async (
     .single();
 
   if (error) {
-    console.error('Error creating batch:', error);
-    throw error;
+    console.error('❌ Error creating batch:', error);
+    throw new Error(`Error al crear batch: ${error.message}`);
   }
 
+  console.log('✅ Batch created successfully:', data.id);
   return data.id;
 };
 

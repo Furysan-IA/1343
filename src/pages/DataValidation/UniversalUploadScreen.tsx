@@ -93,9 +93,38 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
         return;
       }
 
-      // Paso 3: Crear batch
-      setProcessingStep('Preparando análisis...');
+      // Paso 3: Verificar certificados duplicados
+      setProcessingStep('Verificando certificados existentes...');
       setProgress(60);
+      console.log('Checking for existing certificates...');
+
+      const { checkExistingCertificates } = await import('../../services/universalDataValidation.service');
+      const duplicateCheck = await checkExistingCertificates(parsedData.rows);
+
+      console.log('Duplicate check result:', {
+        duplicates: duplicateCheck.duplicates.length,
+        newRecords: duplicateCheck.newRecords.length
+      });
+
+      // Si hay duplicados, mostrar advertencia
+      if (duplicateCheck.duplicates.length > 0) {
+        const shouldContinue = window.confirm(
+          `⚠️ ATENCIÓN: Se encontraron ${duplicateCheck.duplicates.length} certificados que YA EXISTEN en la base de datos.\n\n` +
+          `Certificados duplicados: ${duplicateCheck.duplicates.slice(0, 5).map(d => d.codificacion).join(', ')}${duplicateCheck.duplicates.length > 5 ? '...' : ''}\n\n` +
+          `¿Deseas continuar de todas formas? Los certificados duplicados aparecerán en la revisión.`
+        );
+
+        if (!shouldContinue) {
+          setIsProcessing(false);
+          setSelectedFile(null);
+          setProgress(0);
+          return;
+        }
+      }
+
+      // Paso 4: Crear batch
+      setProcessingStep('Preparando análisis...');
+      setProgress(80);
       console.log('Creating batch...');
       const batchId = await createBatch({
         filename: selectedFile.name,
@@ -105,7 +134,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({ on
 
       console.log('Batch created:', batchId);
 
-      // Paso 4: Completado
+      // Paso 5: Completado
       setProcessingStep('Análisis completado!');
       setProgress(100);
 
