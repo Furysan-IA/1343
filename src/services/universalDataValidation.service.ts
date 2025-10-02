@@ -75,6 +75,26 @@ const PRODUCT_REQUIRED_FIELDS = ['codificacion', 'cuit', 'producto'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_ROWS = 10000;
 
+// Columnas válidas en la tabla products
+const VALID_PRODUCT_COLUMNS = new Set([
+  'codificacion', 'cuit', 'titular', 'tipo_certificacion', 'estado',
+  'en_proceso_renovacion', 'direccion_legal_empresa', 'fabricante',
+  'planta_fabricacion', 'origen', 'producto', 'marca', 'modelo',
+  'caracteristicas_tecnicas', 'normas_aplicacion', 'informe_ensayo_nro',
+  'laboratorio', 'ocp_extranjero', 'n_certificado_extranjero',
+  'fecha_emision_certificado_extranjero', 'disposicion_convenio',
+  'cod_rubro', 'cod_subrubro', 'nombre_subrubro', 'fecha_emision',
+  'vencimiento', 'fecha_cancelacion', 'motivo_cancelacion', 'dias_para_vencer',
+  'djc_status', 'certificado_status', 'enviado_cliente', 'certificado_path',
+  'djc_path', 'qr_path', 'qr_link', 'qr_status', 'qr_generated_at',
+  'organismo_certificacion', 'esquema_certificacion', 'fecha_proxima_vigilancia'
+]);
+
+// Columnas válidas en la tabla clients
+const VALID_CLIENT_COLUMNS = new Set([
+  'cuit', 'razon_social', 'direccion', 'email', 'telefono', 'contacto'
+]);
+
 const normalizeHeader = (header: string): string => {
   return header
     .toLowerCase()
@@ -228,6 +248,22 @@ const parseDate = (value: any): Date | null => {
 
   const parsed = new Date(value);
   return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+// Filtra campos inválidos de un record
+const filterValidFields = (record: any, entityType: EntityType): any => {
+  const validColumns = entityType === 'client' ? VALID_CLIENT_COLUMNS : VALID_PRODUCT_COLUMNS;
+  const filtered: any = {};
+
+  Object.keys(record).forEach(key => {
+    if (validColumns.has(key)) {
+      filtered[key] = record[key];
+    } else {
+      console.log(`⚠️ Skipping invalid column "${key}" for ${entityType}`);
+    }
+  });
+
+  return filtered;
 };
 
 // Convierte valores del Excel a tipos compatibles con PostgreSQL
@@ -829,6 +865,7 @@ export const insertClientsAndProducts = async (
   clientsInserted: number;
   clientsUpdated: number;
   productsInserted: number;
+  productsUpdated: number;
   errors: any[]
 }> => {
   const errors: any[] = [];
@@ -854,22 +891,23 @@ export const insertClientsAndProducts = async (
       const chunk = clientRecords.slice(i, i + chunkSize);
 
       for (const clientRecord of chunk) {
+        // Filtrar campos válidos
+        const cleanRecord = filterValidFields(clientRecord, 'client');
+
         const { data: existing } = await supabase
           .from('clients')
           .select('*')
-          .eq('cuit', clientRecord.cuit)
+          .eq('cuit', cleanRecord.cuit)
           .maybeSingle();
 
         if (existing && updateExistingClients) {
           const { error } = await supabase
             .from('clients')
             .update({
-              razon_social: clientRecord.razon_social,
-              direccion: clientRecord.direccion,
-              email: clientRecord.email,
+              ...cleanRecord,
               updated_at: new Date().toISOString()
             })
-            .eq('cuit', clientRecord.cuit);
+            .eq('cuit', cleanRecord.cuit);
 
           if (error) {
             errors.push({ type: 'client_update', cuit: clientRecord.cuit, error: error.message });
@@ -891,14 +929,14 @@ export const insertClientsAndProducts = async (
           }
         } else if (!existing) {
           // Validar campos requeridos antes de insertar
-          if (!clientRecord.razon_social || !clientRecord.direccion || !clientRecord.email) {
-            console.warn(`Skipping client ${clientRecord.cuit} - missing required fields`);
+          if (!cleanRecord.razon_social || !cleanRecord.direccion || !cleanRecord.email) {
+            console.warn(`Skipping client ${cleanRecord.cuit} - missing required fields`);
             continue;
           }
 
           const { data, error } = await supabase
             .from('clients')
-            .insert(clientRecord)
+            .insert(cleanRecord)
             .select()
             .single();
 
@@ -925,35 +963,43 @@ export const insertClientsAndProducts = async (
     console.log('Clients processed:', { inserted: clientsInserted, updated: clientsUpdated });
   }
 
+  let productsUpdated = 0;
+
   if (productRecords.length > 0) {
-    console.log('Inserting products...');
+    console.log('Processing products...');
     const chunkSize = 50;
+
+    // Campos protegidos que NO se deben actualizar
+    const PROTECTED_FIELDS = ['uuid', 'qr_path', 'qr_link', 'qr_status', 'qr_generated_at', 'created_at'];
 
     for (let i = 0; i < productRecords.length; i += chunkSize) {
       const chunk = productRecords.slice(i, i + chunkSize);
 
       for (const productRecord of chunk) {
+        // Filtrar campos válidos
+        const cleanRecord = filterValidFields(productRecord, 'product');
+
         const { data: existing } = await supabase
           .from('products')
           .select('*')
-          .eq('codificacion', productRecord.codificacion)
+          .eq('codificacion', cleanRecord.codificacion)
           .maybeSingle();
 
         if (!existing) {
-          // Validar campos requeridos antes de insertar
-          if (!productRecord.codificacion || !productRecord.cuit) {
+          // INSERTAR nuevo producto
+          if (!cleanRecord.codificacion || !cleanRecord.cuit) {
             console.warn(`Skipping product - missing required fields`);
             continue;
           }
 
           const { data, error } = await supabase
             .from('products')
-            .insert(productRecord)
+            .insert(cleanRecord)
             .select()
             .single();
 
           if (error) {
-            errors.push({ type: 'product_insert', codificacion: productRecord.codificacion, error: error.message });
+            errors.push({ type: 'product_insert', codificacion: cleanRecord.codificacion, error: error.message });
           } else if (data) {
             productsInserted++;
             try {
@@ -970,11 +1016,45 @@ export const insertClientsAndProducts = async (
             }
           }
         } else {
-          console.log(`Product ${productRecord.codificacion} already exists - SKIPPING to preserve QR/links`);
+          // ACTUALIZAR producto existente
+          const updateData: any = {};
+
+          // Copiar solo los campos que no están protegidos
+          Object.keys(cleanRecord).forEach(key => {
+            if (!PROTECTED_FIELDS.includes(key) && key !== 'codificacion') {
+              updateData[key] = cleanRecord[key];
+            }
+          });
+
+          updateData.updated_at = new Date().toISOString();
+
+          const { error } = await supabase
+            .from('products')
+            .update(updateData)
+            .eq('codificacion', cleanRecord.codificacion);
+
+          if (error) {
+            errors.push({ type: 'product_update', codificacion: cleanRecord.codificacion, error: error.message });
+          } else {
+            productsUpdated++;
+            try {
+              await supabase.from('product_audit_log').insert({
+                product_uuid: existing.uuid,
+                batch_id: batchId,
+                operation_type: 'UPDATE',
+                previous_values: existing,
+                new_values: { ...existing, ...updateData },
+                performed_by: user.user.id,
+                notes: 'Product updated from batch upload'
+              });
+            } catch (auditError) {
+              console.warn('Failed to log audit for product update:', auditError);
+            }
+          }
         }
       }
     }
-    console.log('Products inserted:', productsInserted);
+    console.log('Products processed:', { inserted: productsInserted, updated: productsUpdated });
   }
 
   return {
@@ -982,6 +1062,7 @@ export const insertClientsAndProducts = async (
     clientsInserted,
     clientsUpdated,
     productsInserted,
+    productsUpdated,
     errors
   };
 };
