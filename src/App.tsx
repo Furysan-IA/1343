@@ -11,6 +11,7 @@ import DataUploadPage from './pages/DataUpload';
 import DataUpdate from './pages/DataUpdate';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
+import DJCTemplateEditor from './components/DJC/DJCTemplateEditor';
 import { QRLanding } from './pages/QRLanding';
 import ProductPassport from './pages/ProductPassport';
 import { LoginForm } from './components/Auth/LoginForm';
@@ -58,6 +59,7 @@ function AppContent() {
         <Route path="/data-update" element={<DataUpdate />} />
         <Route path="/djc" element={<DJCManagement />} />
         <Route path="/djc-generator" element={<DJCGenerator />} />
+        <Route path="/djc/editor-plantillas" element={<DJCTemplateEditor />} />
       </Routes>
       {import.meta.env.DEV && <QRModTool />}
     </Layout>
