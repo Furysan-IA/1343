@@ -26,12 +26,22 @@ export class DatabaseService {
   }
 
   async getAllProducts(): Promise<Product[]> {
+    console.log('🔍 DatabaseService - Obteniendo todos los productos existentes...');
     const { data, error } = await supabase
       .from('products')
       .select('*')
       .order('codificacion');
 
-    if (error) throw new Error(`Error obteniendo productos: ${error.message}`);
+    if (error) {
+      console.error('❌ Error obteniendo productos:', error);
+      throw new Error(`Error obteniendo productos: ${error.message}`);
+    }
+
+    console.log(`✅ Productos existentes obtenidos: ${data?.length || 0}`);
+    if (data && data.length > 0) {
+      console.log(`📋 Primeras 3 codificaciones existentes:`, data.slice(0, 3).map(p => p.codificacion));
+    }
+
     return data || [];
   }
 
@@ -212,11 +222,17 @@ export class DatabaseService {
       qr_status: 'No generado'
     }));
 
+    console.log(`📦 Intentando insertar ${products.length} productos...`);
+    console.log(`📋 Primeras 3 codificaciones:`, products.slice(0, 3).map(p => p.codificacion));
+
     const { error, count } = await supabase
       .from('products')
       .insert(productsWithDefaults);
 
-    if (error) throw new Error(`Error en inserción masiva de productos: ${error.message}`);
+    if (error) {
+      console.error('❌ Error en inserción masiva:', error);
+      throw new Error(`Error en inserción masiva de productos: ${error.message}`);
+    }
 
     return count || products.length;
   }
