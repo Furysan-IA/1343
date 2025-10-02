@@ -61,9 +61,9 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
         body {
           font-family: 'Helvetica', 'Arial', sans-serif;
           font-size: 9pt;
-          line-height: 1.4;
+          line-height: 1.3;
           color: #000;
-          padding: 15mm;
+          padding: 20px;
         }
 
         .header {
@@ -85,21 +85,17 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
         .section-header {
           background-color: #404040;
           color: white;
-          padding: 6px 10px;
+          padding: 5px 10px;
           font-weight: bold;
-          page-break-after: avoid;
-          break-after: avoid;
-          margin-top: 15px;
-          margin-bottom: 8px;
+          margin-top: 10px;
+          margin-bottom: 6px;
           font-size: 9pt;
         }
 
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 12px;
-          page-break-inside: avoid;
-          break-inside: avoid;
+          margin-bottom: 8px;
         }
 
         td {
@@ -304,32 +300,55 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
   element.innerHTML = htmlContent;
   element.style.position = 'absolute';
   element.style.left = '-9999px';
-  element.style.width = '794px'; // A4 width in pixels at 96 DPI
+  element.style.width = '700px'; // Ancho reducido para dejar márgenes
   element.style.backgroundColor = '#ffffff';
   document.body.appendChild(element);
 
   try {
     // Esperar un momento para que el DOM se renderice completamente
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 250));
 
+    // Capturar el elemento como canvas
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: 700,
+      height: element.scrollHeight
+    });
+
+    // Limpiar elemento del DOM
+    document.body.removeChild(element);
+
+    // Crear PDF
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     });
 
-    // Usar html() de jsPDF que respeta page-break CSS
-    await pdf.html(element, {
-      callback: () => {
-        // Limpiar elemento del DOM
-        document.body.removeChild(element);
-      },
-      x: 10,
-      y: 10,
-      width: 190, // 210mm - 20mm (márgenes)
-      windowWidth: 794,
-      margin: [10, 10, 10, 10]
-    });
+    // Calcular dimensiones con márgenes
+    const margin = 15; // 15mm de margen en cada lado
+    const imgWidth = 210 - (margin * 2); // 180mm de contenido
+    const pageHeight = 297; // A4 height in mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    // Agregar primera página con márgenes
+    pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+    heightLeft -= (pageHeight - margin * 2);
+
+    // Agregar páginas adicionales si es necesario
+    while (heightLeft > 0) {
+      position = -(imgHeight - heightLeft) + margin;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - margin * 2);
+    }
 
     // Convertir a blob
     const pdfBlob = pdf.output('blob');
