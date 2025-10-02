@@ -116,63 +116,87 @@ export class DJCPdfGenerator {
     this.yPos += rowHeight;
   }
 
-  private addMultiRowField(label: string, fields: { label: string; value: string; highlight?: boolean }[]) {
-    const labelWidth = 70;
-    const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
-    const totalHeight = fields.length * 7;
+ private addMultiRowField(label: string, fields: { label: string; value: string; highlight?: boolean }[]) {
+  const labelWidth = 70;
+  const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
+  const lineHeight = 3.5;
 
-    // Fondo gris para la etiqueta principal
-    this.pdf.setFillColor(245, 245, 245);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'F');
+  // Calcular altura total
+  let totalHeight = 0;
+  const fieldHeights: number[] = [];
 
-    // Borde para la etiqueta
-    this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'S');
-
-    // Texto de la etiqueta principal
-    this.pdf.setFontSize(8);
+  this.pdf.setFontSize(7);
+  
+  fields.forEach(field => {
     this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+    const labelText = field.label + ': ';
+    const labelTextWidth = this.pdf.getTextWidth(labelText);
+    
+    this.pdf.setFont('helvetica', 'normal');
+    const valueText = (!field.value || field.value.trim() === '') ? 'CAMPO NO ENCONTRADO' : field.value;
+    const valueLines = this.pdf.splitTextToSize(valueText, valueWidth - labelTextWidth - 10); // ← Aumenté el margen de 6 a 10
+    
+    const fieldHeight = Math.max(7, valueLines.length * lineHeight + 3);
+    fieldHeights.push(fieldHeight);
+    totalHeight += fieldHeight;
+  });
 
-    // Agregar cada subfila
-    let subYPos = this.yPos;
-    fields.forEach((field, index) => {
-      const rowHeight = 7;
+  // Verificar si necesitamos nueva página
+  this.checkPageBreak(totalHeight + 10);
 
-      // Fondo de la subfila
-      if (field.highlight) {
-        this.pdf.setFillColor(255, 255, 200);
-      } else {
-        this.pdf.setFillColor(255, 255, 255);
-      }
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
+  // Fondo gris para la etiqueta principal
+  this.pdf.setFillColor(245, 245, 245);
+  this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'F');
 
-      // Borde de la subfila
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
+  // Borde para la etiqueta
+  this.pdf.setDrawColor(200, 200, 200);
+  this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'S');
 
-      // Texto
-      this.pdf.setFontSize(7);
-      this.pdf.setFont('helvetica', 'bold');
-      this.pdf.text(field.label + ': ', this.margin + labelWidth + 2, subYPos);
+  // Texto de la etiqueta principal
+  this.pdf.setFontSize(8);
+  this.pdf.setFont('helvetica', 'bold');
+  const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
+  this.pdf.text(labelLines, this.margin + 2, this.yPos);
 
-      this.pdf.setFont('helvetica', 'normal');
-      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
+  // Agregar cada subfila con altura dinámica
+  let subYPos = this.yPos;
+  fields.forEach((field, index) => {
+    const rowHeight = fieldHeights[index];
 
-      if (!field.value || field.value.trim() === '') {
-        this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth, subYPos);
-        this.pdf.setTextColor(0, 0, 0);
-      } else {
-        const valueText = this.pdf.splitTextToSize(field.value, valueWidth - labelTextWidth - 6);
-        this.pdf.text(valueText, this.margin + labelWidth + 2 + labelTextWidth, subYPos, { maxWidth: valueWidth - labelTextWidth - 6 });
-      }
+    // Fondo de la subfila - ELIMINAR EL AMARILLO, SOLO BLANCO
+    this.pdf.setFillColor(255, 255, 255); // ← Siempre blanco, sin importar highlight
+    this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
 
-      subYPos += rowHeight;
-    });
+    // Borde de la subfila
+    this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
 
-    this.yPos += totalHeight;
-  }
+    // Texto de la etiqueta (en negrita)
+    this.pdf.setFontSize(7);
+    this.pdf.setFont('helvetica', 'bold');
+    const labelText = field.label + ': ';
+    this.pdf.text(labelText, this.margin + labelWidth + 2, subYPos);
+
+    // Calcular posición del valor con más espacio
+    this.pdf.setFont('helvetica', 'normal');
+    const labelTextWidth = this.pdf.getTextWidth(labelText);
+    const valueStartX = this.margin + labelWidth + 2 + labelTextWidth + 2; // ← +2 de espaciado extra
+
+    if (!field.value || field.value.trim() === '') {
+      this.pdf.setTextColor(255, 0, 0);
+      this.pdf.text('CAMPO NO ENCONTRADO', valueStartX, subYPos);
+      this.pdf.setTextColor(0, 0, 0);
+    } else {
+      // Calcular el ancho disponible para el valor
+      const availableWidth = valueWidth - labelTextWidth - 10; // ← Aumenté el margen
+      const valueText = this.pdf.splitTextToSize(field.value, availableWidth);
+      this.pdf.text(valueText, valueStartX, subYPos);
+    }
+
+    subYPos += rowHeight;
+  });
+
+  this.yPos += totalHeight;
+}
 
   private checkPageBreak(requiredSpace: number = 40) {
     if (this.yPos + requiredSpace > this.pdf.internal.pageSize.getHeight() - this.margin) {
@@ -221,24 +245,25 @@ export class DJCPdfGenerator {
     this.yPos += 3;
 
     // Sección 5: Normas y Evaluación
-    this.checkPageBreak(60);
-    this.addSectionHeader('(5) NORMAS Y EVALUACIÓN DE LA CONFORMIDAD');
-    this.addTableRow('Reglamento/s por el que se encuentra alcanzado', djcData.reglamento_alcanzado, true);
-    this.addTableRow('Norma/s Técnica/s', djcData.normas_tecnicas);
+ typescript// Sección 5: Normas y Evaluación
+this.checkPageBreak(60);
+this.addSectionHeader('(5) NORMAS Y EVALUACIÓN DE LA CONFORMIDAD');
+this.addTableRow('Reglamento/s por el que se encuentra alcanzado', djcData.reglamento_alcanzado, true);
+this.addTableRow('Norma/s Técnica/s', djcData.normas_tecnicas);
 
-    // Referencia al certificado (campo multilínea)
-    this.addMultiRowField(
-      'Referencia Certificado de conformidad emitido por Organismo de Certificación',
-      [
-        { label: 'N° de Certificado', value: djcData.numero_certificado },
-        { label: 'Organismo de Certificación', value: djcData.organismo_certificacion },
-        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion, highlight: true },
-        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado, highlight: true },
-        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia, highlight: true },
-        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos, highlight: true },
-        { label: 'Informe de ensayos', value: djcData.informe_ensayos, highlight: true }
-      ]
-    );
+// Referencia al certificado (sin highlights)
+this.addMultiRowField(
+  'Referencia Certificado de conformidad emitido por Organismo de Certificación',
+  [
+    { label: 'N° de Certificado', value: djcData.numero_certificado },
+    { label: 'Organismo de Certificación', value: djcData.organismo_certificacion },
+    { label: 'Esquema de certificacion', value: djcData.esquema_certificacion }, // ← Sin highlight
+    { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado }, // ← Sin highlight
+    { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia }, // ← Sin highlight
+    { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos }, // ← Sin highlight
+    { label: 'Informe de ensayos', value: djcData.informe_ensayos } // ← Sin highlight
+  ]
+);
     this.yPos += 3;
 
     // Sección 6: Otros Datos
