@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Eye, Download, Check, Loader2, AlertCircle } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Eye, Download, Check, Loader as Loader2, CircleAlert as AlertCircle } from 'lucide-react';
 import { djcManagementService, type DJCGenerationData } from '../../services/djcManagement.service';
 import { formatCuit } from '../../utils/formatters';
 import toast from 'react-hot-toast';
