@@ -121,7 +121,7 @@ export class DJCPdfGenerator {
     // Texto de la etiqueta - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
     const labelContentHeight = labelLines.length * lineHeight;
-    const labelStartY = this.yPos + (rowHeight - labelContentHeight) / 2 + 3.8;
+    const labelStartY = this.yPos + (rowHeight / 2) + (lineHeight / 2);
     labelLines.forEach((line, index) => {
       this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
     });
@@ -130,12 +130,12 @@ export class DJCPdfGenerator {
     this.pdf.setFont('helvetica', 'normal');
     if (isEmpty && !allowEmpty) {
       this.pdf.setTextColor(255, 0, 0);
-      const valueStartY = this.yPos + (rowHeight / 2) + 3.3;
+      const valueStartY = this.yPos + (rowHeight / 2) + (lineHeight / 2);
       this.pdf.text('VACIO', this.margin + labelWidth + 3, valueStartY);
       this.pdf.setTextColor(0, 0, 0);
     } else if (!isEmpty || allowEmpty) {
       const valueContentHeight = valueLines.length * lineHeight;
-      const valueStartY = this.yPos + (rowHeight - valueContentHeight) / 2 + 3.8;
+      const valueStartY = this.yPos + (rowHeight / 2) + (lineHeight / 2);
       valueLines.forEach((line, index) => {
         if (line.trim() !== '' || !isEmpty) {
           this.pdf.text(line, this.margin + labelWidth + 3, valueStartY + (index * lineHeight));
@@ -190,7 +190,7 @@ export class DJCPdfGenerator {
     this.pdf.setFont('helvetica', 'bold');
     const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
     const labelContentHeight = labelLines.length * lineHeight;
-    const labelStartY = this.yPos + (totalHeight - labelContentHeight) / 2 + 3.8;
+    const labelStartY = this.yPos + (totalHeight / 2) + (lineHeight / 2);
     labelLines.forEach((line, index) => {
       this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
     });
@@ -217,7 +217,7 @@ export class DJCPdfGenerator {
 
       if (!field.value || field.value.trim() === '') {
         // Centrar verticalmente el texto de una línea
-        const textStartY = subYPos + (subRowHeight / 2) + 3.3;
+        const textStartY = subYPos + (subRowHeight / 2) + (lineHeight / 2);
         this.pdf.setFont('helvetica', 'bold');
         this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textStartY);
         this.pdf.setFont('helvetica', 'normal');
@@ -227,7 +227,7 @@ export class DJCPdfGenerator {
       } else {
         const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
         const contentHeight = valueLines.length * lineHeight;
-        const textStartY = subYPos + (subRowHeight - contentHeight) / 2 + 3.8;
+        const textStartY = subYPos + (subRowHeight / 2) + (lineHeight / 2);
 
         // Dibujar etiqueta en la misma línea que el primer valor
         this.pdf.setFont('helvetica', 'bold');
