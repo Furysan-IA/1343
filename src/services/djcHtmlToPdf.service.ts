@@ -1,0 +1,320 @@
+import html2pdf from 'html2pdf.js';
+
+interface DJCData {
+  numero_djc: string;
+  resolucion: string;
+  razon_social: string;
+  cuit: string;
+  marca: string;
+  domicilio_legal: string;
+  domicilio_planta: string;
+  telefono: string;
+  email: string;
+  representante_nombre: string;
+  representante_domicilio: string;
+  representante_cuit: string;
+  codigo_producto: string;
+  fabricante: string;
+  identificacion_producto: string;
+  producto_marca: string;
+  producto_modelo: string;
+  caracteristicas_tecnicas: string;
+  reglamento_alcanzado: string;
+  normas_tecnicas: string;
+  numero_certificado: string;
+  organismo_certificacion: string;
+  esquema_certificacion: string;
+  fecha_emision_certificado: string;
+  fecha_proxima_vigilancia: string;
+  laboratorio_ensayos: string;
+  informe_ensayos: string;
+  enlace_declaracion: string;
+  fecha_lugar: string;
+}
+
+const formatFieldValue = (value: string | null | undefined): string => {
+  if (!value || value.trim() === '') {
+    return '<span style="color: #dc2626; font-weight: bold;">CAMPO NO ENCONTRADO</span>';
+  }
+  return value;
+};
+
+export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> => {
+  // Crear el HTML completo del documento
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
+        body {
+          font-family: 'Helvetica', 'Arial', sans-serif;
+          font-size: 9pt;
+          line-height: 1.4;
+          color: #000;
+          padding: 20px;
+        }
+
+        .header {
+          text-align: center;
+          margin-bottom: 20px;
+        }
+
+        .header h1 {
+          font-size: 14pt;
+          font-weight: bold;
+          margin-bottom: 8px;
+        }
+
+        .header p {
+          font-size: 9pt;
+          font-weight: 600;
+        }
+
+        .section-header {
+          background-color: #404040;
+          color: white;
+          padding: 6px 10px;
+          font-weight: bold;
+          margin-top: 15px;
+          margin-bottom: 8px;
+          font-size: 9pt;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 12px;
+        }
+
+        td {
+          border: 1px solid #d1d5db;
+          padding: 6px 8px;
+          vertical-align: top;
+          font-size: 8pt;
+        }
+
+        td.label {
+          background-color: #f9fafb;
+          font-weight: 600;
+          width: 35%;
+        }
+
+        td.value {
+          width: 65%;
+        }
+
+        td.sublabel {
+          font-weight: 600;
+          padding-left: 4px;
+        }
+
+        .highlight {
+          background-color: #fefce8;
+        }
+
+        .footer-text {
+          font-size: 8pt;
+          margin: 20px 0;
+          line-height: 1.6;
+        }
+
+        .signature-section {
+          margin-top: 30px;
+        }
+
+        .signature-line {
+          border-bottom: 1px solid #000;
+          width: 300px;
+          margin-top: 50px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>DECLARACIÓN JURADA DE CONFORMIDAD (DJC)</h1>
+        <p>SEGÚN RESOLUCIÓN M.E.S.I.C. N° 237/2024, MODIFICACIONES Y COMPLEMENTOS</p>
+      </div>
+
+      <div class="section-header">
+        (1) IDENTIFICACIÓN DE DECLARACIÓN DE CONFORMIDAD: ${djcData.numero_djc}
+      </div>
+
+      <div class="section-header">
+        (2) INFORMACIÓN DEL FABRICANTE O IMPORTADOR
+      </div>
+      <table>
+        <tr>
+          <td class="label">Razón Social</td>
+          <td class="value">${djcData.razon_social}</td>
+        </tr>
+        <tr>
+          <td class="label">C.U.I.T.</td>
+          <td class="value">${djcData.cuit}</td>
+        </tr>
+        <tr>
+          <td class="label">Nombre Comercial o Marca Registrada</td>
+          <td class="value">${djcData.marca}</td>
+        </tr>
+        <tr>
+          <td class="label">Domicilio legal</td>
+          <td class="value">${djcData.domicilio_legal}</td>
+        </tr>
+        <tr>
+          <td class="label">Domicilio de la planta de producción o del depósito del importador</td>
+          <td class="value">${djcData.domicilio_planta}</td>
+        </tr>
+        <tr>
+          <td class="label">Telefono</td>
+          <td class="value">${formatFieldValue(djcData.telefono)}</td>
+        </tr>
+        <tr>
+          <td class="label">Correo electrónico</td>
+          <td class="value">${djcData.email}</td>
+        </tr>
+      </table>
+
+      <div class="section-header">
+        (3) REPRESENTANTE AUTORIZADO (SI FUERA APLICABLE)
+      </div>
+      <table>
+        <tr>
+          <td class="label">Nombre y Apellido / Razón Social</td>
+          <td class="value">${djcData.representante_nombre || 'No aplica'}</td>
+        </tr>
+        <tr>
+          <td class="label">C.U.I.T.</td>
+          <td class="value">${djcData.representante_cuit || 'No aplica'}</td>
+        </tr>
+        <tr>
+          <td class="label">Domicilio legal</td>
+          <td class="value">${djcData.representante_domicilio || 'No aplica'}</td>
+        </tr>
+      </table>
+
+      <div class="section-header">
+        (4) INFORMACIÓN DEL PRODUCTO
+      </div>
+      <table>
+        <tr>
+          <td class="label">Código de identificación único del producto (Autodeterminado)</td>
+          <td class="value">${djcData.codigo_producto}</td>
+        </tr>
+        <tr>
+          <td class="label">Fabricante (Nombre y dirección de la planta de producción)</td>
+          <td class="value">${djcData.fabricante}</td>
+        </tr>
+        <tr>
+          <td class="label">Identificación del producto</td>
+          <td class="value">${djcData.identificacion_producto}</td>
+        </tr>
+        <tr>
+          <td class="label">Marca/s</td>
+          <td class="value">${djcData.producto_marca}</td>
+        </tr>
+        <tr>
+          <td class="label">Modelo/s</td>
+          <td class="value">${djcData.producto_modelo}</td>
+        </tr>
+        <tr>
+          <td class="label">Características técnicas</td>
+          <td class="value">${djcData.caracteristicas_tecnicas}</td>
+        </tr>
+      </table>
+
+      <div class="section-header">
+        (5) NORMAS Y EVALUACIÓN DE LA CONFORMIDAD
+      </div>
+      <table>
+        <tr>
+          <td class="label">Reglamento/s por el que se encuentra alcanzado</td>
+          <td class="value">${djcData.reglamento_alcanzado}</td>
+        </tr>
+        <tr>
+          <td class="label">Norma/s Técnica/s</td>
+          <td class="value">${formatFieldValue(djcData.normas_tecnicas)}</td>
+        </tr>
+        <tr>
+          <td class="label" rowspan="6">Referencia Certificado de conformidad emitido por Organismo de Certificación</td>
+          <td class="sublabel">N° de Certificado: <span style="font-weight: normal;">${djcData.numero_certificado}</span></td>
+        </tr>
+        <tr>
+          <td class="sublabel">Organismo de Certificación: <span style="font-weight: normal;">${djcData.organismo_certificacion}</span></td>
+        </tr>
+        <tr>
+          <td class="sublabel highlight">Esquema de certificacion: <span style="font-weight: normal;">${formatFieldValue(djcData.esquema_certificacion)}</span></td>
+        </tr>
+        <tr>
+          <td class="sublabel highlight">Fecha de emision (Certificado / Ultima Vigilancia): <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_emision_certificado)}</span></td>
+        </tr>
+        <tr>
+          <td class="sublabel highlight">Fecha de proxima vigilancia: <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_proxima_vigilancia)}</span></td>
+        </tr>
+        <tr>
+          <td class="sublabel highlight">Laboratorio de ensayos: <span style="font-weight: normal;">${formatFieldValue(djcData.laboratorio_ensayos)}</span></td>
+        </tr>
+        <tr>
+          <td class="label">Informe de ensayos:</td>
+          <td class="value highlight">${formatFieldValue(djcData.informe_ensayos)}</td>
+        </tr>
+      </table>
+
+      <div class="section-header">
+        (6) OTROS DATOS
+      </div>
+      <table>
+        <tr>
+          <td class="label">Enlace a la copia de la declaración de conformidad en Internet</td>
+          <td class="value">${djcData.enlace_declaracion}</td>
+        </tr>
+      </table>
+
+      <div class="footer-text">
+        <p>La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.</p>
+      </div>
+
+      <div class="signature-section">
+        <p><strong>Fecha y Lugar:</strong></p>
+        <p>${djcData.fecha_lugar}</p>
+        <br><br>
+        <p><strong>Firma y Aclaracion del Apoderado Legal:</strong></p>
+        <div class="signature-line"></div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Crear un elemento temporal para renderizar el HTML
+  const element = document.createElement('div');
+  element.innerHTML = htmlContent;
+  element.style.position = 'absolute';
+  element.style.left = '-9999px';
+  document.body.appendChild(element);
+
+  try {
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: `DJC_${djcData.numero_djc}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // Generar PDF
+    const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+
+    // Limpiar
+    document.body.removeChild(element);
+
+    return pdfBlob as Blob;
+  } catch (error) {
+    document.body.removeChild(element);
+    throw error;
+  }
+};

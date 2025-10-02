@@ -4,7 +4,7 @@ import { formatCuit } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
-import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
+import { generateDJCPdfFromHtml } from '../../services/djcHtmlToPdf.service';
 
 interface Client {
   id: string;
@@ -286,7 +286,9 @@ const DJCGenerator: React.FC = () => {
       reglamento_alcanzado: selectedResolution,
       normas_tecnicas: selectedProduct.normas_aplicacion || '',
       numero_certificado: selectedProduct.codificacion,
-      organismo_certificacion: selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones S.A.',
+      organismo_certificacion: selectedProduct.organismo_certificacion === 'IACSA'
+        ? 'Intertek Argentina Certificaciones SA'
+        : (selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones SA'),
       esquema_certificacion: selectedProduct.esquema_certificacion || '',
       fecha_emision_certificado: fechaEmisionCertificado,
       fecha_proxima_vigilancia: fechaProximaVigilancia,
@@ -316,13 +318,9 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
-      // Generar el PDF usando el nuevo servicio
-      const pdfGenerator = new DJCPdfGenerator();
-      const pdf = pdfGenerator.generate(previewData);
-
-      // Convertir PDF a blob
-      const pdfBlob = pdf.output('blob');
-      const fileName = `djc_preliminar_${selectedProduct.codificacion}_${Date.now()}.pdf`;
+      // Generar el PDF usando HTML (mantiene el formato exacto de la vista previa)
+      const pdfBlob = await generateDJCPdfFromHtml(previewData);
+      const fileName = `DJC_${previewData.numero_djc}.pdf`;
 
       // Guardar en bucket 'djcs'
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -397,7 +395,11 @@ const DJCGenerator: React.FC = () => {
       }
 
       // Descargar el PDF
-      pdf.save(`DJC_${previewData.numero_djc}.pdf`);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
 
       toast.success('DJC generada y guardada exitosamente');
 
