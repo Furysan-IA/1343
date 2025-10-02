@@ -330,24 +330,26 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
     });
 
     // Calcular dimensiones con márgenes
-    const margin = 15; // 15mm de margen en cada lado
+    const margin = 15; // 15mm de margen lateral
+    const marginTop = 15; // 15mm margen superior página 1
+    const marginTopNext = 25; // 25mm margen superior páginas siguientes
     const imgWidth = 210 - (margin * 2); // 180mm de contenido
     const pageHeight = 297; // A4 height in mm
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
     let heightLeft = imgHeight;
-    let position = margin;
+    let position = marginTop;
 
-    // Agregar primera página con márgenes
+    // Agregar primera página con márgenes normales
     pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-    heightLeft -= (pageHeight - margin * 2);
+    heightLeft -= (pageHeight - marginTop - margin);
 
-    // Agregar páginas adicionales si es necesario
+    // Agregar páginas adicionales con margen superior mayor
     while (heightLeft > 0) {
-      position = -(imgHeight - heightLeft) + margin;
+      position = -(imgHeight - heightLeft) + marginTopNext;
       pdf.addPage();
       pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - margin * 2);
+      heightLeft -= (pageHeight - marginTopNext - margin);
     }
 
     // Convertir a blob
