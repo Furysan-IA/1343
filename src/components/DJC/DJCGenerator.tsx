@@ -261,9 +261,15 @@ const DJCGenerator: React.FC = () => {
         })
       : '-';
 
-    // Formatear fecha de próxima vigilancia
+    // Formatear fecha de próxima vigilancia - usar vencimiento si no está disponible
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
       ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : selectedProduct.vencimiento
+      ? new Date(selectedProduct.vencimiento).toLocaleDateString('es-AR', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
