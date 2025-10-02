@@ -4,7 +4,8 @@ export class DataMapper {
   private static COLUMN_MAPPING: Record<string, string[]> = {
     cuit: ['cuit', 'cuil', 'nro cuit', 'numero cuit', 'nro. cuit'],
     razon_social: ['razon_social', 'razon social', 'titular', 'empresa', 'nombre empresa', 'razón social'],
-    direccion: ['direccion', 'dirección', 'domicilio', 'direccion legal', 'direccion_legal_empresa'],
+    direccion: ['direccion', 'dirección', 'domicilio'],
+    direccion_legal_empresa: ['direccion_legal_empresa', 'direccion legal empresa', 'dirección legal empresa', 'direccion legal de la empresa', 'dirección legal de la empresa'],
     email: ['email', 'e-mail', 'correo', 'mail', 'correo electronico', 'correo electrónico'],
     telefono: ['telefono', 'teléfono', 'tel', 'tel.', 'celular'],
     contacto: ['contacto', 'persona contacto', 'nombre contacto'],
@@ -109,7 +110,7 @@ export class DataMapper {
           const client: Client = {
             cuit,
             razon_social: mappedRow.razon_social || mappedRow.titular || 'No encontrado',
-            direccion: mappedRow.direccion || mappedRow.direccion_legal_empresa || 'No encontrado',
+            direccion: mappedRow.direccion || 'No encontrado',
             email: mappedRow.email || 'No encontrado',
             telefono: mappedRow.telefono,
             contacto: mappedRow.contacto
@@ -140,6 +141,7 @@ export class DataMapper {
             titular: mappedRow.razon_social || mappedRow.titular,
             tipo_certificacion: mappedRow.tipo_certificacion,
             estado: mappedRow.estado,
+            direccion_legal_empresa: mappedRow.direccion_legal_empresa,
             fabricante: mappedRow.fabricante,
             planta_fabricacion: mappedRow.planta_fabricacion,
             origen: mappedRow.origen,
