@@ -71,8 +71,10 @@ export class DataMapper {
       try {
         const mappedRow: any = {};
 
+        // Mapear desde el objeto row usando los headers originales
         Object.entries(headerMapping).forEach(([colIndex, dbField]) => {
-          const value = row[parseInt(colIndex)];
+          const originalHeader = headers[parseInt(colIndex)];
+          const value = row[originalHeader];
           if (value !== null && value !== undefined && value !== '') {
             mappedRow[dbField] = value;
           }
@@ -84,8 +86,13 @@ export class DataMapper {
 
         const cuit = this.parseCUIT(mappedRow.cuit);
         if (!cuit) {
-          errors.push(`Fila ${rowIndex + 2}: CUIT inválido o faltante`);
+          console.warn(`❌ Fila ${rowIndex + 2}: CUIT inválido "${mappedRow.cuit}"`);
+          errors.push(`Fila ${rowIndex + 2}: CUIT inválido o faltante: "${mappedRow.cuit}"`);
           return;
+        }
+
+        if (rowIndex < 3) {
+          console.log(`🔍 Fila ${rowIndex + 2}: CUIT original="${mappedRow.cuit}" → parseado=${cuit}`);
         }
 
         if (!clientMap.has(cuit)) {
@@ -168,10 +175,21 @@ export class DataMapper {
   private static parseCUIT(value: any): number | null {
     if (!value) return null;
 
-    const cleaned = String(value).replace(/[-\s]/g, '').trim();
+    // Convertir a string y limpiar guiones, espacios y cualquier caracter no numérico
+    let cleaned = String(value)
+      .replace(/[-\s_\/\\.]/g, '')  // Eliminar guiones, espacios, guiones bajos, barras y puntos
+      .trim();
+
+    // Si es un número flotante de Excel, quitar los decimales
+    if (cleaned.includes('.')) {
+      cleaned = cleaned.split('.')[0];
+    }
+
     const num = parseInt(cleaned, 10);
 
+    // Validar que sea un número y tenga 10-11 dígitos (formato CUIT argentino)
     if (isNaN(num) || cleaned.length < 10 || cleaned.length > 11) {
+      console.warn(`⚠️ CUIT inválido: "${value}" → cleaned="${cleaned}" (length=${cleaned.length})`);
       return null;
     }
 
