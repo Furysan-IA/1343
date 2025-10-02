@@ -267,26 +267,51 @@ export default function DataUploadPage() {
             {validatedData.issues.length > 0 && (
               <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
                 <div
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b text-yellow-700"
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b"
                   onClick={() => toggleSection('issues')}
                 >
                   <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-6 h-6" />
-                    <h3 className="text-lg font-semibold">Advertencias</h3>
-                    <span className="px-3 py-1 bg-yellow-100 rounded-full text-sm font-medium">
+                    <AlertTriangle className="w-6 h-6 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-gray-800">Información y Advertencias</h3>
+                    <span className="px-3 py-1 bg-blue-100 rounded-full text-sm font-medium text-blue-700">
                       {validatedData.issues.length}
                     </span>
                   </div>
-                  {expandedSections.issues ? <ChevronUp /> : <ChevronDown />}
+                  {expandedSections.issues ? <ChevronUp className="text-gray-600" /> : <ChevronDown className="text-gray-600" />}
                 </div>
                 {expandedSections.issues && (
-                  <div className="p-4 space-y-2">
-                    {validatedData.issues.map((issue, idx) => (
-                      <div key={idx} className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-gray-700">{issue.message}</span>
-                      </div>
-                    ))}
+                  <div className="p-4">
+                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <strong>ℹ️ Estas son advertencias informativas.</strong> Los registros se pueden procesar normalmente.
+                        Revisa la información y aprúeba los cambios en las secciones de abajo.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {validatedData.issues.map((issue, idx) => {
+                        const isError = issue.severity === 'error';
+                        const isWarning = issue.severity === 'warning';
+                        const bgColor = isError ? 'bg-red-50 border-red-200' : isWarning ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200';
+                        const iconColor = isError ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600';
+                        const textColor = isError ? 'text-red-700' : 'text-gray-700';
+
+                        return (
+                          <div key={idx} className={`flex items-start gap-2 p-3 rounded-lg border ${bgColor}`}>
+                            {isError ? (
+                              <XCircle className={`w-5 h-5 ${iconColor} mt-0.5 flex-shrink-0`} />
+                            ) : (
+                              <AlertTriangle className={`w-5 h-5 ${iconColor} mt-0.5 flex-shrink-0`} />
+                            )}
+                            <div className="flex-1">
+                              <span className={`text-sm ${textColor}`}>{issue.message}</span>
+                              {isError && (
+                                <div className="text-xs text-red-600 mt-1 font-medium">❌ Este error bloquea el procesamiento</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
