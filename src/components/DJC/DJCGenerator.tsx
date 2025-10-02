@@ -286,7 +286,7 @@ const DJCGenerator: React.FC = () => {
       reglamento_alcanzado: selectedResolution,
       normas_tecnicas: selectedProduct.normas_aplicacion || '',
       numero_certificado: selectedProduct.codificacion,
-      organismo_certificacion: selectedProduct.organismo_certificacion || '',
+      organismo_certificacion: selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones S.A.',
       esquema_certificacion: selectedProduct.esquema_certificacion || '',
       fecha_emision_certificado: fechaEmisionCertificado,
       fecha_proxima_vigilancia: fechaProximaVigilancia,
