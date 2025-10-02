@@ -91,7 +91,7 @@ export class DJCPdfGenerator {
     this.pdf.setFont('helvetica', 'normal');
     let valueLines: string[] = [];
     if (!value || value.trim() === '') {
-      valueLines = ['CAMPO NO ENCONTRADO'];
+      valueLines = ['VACIO'];
     } else {
       valueLines = this.pdf.splitTextToSize(value, valueWidth - 6);
     }
@@ -125,7 +125,7 @@ export class DJCPdfGenerator {
     this.pdf.setFont('helvetica', 'normal');
     if (!value || value.trim() === '') {
       this.pdf.setTextColor(255, 0, 0);
-      this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 3, this.yPos + padding + lineHeight);
+      this.pdf.text('VACIO', this.margin + labelWidth + 3, this.yPos + padding + lineHeight);
       this.pdf.setTextColor(0, 0, 0);
     } else {
       let valueYPos = this.yPos + padding + lineHeight;
@@ -159,7 +159,7 @@ export class DJCPdfGenerator {
 
       let valueLines: string[] = [];
       if (!field.value || field.value.trim() === '') {
-        valueLines = ['CAMPO NO ENCONTRADO'];
+        valueLines = ['VACIO'];
       } else {
         valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
       }
@@ -209,7 +209,7 @@ export class DJCPdfGenerator {
 
       if (!field.value || field.value.trim() === '') {
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 3 + labelTextWidth, subYPos + padding + lineHeight);
+        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, subYPos + padding + lineHeight);
         this.pdf.setTextColor(0, 0, 0);
       } else {
         const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
