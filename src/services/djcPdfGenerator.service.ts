@@ -76,9 +76,30 @@ export class DJCPdfGenerator {
   }
 
   private addTableRow(label: string, value: string, isGray: boolean = false) {
-    const rowHeight = 8;
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
+    const lineHeight = 4;
+    const minRowHeight = 8;
+    const padding = 3;
+
+    // Preparar texto de la etiqueta
+    this.pdf.setFontSize(8);
+    this.pdf.setFont('helvetica', 'bold');
+    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
+
+    // Preparar texto del valor
+    this.pdf.setFont('helvetica', 'normal');
+    let valueLines: string[] = [];
+    if (!value || value.trim() === '') {
+      valueLines = ['CAMPO NO ENCONTRADO'];
+    } else {
+      valueLines = this.pdf.splitTextToSize(value, valueWidth - 6);
+    }
+
+    // Calcular altura dinámica basada en el contenido
+    const labelHeight = labelLines.length * lineHeight + padding * 2;
+    const valueHeight = valueLines.length * lineHeight + padding * 2;
+    const rowHeight = Math.max(minRowHeight, labelHeight, valueHeight);
 
     // Fondo de la fila
     if (isGray) {
@@ -86,29 +107,32 @@ export class DJCPdfGenerator {
     } else {
       this.pdf.setFillColor(255, 255, 255);
     }
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'F');
+    this.pdf.rect(this.margin, this.yPos, this.pageWidth - 2 * this.margin, rowHeight, 'F');
 
     // Borde de la fila
     this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'S');
+    this.pdf.rect(this.margin, this.yPos, this.pageWidth - 2 * this.margin, rowHeight, 'S');
 
     // Texto de la etiqueta
-    this.pdf.setFontSize(8);
     this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+    let labelYPos = this.yPos + padding + lineHeight;
+    labelLines.forEach(line => {
+      this.pdf.text(line, this.margin + 3, labelYPos);
+      labelYPos += lineHeight;
+    });
 
     // Texto del valor
     this.pdf.setFont('helvetica', 'normal');
-
-    // Verificar si el valor está vacío o es "CAMPO NO ENCONTRADO"
     if (!value || value.trim() === '') {
       this.pdf.setTextColor(255, 0, 0);
-      this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2, this.yPos);
+      this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 3, this.yPos + padding + lineHeight);
       this.pdf.setTextColor(0, 0, 0);
     } else {
-      const valueLines = this.pdf.splitTextToSize(value, valueWidth - 4);
-      this.pdf.text(valueLines, this.margin + labelWidth + 2, this.yPos, { maxWidth: valueWidth - 4 });
+      let valueYPos = this.yPos + padding + lineHeight;
+      valueLines.forEach(line => {
+        this.pdf.text(line, this.margin + labelWidth + 3, valueYPos);
+        valueYPos += lineHeight;
+      });
     }
 
     this.yPos += rowHeight;
@@ -117,65 +141,86 @@ export class DJCPdfGenerator {
    private addMultiRowField(label: string, fields: { label: string; value: string }[]) {
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
-    const rowHeight = 8;
-    const totalHeight = fields.length * rowHeight;
+    const lineHeight = 4;
+    const minSubRowHeight = 8;
+    const padding = 3;
+
+    // Calcular alturas de cada subfila
+    this.pdf.setFontSize(8);
+    const subRowHeights: number[] = [];
+    let totalHeight = 0;
+
+    fields.forEach(field => {
+      this.pdf.setFont('helvetica', 'bold');
+      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
+
+      this.pdf.setFont('helvetica', 'normal');
+      const availableWidth = valueWidth - labelTextWidth - 6;
+
+      let valueLines: string[] = [];
+      if (!field.value || field.value.trim() === '') {
+        valueLines = ['CAMPO NO ENCONTRADO'];
+      } else {
+        valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
+      }
+
+      const subRowHeight = Math.max(minSubRowHeight, valueLines.length * lineHeight + padding * 2);
+      subRowHeights.push(subRowHeight);
+      totalHeight += subRowHeight;
+    });
 
     // Fondo gris para la etiqueta principal
     this.pdf.setFillColor(245, 245, 245);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'F');
+    this.pdf.rect(this.margin, this.yPos, labelWidth, totalHeight, 'F');
 
     // Borde para la etiqueta
     this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'S');
+    this.pdf.rect(this.margin, this.yPos, labelWidth, totalHeight, 'S');
 
     // Texto de la etiqueta principal
-    this.pdf.setFontSize(8);
     this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
+    let labelYPos = this.yPos + padding + lineHeight;
+    labelLines.forEach(line => {
+      this.pdf.text(line, this.margin + 3, labelYPos);
+      labelYPos += lineHeight;
+    });
 
     // Agregar cada subfila
     let subYPos = this.yPos;
     fields.forEach((field, index) => {
+      const subRowHeight = subRowHeights[index];
+
       // Fondo blanco uniforme para todas las subfilas
       this.pdf.setFillColor(255, 255, 255);
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
+      this.pdf.rect(this.margin + labelWidth, subYPos, valueWidth, subRowHeight, 'F');
 
       // Borde de la subfila
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
+      this.pdf.rect(this.margin + labelWidth, subYPos, valueWidth, subRowHeight, 'S');
 
-      // Texto de la etiqueta
-      this.pdf.setFontSize(8);
+      // Calcular ancho de la etiqueta del campo
       this.pdf.setFont('helvetica', 'bold');
-      this.pdf.text(field.label + ':', this.margin + labelWidth + 2, subYPos);
+      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
+      this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, subYPos + padding + lineHeight);
 
-      // Calcular ancho de la etiqueta y agregar padding
+      // Texto del valor
       this.pdf.setFont('helvetica', 'normal');
-      const labelTextWidth = this.pdf.getTextWidth(field.label + ':');
-      const padding = 4;
+      const availableWidth = valueWidth - labelTextWidth - 6;
 
       if (!field.value || field.value.trim() === '') {
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth + padding, subYPos);
+        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 3 + labelTextWidth, subYPos + padding + lineHeight);
         this.pdf.setTextColor(0, 0, 0);
       } else {
-        // Truncar el texto si es muy largo para mantenerlo en una línea
-        const availableWidth = valueWidth - labelTextWidth - padding - 4;
-        let displayValue = field.value;
-
-        // Verificar si el texto cabe en el ancho disponible
-        if (this.pdf.getTextWidth(displayValue) > availableWidth) {
-          // Truncar el texto y agregar puntos suspensivos
-          while (this.pdf.getTextWidth(displayValue + '...') > availableWidth && displayValue.length > 0) {
-            displayValue = displayValue.slice(0, -1);
-          }
-          displayValue = displayValue + '...';
-        }
-
-        this.pdf.text(displayValue, this.margin + labelWidth + 2 + labelTextWidth + padding, subYPos);
+        const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
+        let valueYPos = subYPos + padding + lineHeight;
+        valueLines.forEach(line => {
+          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, valueYPos);
+          valueYPos += lineHeight;
+        });
       }
 
-      subYPos += rowHeight;
+      subYPos += subRowHeight;
     });
 
     this.yPos += totalHeight;
