@@ -106,6 +106,8 @@ const DJCGenerator: React.FC = () => {
     domicilio: '',
     cuit: ''
   });
+  const [useCustomLink, setUseCustomLink] = useState(false);
+  const [customLink, setCustomLink] = useState('');
 
   const resolutions = [
     { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
@@ -244,7 +246,11 @@ const DJCGenerator: React.FC = () => {
     });
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
-    const qrLink = `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+
+    // Usar link personalizado o generar el link automático según la opción seleccionada
+    const qrLink = useCustomLink
+      ? (customLink || '')
+      : `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
 
     // Formatear fecha de emisión del certificado
     const fechaEmisionCertificado = selectedProduct.fecha_emision
@@ -422,6 +428,8 @@ const DJCGenerator: React.FC = () => {
     setClientSearch('');
     setProductSearch('');
     setRepresentante({ nombre: '', domicilio: '', cuit: '' });
+    setUseCustomLink(false);
+    setCustomLink('');
     setDjcHistory([]);
     setShowHistory(false);
     setPreviewData(null);
@@ -789,6 +797,63 @@ const DJCGenerator: React.FC = () => {
                 onChange={(e) => setRepresentante({...representante, cuit: e.target.value})}
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               />
+            </div>
+          </div>
+        )}
+
+        {/* Enlace de Declaración */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-gray-700 mb-3">
+              Enlace de la Declaración
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="useCustomLink"
+                  checked={useCustomLink}
+                  onChange={(e) => {
+                    setUseCustomLink(e.target.checked);
+                    if (!e.target.checked) {
+                      setCustomLink('');
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="useCustomLink" className="text-sm text-gray-700">
+                  El cliente genera su propio enlace (dejar en blanco o usar enlace personalizado)
+                </label>
+              </div>
+
+              {!useCustomLink && (
+                <div className="p-3 bg-white rounded border border-gray-300">
+                  <p className="text-sm text-gray-600 mb-1 font-medium">Enlace automático:</p>
+                  <p className="text-sm text-blue-600 break-all">
+                    https://verificar.argentina.gob.ar/qr/{selectedProduct.codificacion}
+                  </p>
+                </div>
+              )}
+
+              {useCustomLink && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">
+                    Enlace personalizado (opcional - dejar vacío para que el cliente lo complete después):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={customLink}
+                    onChange={(e) => setCustomLink(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {!customLink && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Si se deja vacío, el campo aparecerá como "CAMPO NO ENCONTRADO" en el PDF
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
