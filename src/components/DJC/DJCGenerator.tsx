@@ -268,7 +268,7 @@ const DJCGenerator: React.FC = () => {
           month: '2-digit',
           year: 'numeric'
         })
-      : '';
+      : '-';
 
     const data: DJCPreviewData = {
       numero_djc: djcNumber,
