@@ -27,7 +27,7 @@ export class ProductUpdateService {
         stats.totalProcessed++;
 
         const { data: existingProduct, error: fetchError } = await supabase
-          .from('productos')
+          .from('products')
           .select('*')
           .eq('codificacion', product.codificacion)
           .maybeSingle();
@@ -55,7 +55,7 @@ export class ProductUpdateService {
         console.log(`🔄 Actualizando ${product.codificacion} con:`, Object.keys(updates));
 
         const { error: updateError } = await supabase
-          .from('productos')
+          .from('products')
           .update(updates)
           .eq('codificacion', product.codificacion);
 
