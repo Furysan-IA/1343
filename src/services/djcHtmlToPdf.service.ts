@@ -272,7 +272,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
       <table>
         <tr>
           <td class="label">Enlace a la copia de la declaración de conformidad en Internet</td>
-          <td class="value">${djcData.enlace_declaracion}</td>
+          <td class="value">${formatFieldValue(djcData.enlace_declaracion)}</td>
         </tr>
       </table>
 
