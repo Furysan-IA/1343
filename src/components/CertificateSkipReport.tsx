@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, AlertTriangle, FileX, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Download, TriangleAlert as AlertTriangle, FileX, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { DiagnosticReport, generateDiagnosticReport, exportDiagnosticToExcel } from '../services/certificateDiagnostics.service';
 import toast from 'react-hot-toast';
 
