@@ -80,7 +80,8 @@ export class DJCPdfGenerator {
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
     const lineHeight = 4;
     const minRowHeight = 8;
-    const padding = 3;
+    const topPadding = 2.5;
+    const bottomPadding = 2.5;
 
     // Preparar texto de la etiqueta
     this.pdf.setFontSize(8);
@@ -97,8 +98,8 @@ export class DJCPdfGenerator {
     }
 
     // Calcular altura dinámica basada en el contenido
-    const labelHeight = labelLines.length * lineHeight + padding * 2;
-    const valueHeight = valueLines.length * lineHeight + padding * 2;
+    const labelHeight = labelLines.length * lineHeight + topPadding + bottomPadding;
+    const valueHeight = valueLines.length * lineHeight + topPadding + bottomPadding;
     const rowHeight = Math.max(minRowHeight, labelHeight, valueHeight);
 
     // Fondo de la fila
@@ -116,25 +117,23 @@ export class DJCPdfGenerator {
     // Texto de la etiqueta - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
     const labelContentHeight = labelLines.length * lineHeight;
-    let labelYPos = this.yPos + (rowHeight - labelContentHeight) / 2 + lineHeight;
-    labelLines.forEach(line => {
-      this.pdf.text(line, this.margin + 3, labelYPos);
-      labelYPos += lineHeight;
+    const labelStartY = this.yPos + (rowHeight - labelContentHeight) / 2 + 3;
+    labelLines.forEach((line, index) => {
+      this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
     });
 
     // Texto del valor - centrado verticalmente
     this.pdf.setFont('helvetica', 'normal');
     if (!value || value.trim() === '') {
       this.pdf.setTextColor(255, 0, 0);
-      const valueYPos = this.yPos + (rowHeight - lineHeight) / 2 + lineHeight;
-      this.pdf.text('VACIO', this.margin + labelWidth + 3, valueYPos);
+      const valueStartY = this.yPos + (rowHeight / 2) + 2.5;
+      this.pdf.text('VACIO', this.margin + labelWidth + 3, valueStartY);
       this.pdf.setTextColor(0, 0, 0);
     } else {
       const valueContentHeight = valueLines.length * lineHeight;
-      let valueYPos = this.yPos + (rowHeight - valueContentHeight) / 2 + lineHeight;
-      valueLines.forEach(line => {
-        this.pdf.text(line, this.margin + labelWidth + 3, valueYPos);
-        valueYPos += lineHeight;
+      const valueStartY = this.yPos + (rowHeight - valueContentHeight) / 2 + 3;
+      valueLines.forEach((line, index) => {
+        this.pdf.text(line, this.margin + labelWidth + 3, valueStartY + (index * lineHeight));
       });
     }
 
@@ -146,7 +145,8 @@ export class DJCPdfGenerator {
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
     const lineHeight = 4;
     const minSubRowHeight = 8;
-    const padding = 3;
+    const topPadding = 2.5;
+    const bottomPadding = 2.5;
 
     // Calcular alturas de cada subfila
     this.pdf.setFontSize(8);
@@ -167,7 +167,7 @@ export class DJCPdfGenerator {
         valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
       }
 
-      const subRowHeight = Math.max(minSubRowHeight, valueLines.length * lineHeight + padding * 2);
+      const subRowHeight = Math.max(minSubRowHeight, valueLines.length * lineHeight + topPadding + bottomPadding);
       subRowHeights.push(subRowHeight);
       totalHeight += subRowHeight;
     });
@@ -184,10 +184,9 @@ export class DJCPdfGenerator {
     this.pdf.setFont('helvetica', 'bold');
     const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
     const labelContentHeight = labelLines.length * lineHeight;
-    let labelYPos = this.yPos + (totalHeight - labelContentHeight) / 2 + lineHeight;
-    labelLines.forEach(line => {
-      this.pdf.text(line, this.margin + 3, labelYPos);
-      labelYPos += lineHeight;
+    const labelStartY = this.yPos + (totalHeight - labelContentHeight) / 2 + 3;
+    labelLines.forEach((line, index) => {
+      this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
     });
 
     // Agregar cada subfila
@@ -212,27 +211,26 @@ export class DJCPdfGenerator {
 
       if (!field.value || field.value.trim() === '') {
         // Centrar verticalmente el texto de una línea
-        const textYPos = subYPos + (subRowHeight - lineHeight) / 2 + lineHeight;
+        const textStartY = subYPos + (subRowHeight / 2) + 2.5;
         this.pdf.setFont('helvetica', 'bold');
-        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textYPos);
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textStartY);
         this.pdf.setFont('helvetica', 'normal');
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, textYPos);
+        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, textStartY);
         this.pdf.setTextColor(0, 0, 0);
       } else {
         const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
         const contentHeight = valueLines.length * lineHeight;
-        let textYPos = subYPos + (subRowHeight - contentHeight) / 2 + lineHeight;
+        const textStartY = subYPos + (subRowHeight - contentHeight) / 2 + 3;
 
         // Dibujar etiqueta en la misma línea que el primer valor
         this.pdf.setFont('helvetica', 'bold');
-        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textYPos);
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textStartY);
 
         // Dibujar valores
         this.pdf.setFont('helvetica', 'normal');
-        valueLines.forEach(line => {
-          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, textYPos);
-          textYPos += lineHeight;
+        valueLines.forEach((line, lineIndex) => {
+          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, textStartY + (lineIndex * lineHeight));
         });
       }
 
