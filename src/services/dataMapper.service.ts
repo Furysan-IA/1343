@@ -67,6 +67,16 @@ export class DataMapper {
       }
     });
 
+    console.log('📊 Header Mapping creado:');
+    console.log('  - Columnas mapeadas:', Object.keys(headerMapping).length);
+    console.log('  - Columnas sin mapear:', unmappedColumns.length);
+    console.log('  - Mapping:', headerMapping);
+
+    const hasCodificacion = Object.values(headerMapping).includes('codificacion');
+    const hasCuit = Object.values(headerMapping).includes('cuit');
+    console.log(`  - ✓ Tiene columna CUIT: ${hasCuit}`);
+    console.log(`  - ✓ Tiene columna CODIFICACION: ${hasCodificacion}`);
+
     rows.forEach((row, rowIndex) => {
       try {
         const mappedRow: any = {};
@@ -110,9 +120,17 @@ export class DataMapper {
           }
 
           clientMap.set(cuit, client);
+          if (rowIndex < 3) {
+            console.log(`👤 Cliente agregado al mapa: CUIT=${cuit}, Razón Social=${client.razon_social}`);
+          }
         }
 
         const codificacion = mappedRow.codificacion?.toString().trim();
+
+        if (rowIndex < 3) {
+          console.log(`🔍 Fila ${rowIndex + 2}: codificacion="${codificacion}", existe en mapa=${productMap.has(codificacion || '')}, mappedRow.codificacion="${mappedRow.codificacion}"`);
+        }
+
         if (codificacion && !productMap.has(codificacion)) {
           const product: Product = {
             codificacion,
@@ -147,6 +165,17 @@ export class DataMapper {
           };
 
           productMap.set(codificacion, product);
+          if (rowIndex < 3) {
+            console.log(`📦 Producto agregado al mapa: ${codificacion} (CUIT: ${cuit}, Producto: ${product.producto})`);
+          }
+        } else if (!codificacion) {
+          if (rowIndex < 3) {
+            console.warn(`⚠️ Fila ${rowIndex + 2}: codificacion vacía o faltante en mappedRow`);
+          }
+        } else if (productMap.has(codificacion)) {
+          if (rowIndex < 3) {
+            console.log(`⏭️ Fila ${rowIndex + 2}: producto ${codificacion} ya existe en mapa, saltando`);
+          }
         }
       } catch (error) {
         errors.push(`Fila ${rowIndex + 2}: Error al procesar - ${error.message}`);
