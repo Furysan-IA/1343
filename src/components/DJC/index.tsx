@@ -1,1 +1,1 @@
-export { default as DJCGenerator } from './DJCGenerator';
+export { DJCGenerator } from './DJCGenerator';
