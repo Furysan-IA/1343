@@ -8,27 +8,36 @@ export class ExcelParser {
 
       reader.onload = (e) => {
         try {
-          const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, {
+            type: 'array',
+            cellDates: true,
+            cellStyles: true
+          });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
 
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          // Convert directly to objects using first row as headers
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            defval: null,      // Default value for empty cells
+            blankrows: false   // Skip completely blank rows
+          });
 
           if (jsonData.length === 0) {
             reject(new Error('El archivo está vacío'));
             return;
           }
 
-          const headers = (jsonData[0] as any[]).map(h => String(h || '').trim());
-          const rows = jsonData.slice(1).filter((row: any) => {
-            return Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && cell !== '');
-          });
+          // Extract headers from the keys of the first object
+          const headers = Object.keys(jsonData[0]);
+
+          console.log('📊 ExcelParser - Parsed rows:', jsonData.length);
+          console.log('📋 ExcelParser - Headers detected:', headers.length);
 
           resolve({
-            rows,
+            rows: jsonData,
             headers,
-            totalRows: rows.length
+            totalRows: jsonData.length
           });
         } catch (error) {
           reject(new Error(`Error al parsear Excel: ${error.message}`));
@@ -39,7 +48,7 @@ export class ExcelParser {
         reject(new Error('Error al leer el archivo'));
       };
 
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     });
   }
 

@@ -85,35 +85,46 @@ export const parseUnifiedFile = async (file: File): Promise<UnifiedRecord[]> => 
 
     reader.onload = (e) => {
       try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, {
+          type: 'array',
+          cellDates: true,
+          cellStyles: true
+        });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+
+        // Convert directly to objects using first row as headers
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          defval: null,
+          blankrows: false,
+          raw: false
+        });
 
         if (jsonData.length === 0) {
           reject(new Error('Archivo vacío'));
           return;
         }
 
-        const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h)));
+        const originalHeaders = Object.keys(jsonData[0]);
+        const headers = originalHeaders.map(h => normalizeHeader(String(h)));
         const records: UnifiedRecord[] = [];
 
-        for (let i = 1; i < jsonData.length; i++) {
-          const row = jsonData[i] as any[];
-          if (!row || row.every(cell => !cell)) continue;
-
+        for (const rawRow of jsonData) {
           const fullRecord: any = {};
-          headers.forEach((header, index) => {
-            const value = row[index];
+
+          originalHeaders.forEach((originalHeader, index) => {
+            const normalizedHeader = headers[index];
+            const value = rawRow[originalHeader];
+
             if (value !== undefined && value !== null && value !== '') {
-              if (header.includes('fecha') || header.includes('vencimiento') || header.includes('emision')) {
+              if (normalizedHeader.includes('fecha') || normalizedHeader.includes('vencimiento') || normalizedHeader.includes('emision')) {
                 const parsed = parseDate(value);
-                fullRecord[header] = parsed ? parsed.toISOString() : value;
-              } else if (header === 'cuit') {
-                fullRecord[header] = parseInt(String(value).replace(/\D/g, ''));
+                fullRecord[normalizedHeader] = parsed ? parsed.toISOString() : value;
+              } else if (normalizedHeader === 'cuit') {
+                fullRecord[normalizedHeader] = parseInt(String(value).replace(/\D/g, ''));
               } else {
-                fullRecord[header] = value;
+                fullRecord[normalizedHeader] = value;
               }
             }
           });
@@ -146,7 +157,7 @@ export const parseUnifiedFile = async (file: File): Promise<UnifiedRecord[]> => 
     };
 
     reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   });
 };
 

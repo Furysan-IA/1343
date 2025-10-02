@@ -151,21 +151,26 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
     reader.onload = (e) => {
       try {
         console.log('📖 FileReader onload triggered');
-        const data = e.target?.result;
-
-        if (!data) {
-          throw new Error('No data read from file');
-        }
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
 
         console.log('📊 Reading workbook...');
-        const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+        const workbook = XLSX.read(data, {
+          type: 'array',
+          cellDates: true,
+          cellStyles: true
+        });
 
         const firstSheetName = workbook.SheetNames[0];
         console.log('📄 Sheet name:', firstSheetName);
         const worksheet = workbook.Sheets[firstSheetName];
 
         console.log('🔄 Converting to JSON...');
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+        // Convert directly to objects using first row as headers
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          defval: null,      // Default value for empty cells
+          blankrows: false,  // Skip completely blank rows
+          raw: false         // Convert dates and numbers to strings
+        });
 
         if (jsonData.length === 0) {
           reject(new Error('El archivo está vacío'));
@@ -173,7 +178,9 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
         }
 
         console.log('✅ JSON data extracted, rows:', jsonData.length);
-        const originalHeaders = jsonData[0] as any[];
+
+        // Extract and normalize headers from the keys of the first object
+        const originalHeaders = Object.keys(jsonData[0]);
         const headers = originalHeaders.map(h => normalizeHeader(String(h)));
         console.log('📋 Original headers:', originalHeaders);
         console.log('📋 Normalized headers:', headers);
@@ -181,20 +188,20 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
         const rows: UniversalRecord[] = [];
 
         console.log('🔄 Processing rows...');
-        for (let i = 1; i < jsonData.length; i++) {
-          const row = jsonData[i] as any[];
-          if (!row || row.every(cell => !cell)) continue;
-
+        for (const rawRow of jsonData) {
           const record: any = {};
-          headers.forEach((header, index) => {
-            const value = row[index];
 
-            // Aplicar conversión de tipos para cada campo
-            const converted = convertToDbType(value, header);
+          // Process each field with normalized header
+          originalHeaders.forEach((originalHeader, index) => {
+            const normalizedHeader = headers[index];
+            const value = rawRow[originalHeader];
 
-            // Solo agregar al record si no es null
+            // Apply type conversion for each field
+            const converted = convertToDbType(value, normalizedHeader);
+
+            // Only add to record if not null
             if (converted !== null) {
-              record[header] = converted;
+              record[normalizedHeader] = converted;
             }
           });
 
@@ -232,8 +239,8 @@ export const parseFile = async (file: File): Promise<ParsedData> => {
       reject(new Error('Error al leer el archivo'));
     };
 
-    console.log('🚀 Starting to read file as binary string...');
-    reader.readAsBinaryString(file);
+    console.log('🚀 Starting to read file as array buffer...');
+    reader.readAsArrayBuffer(file);
   });
 };
 

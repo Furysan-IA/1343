@@ -149,8 +149,12 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
           return;
         }
 
-        const data = e.target.result;
-        const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+        const data = new Uint8Array(e.target.result as ArrayBuffer);
+        const workbook = XLSX.read(data, {
+          type: 'array',
+          cellDates: true,
+          cellStyles: true
+        });
 
         if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
           reject(new Error('El archivo no contiene hojas de cálculo'));
@@ -165,19 +169,21 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
           return;
         }
 
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+        // Convert directly to objects using first row as headers
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          defval: null,
+          blankrows: false,
+          raw: false
+        });
 
         if (!jsonData || jsonData.length === 0) {
-          reject(new Error('El archivo está vacío'));
+          reject(new Error('El archivo está vacío o solo contiene encabezados'));
           return;
         }
 
-        if (jsonData.length === 1) {
-          reject(new Error('El archivo solo contiene encabezados, no hay datos'));
-          return;
-        }
-
-        const headers = (jsonData[0] as any[]).map(h => normalizeHeader(String(h || '')));
+        // Extract and normalize headers from first object
+        const originalHeaders = Object.keys(jsonData[0]);
+        const headers = originalHeaders.map(h => normalizeHeader(String(h || '')));
 
         if (!headers.includes('fecha_emision')) {
           reject(new Error('El archivo debe contener la columna "fecha_emision"'));
@@ -188,28 +194,19 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
         const extractions: ExtractionResult[] = [];
         const rejectedRecords: RejectedRecord[] = [];
 
-        for (let i = 1; i < jsonData.length; i++) {
-          const row = jsonData[i] as any[];
-          const rowNumber = i + 1;
-
-          if (!row || row.every(cell => !cell)) {
-            rejectedRecords.push({
-              rowNumber,
-              reason: 'Fila vacía - todas las celdas están vacías',
-              data: row
-            });
-            continue;
-          }
+        jsonData.forEach((rawRow: any, index: number) => {
+          const rowNumber = index + 2;
 
           const record: any = {};
-          headers.forEach((header, index) => {
-            let value = row[index];
+          originalHeaders.forEach((originalHeader, idx) => {
+            const normalizedHeader = headers[idx];
+            let value = rawRow[originalHeader];
 
-            if (header === 'fecha_emision' || header === 'fecha_vencimiento') {
+            if (normalizedHeader === 'fecha_emision' || normalizedHeader === 'fecha_vencimiento') {
               value = parseDate(value);
             }
 
-            record[header] = value;
+            record[normalizedHeader] = value;
           });
 
           if (!record.fecha_emision) {
@@ -219,14 +216,14 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
               data: record,
               missingFields: ['fecha_emision']
             });
-            continue;
+            return;
           }
 
           records.push(record);
 
           const extraction = extractClientAndProductData(record);
           extractions.push(extraction);
-        }
+        });
 
         if (records.length > MAX_ROWS) {
           reject(new Error(`El archivo contiene ${records.length} filas. Máximo permitido: ${MAX_ROWS}`));
@@ -258,7 +255,7 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
       }
     };
 
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   });
 };
 
