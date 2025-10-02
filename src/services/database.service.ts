@@ -25,6 +25,26 @@ export class DatabaseService {
     return data;
   }
 
+  async getClientsByCuits(cuits: number[]): Promise<Client[]> {
+    console.log(`🔍 DatabaseService - Verificando ${cuits.length} CUITs específicos...`);
+
+    if (cuits.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .in('cuit', cuits);
+
+    if (error) {
+      console.error('❌ Error obteniendo clientes por CUIT:', error);
+      throw new Error(`Error obteniendo clientes por CUIT: ${error.message}`);
+    }
+
+    console.log(`✅ Clientes existentes encontrados: ${data?.length || 0} de ${cuits.length}`);
+
+    return data || [];
+  }
+
   async getAllProducts(): Promise<Product[]> {
     console.log('🔍 DatabaseService - Obteniendo todos los productos existentes...');
     const { data, error } = await supabase
@@ -56,6 +76,29 @@ export class DatabaseService {
       throw new Error(`Error obteniendo producto: ${error.message}`);
     }
     return data;
+  }
+
+  async getProductsByCodificaciones(codificaciones: string[]): Promise<Product[]> {
+    console.log(`🔍 DatabaseService - Verificando ${codificaciones.length} codificaciones específicas...`);
+
+    if (codificaciones.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .in('codificacion', codificaciones);
+
+    if (error) {
+      console.error('❌ Error obteniendo productos por codificación:', error);
+      throw new Error(`Error obteniendo productos por codificación: ${error.message}`);
+    }
+
+    console.log(`✅ Productos existentes encontrados: ${data?.length || 0} de ${codificaciones.length}`);
+    if (data && data.length > 0) {
+      console.log(`📋 Primeras 3 codificaciones encontradas:`, data.slice(0, 3).map(p => p.codificacion));
+    }
+
+    return data || [];
   }
 
   async insertClient(client: Client, userId: string, batchId: string): Promise<void> {

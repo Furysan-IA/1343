@@ -53,8 +53,13 @@ export class UploadOrchestrator {
       }
 
       this.updateProgress('validating', 'Consultando base de datos...', 40);
-      const existingClients = await dbService.getAllClients();
-      const existingProducts = await dbService.getAllProducts();
+
+      // Solo traer clientes y productos específicos del archivo para evitar límite de 1000 filas
+      const uploadedCuits = mappedData.clients.map(c => c.cuit);
+      const uploadedCodificaciones = mappedData.products.map(p => p.codificacion);
+
+      const existingClients = await dbService.getClientsByCuits(uploadedCuits);
+      const existingProducts = await dbService.getProductsByCodificaciones(uploadedCodificaciones);
 
       this.updateProgress('validating', 'Validando contra datos existentes...', 50);
       const validatedData = await DataValidator.validateAgainstDatabase(
