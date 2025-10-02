@@ -361,7 +361,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
             className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <Printer className="h-5 w-5" />
-            Imprimir / Guardar PDF
+            Imprimir
           </button>
           <button
             onClick={onConfirm}
@@ -380,7 +380,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
             ) : (
               <>
                 <Download className="h-5 w-5" />
-                Confirmar y Generar PDF
+                Generar y Descargar Word
               </>
             )}
           </button>

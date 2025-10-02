@@ -4,7 +4,7 @@ import { formatCuit } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
-import { generateDJCPdfFromHtml } from '../../services/djcHtmlToPdf.service';
+import { generateDJCWord } from '../../services/djcWordGenerator.service';
 
 interface Client {
   id: string;
@@ -308,7 +308,7 @@ const DJCGenerator: React.FC = () => {
     setShowPreview(true);
   };
 
-  const generatePDF = async () => {
+  const generateWord = async () => {
     if (!previewData || !selectedClient || !selectedProduct) return;
 
     setGenerating(true);
@@ -324,20 +324,20 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
-      // Generar el PDF usando HTML (mantiene el formato exacto de la vista previa)
-      const pdfBlob = await generateDJCPdfFromHtml(previewData);
-      const fileName = `DJC_${previewData.numero_djc}.pdf`;
+      // Generar el documento Word
+      const wordBlob = await generateDJCWord(previewData);
+      const fileName = `DJC_${previewData.numero_djc}.docx`;
 
       // Guardar en bucket 'djcs'
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('djcs')
-        .upload(fileName, pdfBlob, {
-          contentType: 'application/pdf',
+        .upload(fileName, wordBlob, {
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           upsert: true
         });
 
       if (uploadError) {
-        console.error('Error uploading PDF:', uploadError);
+        console.error('Error uploading Word:', uploadError);
         throw uploadError;
       }
 
@@ -400,9 +400,9 @@ const DJCGenerator: React.FC = () => {
         throw updateError;
       }
 
-      // Descargar el PDF
+      // Descargar el documento Word
       const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.href = URL.createObjectURL(wordBlob);
       downloadLink.download = fileName;
       downloadLink.click();
       URL.revokeObjectURL(downloadLink.href);
@@ -473,7 +473,7 @@ const DJCGenerator: React.FC = () => {
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Vista previa antes de generar el PDF final</li>
+                <li>Vista previa antes de generar el documento Word final</li>
                 <li>Cada DJC es individual por producto</li>
                 <li>Las DJC se guardan en el bucket "djcs"</li>
                 <li>Puede agregar un representante autorizado si corresponde</li>
@@ -851,7 +851,7 @@ const DJCGenerator: React.FC = () => {
                   />
                   {!customLink && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Si se deja vacío, el campo aparecerá como "CAMPO NO ENCONTRADO" en el PDF
+                      Si se deja vacío, el campo aparecerá como "CAMPO NO ENCONTRADO" en el documento
                     </p>
                   )}
                 </div>
@@ -901,7 +901,7 @@ const DJCGenerator: React.FC = () => {
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
         djcData={previewData}
-        onConfirm={generatePDF}
+        onConfirm={generateWord}
         isGenerating={generating}
       />
     </div>
