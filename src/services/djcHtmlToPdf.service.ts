@@ -115,14 +115,14 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           padding-left: 4px;
         }
 
-        .highlight {
-          background-color: #fefce8;
-        }
-
         .footer-text {
-          font-size: 8pt;
+          font-size: 9pt;
           margin: 20px 0;
           line-height: 1.6;
+          padding: 12px;
+          border: 2px solid #404040;
+          background-color: #f9fafb;
+          font-weight: bold;
         }
 
         .signature-section {
@@ -248,20 +248,20 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           <td class="sublabel">Organismo de Certificación: <span style="font-weight: normal;">${djcData.organismo_certificacion}</span></td>
         </tr>
         <tr>
-          <td class="sublabel highlight">Esquema de certificacion: <span style="font-weight: normal;">${formatFieldValue(djcData.esquema_certificacion)}</span></td>
+          <td class="sublabel">Esquema de certificacion: <span style="font-weight: normal;">${formatFieldValue(djcData.esquema_certificacion)}</span></td>
         </tr>
         <tr>
-          <td class="sublabel highlight">Fecha de emision (Certificado / Ultima Vigilancia): <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_emision_certificado)}</span></td>
+          <td class="sublabel">Fecha de emision (Certificado / Ultima Vigilancia): <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_emision_certificado)}</span></td>
         </tr>
         <tr>
-          <td class="sublabel highlight">Fecha de proxima vigilancia: <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_proxima_vigilancia)}</span></td>
+          <td class="sublabel">Fecha de proxima vigilancia: <span style="font-weight: normal;">${formatFieldValue(djcData.fecha_proxima_vigilancia)}</span></td>
         </tr>
         <tr>
-          <td class="sublabel highlight">Laboratorio de ensayos: <span style="font-weight: normal;">${formatFieldValue(djcData.laboratorio_ensayos)}</span></td>
+          <td class="sublabel">Laboratorio de ensayos: <span style="font-weight: normal;">${formatFieldValue(djcData.laboratorio_ensayos)}</span></td>
         </tr>
         <tr>
           <td class="label">Informe de ensayos:</td>
-          <td class="value highlight">${formatFieldValue(djcData.informe_ensayos)}</td>
+          <td class="value">${formatFieldValue(djcData.informe_ensayos)}</td>
         </tr>
       </table>
 

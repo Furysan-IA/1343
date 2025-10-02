@@ -252,7 +252,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       )}
                     </td>
                   </tr>
-                  <tr className="border-b border-gray-300 bg-yellow-50">
+                  <tr className="border-b border-gray-300">
                     <td className="p-2">
                       <span className="font-semibold">
                         Esquema de certificacion:
@@ -262,7 +262,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       )}
                     </td>
                   </tr>
-                  <tr className="border-b border-gray-300 bg-yellow-50">
+                  <tr className="border-b border-gray-300">
                     <td className="p-2">
                       <span className="font-semibold">
                         Fecha de emision (Certificado / Ultima Vigilancia):
@@ -272,7 +272,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       )}
                     </td>
                   </tr>
-                  <tr className="border-b border-gray-300 bg-yellow-50">
+                  <tr className="border-b border-gray-300">
                     <td className="p-2">
                       <span className="font-semibold">
                         Fecha de proxima vigilancia:
@@ -282,7 +282,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       )}
                     </td>
                   </tr>
-                  <tr className="border-b border-gray-300 bg-yellow-50">
+                  <tr className="border-b border-gray-300">
                     <td className="p-2">
                       <span className="font-semibold">
                         Laboratorio de ensayos:
@@ -293,7 +293,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="p-2 bg-yellow-50">
+                    <td className="p-2">
                       <span className="font-semibold">Informe de ensayos:</span>{' '}
                       {djcData.informe_ensayos || (
                         <span className="text-red-600">CAMPO NO ENCONTRADO</span>
@@ -322,7 +322,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
               </table>
 
               <div className="mt-6 pt-4 border-t">
-                <p className="text-xs text-justify mb-4">
+                <p className="text-sm text-justify mb-4 p-3 border-2 border-gray-700 bg-gray-50 font-bold">
                   La presente declaración jurada de conformidad se emite, en todo
                   de acuerdo con el/los Reglamentos Técnicos aludidos
                   precedentemente, asumiendo la responsabilidad directa por los
