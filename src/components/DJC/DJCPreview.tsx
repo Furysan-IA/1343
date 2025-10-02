@@ -315,7 +315,9 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       Internet
                     </td>
                     <td className="p-2 text-blue-600 break-all">
-                      {djcData.enlace_declaracion}
+                      {djcData.enlace_declaracion && djcData.enlace_declaracion.trim() !== ''
+                        ? djcData.enlace_declaracion
+                        : ''}
                     </td>
                   </tr>
                 </tbody>

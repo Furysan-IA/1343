@@ -75,7 +75,7 @@ export class DJCPdfGenerator {
     this.yPos += 9;
   }
 
-  private addTableRow(label: string, value: string, isGray: boolean = false) {
+  private addTableRow(label: string, value: string, isGray: boolean = false, allowEmpty: boolean = false) {
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
     const lineHeight = 4;
@@ -91,8 +91,12 @@ export class DJCPdfGenerator {
     // Preparar texto del valor
     this.pdf.setFont('helvetica', 'normal');
     let valueLines: string[] = [];
-    if (!value || value.trim() === '') {
+    const isEmpty = !value || value.trim() === '';
+
+    if (isEmpty && !allowEmpty) {
       valueLines = ['VACIO'];
+    } else if (isEmpty && allowEmpty) {
+      valueLines = [''];
     } else {
       valueLines = this.pdf.splitTextToSize(value, valueWidth - 6);
     }
@@ -124,16 +128,18 @@ export class DJCPdfGenerator {
 
     // Texto del valor - centrado verticalmente
     this.pdf.setFont('helvetica', 'normal');
-    if (!value || value.trim() === '') {
+    if (isEmpty && !allowEmpty) {
       this.pdf.setTextColor(255, 0, 0);
       const valueStartY = this.yPos + (rowHeight / 2) + 2.5;
       this.pdf.text('VACIO', this.margin + labelWidth + 3, valueStartY);
       this.pdf.setTextColor(0, 0, 0);
-    } else {
+    } else if (!isEmpty || allowEmpty) {
       const valueContentHeight = valueLines.length * lineHeight;
       const valueStartY = this.yPos + (rowHeight - valueContentHeight) / 2 + 3;
       valueLines.forEach((line, index) => {
-        this.pdf.text(line, this.margin + labelWidth + 3, valueStartY + (index * lineHeight));
+        if (line.trim() !== '' || !isEmpty) {
+          this.pdf.text(line, this.margin + labelWidth + 3, valueStartY + (index * lineHeight));
+        }
       });
     }
 
@@ -310,7 +316,7 @@ export class DJCPdfGenerator {
     // Sección 6: Otros Datos
     this.checkPageBreak();
     this.addSectionHeader('(6) OTROS DATOS');
-    this.addTableRow('Enlace a la copia de la declaración de conformidad en Internet', djcData.enlace_declaracion, true);
+    this.addTableRow('Enlace a la copia de la declaración de conformidad en Internet', djcData.enlace_declaracion, true, true);
     this.yPos += 5;
 
     // Texto legal
