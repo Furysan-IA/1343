@@ -73,6 +73,9 @@ export const DJCGenerator: React.FC = () => {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
+      .not('pag', 'is', null)
+      .not('res', 'is', null)
+      .not('qr', 'is', null)
       .order('razon_social');
 
     if (!error && data) {
@@ -84,6 +87,9 @@ export const DJCGenerator: React.FC = () => {
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .not('pag', 'is', null)
+      .not('res', 'is', null)
+      .not('qr', 'is', null)
       .order('producto');
 
     if (!error && data) {
@@ -93,7 +99,7 @@ export const DJCGenerator: React.FC = () => {
 
   const filteredClients = clients.filter(c =>
     c.razon_social.toLowerCase().includes(clientSearch.toLowerCase()) ||
-    c.cuit.includes(clientSearch)
+    String(c.cuit).includes(clientSearch)
   );
 
   const filteredProducts = products.filter(p => {
@@ -101,7 +107,7 @@ export const DJCGenerator: React.FC = () => {
       p.codificacion.toLowerCase().includes(productSearch.toLowerCase());
 
     if (selectedClient) {
-      return matchesSearch && p.cuit === selectedClient.cuit;
+      return matchesSearch && String(p.cuit) === String(selectedClient.cuit);
     }
     return matchesSearch;
   });
@@ -430,7 +436,7 @@ export const DJCGenerator: React.FC = () => {
                     key={product.id}
                     onClick={() => {
                       setSelectedProduct(product);
-                      const client = clients.find(c => c.cuit === product.cuit);
+                      const client = clients.find(c => String(c.cuit) === String(product.cuit));
                       if (client) setSelectedClient(client);
                       setProductSearch('');
                     }}
