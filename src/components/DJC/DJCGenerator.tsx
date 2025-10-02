@@ -4,7 +4,7 @@ import { formatCuit } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
-import { generateDJCPdfFromHtml } from '../../services/djcHtmlToPdf.service';
+import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
 
 interface Client {
   id: string;
@@ -324,8 +324,10 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
-      // Generar el PDF usando HTML (mantiene el formato exacto de la vista previa)
-      const pdfBlob = await generateDJCPdfFromHtml(previewData);
+      // Generar el PDF usando jsPDF directamente
+      const pdfGenerator = new DJCPdfGenerator();
+      const pdf = pdfGenerator.generate(previewData);
+      const pdfBlob = pdf.output('blob');
       const fileName = `DJC_${previewData.numero_djc}.pdf`;
 
       // Guardar en bucket 'djcs'
