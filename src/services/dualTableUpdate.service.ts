@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { ExtractionResult } from './certificateProcessing.service';
 import { createBackupSnapshot } from './backup.service';
+import { logCertificateProcessing } from './certificateDiagnostics.service';
 
 export interface ClientMatch {
   exists: boolean;
@@ -28,6 +29,8 @@ export interface DualMatchResult {
 
   isNewClient: boolean;
   missingClientData: string[];
+  skipReason?: string;
+  dateDifferenceDays?: number;
 }
 
 export interface ProcessingStats {
@@ -155,6 +158,9 @@ export const analyzeCertificateForUpdate = async (
     }
   }
 
+  let skipReason: string | undefined;
+  let dateDifferenceDays: number | undefined;
+
   if (!clientMatch.exists && !productMatch.exists) {
     action = 'insert_both';
   } else if (clientMatch.needsUpdate && productMatch.needsUpdate) {
@@ -165,6 +171,19 @@ export const analyzeCertificateForUpdate = async (
     action = 'update_client_insert_product';
   } else if (!clientMatch.needsUpdate && !productMatch.needsUpdate) {
     action = 'skip';
+
+    const certDate = new Date(extraction.originalRecord.fecha_emision);
+    const existingClientDate = clientMatch.existingDate;
+    const existingProductDate = productMatch.existingDate;
+
+    if (existingClientDate || existingProductDate) {
+      const referenceDate = existingClientDate || existingProductDate;
+      dateDifferenceDays = Math.floor((referenceDate!.getTime() - certDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      skipReason = `Certificado más antiguo que el registro existente. El certificado es de ${certDate.toLocaleDateString('es-AR')}, pero ya existe un registro de ${referenceDate!.toLocaleDateString('es-AR')} (${dateDifferenceDays} días más reciente)`;
+    } else {
+      skipReason = 'Certificado no requiere actualización';
+    }
   }
 
   if (missingClientData.length > 0) {
@@ -177,7 +196,9 @@ export const analyzeCertificateForUpdate = async (
     extraction,
     action,
     isNewClient,
-    missingClientData
+    missingClientData,
+    skipReason,
+    dateDifferenceDays
   };
 };
 
@@ -296,7 +317,11 @@ export const processAllCertificates = async (
     errors: []
   };
 
+  let rowNumber = 2;
   for (const analysis of analyses) {
+    await logCertificateProcessing(batchId, analysis, rowNumber);
+    rowNumber++;
+
     try {
       switch (analysis.action) {
         case 'insert_both':

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, X, Award, Calendar } from 'lucide-react';
 import { validateFile, parseCertificateFile, filterByEmissionDate, categorizeExtractions, ParsedCertificates } from '../../services/certificateProcessing.service';
 import { createBatchRecord } from '../../services/dualTableUpdate.service';
+import { logRejectedRecord } from '../../services/certificateDiagnostics.service';
 import { subDays } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -109,6 +110,12 @@ export const CertificateUploadScreen: React.FC<CertificateUploadScreenProps> = (
 
       if (!batchId) {
         throw new Error('No se pudo crear el registro del lote');
+      }
+
+      if (parsedData.rejectedRecords && parsedData.rejectedRecords.length > 0) {
+        for (const rejected of parsedData.rejectedRecords) {
+          await logRejectedRecord(batchId, rejected);
+        }
       }
 
       const updatedData: ParsedCertificates = {
@@ -247,10 +254,21 @@ export const CertificateUploadScreen: React.FC<CertificateUploadScreenProps> = (
                 <h3 className="font-semibold text-green-900 mb-3 text-lg">
                   Archivo procesado exitosamente
                 </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-green-700">Total de certificados:</p>
                     <p className="text-2xl font-bold text-green-900">{parsedData?.records.length}</p>
+                  </div>
+                  {parsedData && parsedData.metadata.totalRejected > 0 && (
+                    <div>
+                      <p className="text-red-700">Registros rechazados:</p>
+                      <p className="text-2xl font-bold text-red-900">{parsedData.metadata.totalRejected}</p>
+                      <p className="text-xs text-red-600 mt-1">Filas vacías o sin fecha_emision</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-slate-700">Columnas detectadas:</p>
+                    <p className="text-2xl font-bold text-slate-900">{parsedData?.metadata.columnCount}</p>
                   </div>
                 </div>
               </div>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, UserPlus, Package, ChevronRight, Database, History } from 'lucide-react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, UserPlus, Package, ChevronRight, Database, History, FileText } from 'lucide-react';
 import { ParsedCertificates, categorizeExtractions } from '../../services/certificateProcessing.service';
 import { analyzeCertificateForUpdate, processAllCertificates, updateBatchStats, DualMatchResult } from '../../services/dualTableUpdate.service';
 import { BackupHistory } from '../../components/BackupHistory';
+import { CertificateSkipReport } from '../../components/CertificateSkipReport';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -25,6 +26,7 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   const [showNewClients, setShowNewClients] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [showBackupHistory, setShowBackupHistory] = useState(false);
+  const [showSkipReport, setShowSkipReport] = useState(false);
   const [createBackup, setCreateBackup] = useState(true);
 
   const itemsPerPage = 10;
@@ -132,13 +134,22 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
                 Análisis completo de {parsedData.extractions.length} certificados
               </p>
             </div>
-            <button
-              onClick={() => setShowBackupHistory(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <History className="w-4 h-4" />
-              Ver Backups
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSkipReport(true)}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Ver Reporte Detallado
+              </button>
+              <button
+                onClick={() => setShowBackupHistory(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <History className="w-4 h-4" />
+                Ver Backups
+              </button>
+            </div>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -180,14 +191,21 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
               <p className="text-sm text-amber-600 mt-1">Clientes nuevos incompletos</p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-6">
+            <button
+              onClick={() => setShowSkipReport(true)}
+              className="bg-slate-50 border border-slate-200 rounded-lg p-6 hover:bg-slate-100 transition-colors text-left w-full"
+            >
               <div className="flex items-center gap-3 mb-2">
                 <Package className="w-6 h-6 text-slate-600" />
                 <h3 className="font-semibold text-slate-900">Omitir</h3>
               </div>
               <p className="text-3xl font-bold text-slate-700">{stats.skip}</p>
               <p className="text-sm text-slate-600 mt-1">Certificados más antiguos</p>
-            </div>
+              <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                Click para ver detalles
+              </p>
+            </button>
 
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-lg p-6">
               <h3 className="font-semibold mb-2">Total a Procesar</h3>
@@ -371,6 +389,14 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
       <BackupHistory
         isOpen={showBackupHistory}
         onClose={() => setShowBackupHistory(false)}
+      />
+
+      <CertificateSkipReport
+        isOpen={showSkipReport}
+        onClose={() => setShowSkipReport(false)}
+        batchId={batchId}
+        filename={parsedData.metadata.filename}
+        totalInFile={parsedData.metadata.totalRecords + parsedData.metadata.totalRejected}
       />
     </div>
   );

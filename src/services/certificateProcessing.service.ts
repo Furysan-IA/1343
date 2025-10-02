@@ -56,14 +56,23 @@ export interface ValidationError {
   code: string;
 }
 
+export interface RejectedRecord {
+  rowNumber: number;
+  reason: string;
+  data: any;
+  missingFields?: string[];
+}
+
 export interface ParsedCertificates {
   headers: string[];
   records: CertificateRecord[];
   extractions: ExtractionResult[];
+  rejectedRecords: RejectedRecord[];
   metadata: {
     filename: string;
     fileSize: number;
     totalRecords: number;
+    totalRejected: number;
     columnCount: number;
     uploadedAt: Date;
   };
@@ -177,10 +186,20 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
 
         const records: CertificateRecord[] = [];
         const extractions: ExtractionResult[] = [];
+        const rejectedRecords: RejectedRecord[] = [];
 
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
-          if (!row || row.every(cell => !cell)) continue;
+          const rowNumber = i + 1;
+
+          if (!row || row.every(cell => !cell)) {
+            rejectedRecords.push({
+              rowNumber,
+              reason: 'Fila vacía - todas las celdas están vacías',
+              data: row
+            });
+            continue;
+          }
 
           const record: any = {};
           headers.forEach((header, index) => {
@@ -194,6 +213,12 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
           });
 
           if (!record.fecha_emision) {
+            rejectedRecords.push({
+              rowNumber,
+              reason: 'Falta campo obligatorio: fecha_emision',
+              data: record,
+              missingFields: ['fecha_emision']
+            });
             continue;
           }
 
@@ -217,10 +242,12 @@ export const parseCertificateFile = async (file: File): Promise<ParsedCertificat
           headers,
           records,
           extractions,
+          rejectedRecords,
           metadata: {
             filename: file.name,
             fileSize: file.size,
             totalRecords: records.length,
+            totalRejected: rejectedRecords.length,
             columnCount: headers.length,
             uploadedAt: new Date()
           }
