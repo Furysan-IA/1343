@@ -859,7 +859,7 @@ const DJCGenerator: React.FC = () => {
                   />
                   {!customLink && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Si se deja vacío, el campo aparecerá como "VACIO" en el PDF
+                      Si se deja vacío, el campo quedará en blanco para que el cliente lo complete después
                     </p>
                   )}
                 </div>
