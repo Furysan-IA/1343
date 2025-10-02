@@ -1,4 +1,4 @@
-import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 
 interface DJCData {
   numero_djc: string;
@@ -302,37 +302,45 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
     </html>
   `;
 
-  // Crear un elemento temporal para renderizar el HTML
+  // Crear elemento temporal
   const element = document.createElement('div');
   element.innerHTML = htmlContent;
+  element.style.width = '700px'; // Ancho fijo para mantener proporciones
+
+  // Agregar al DOM temporalmente (necesario para jsPDF.html())
+  element.style.position = 'absolute';
+  element.style.left = '-9999px';
+  document.body.appendChild(element);
 
   try {
-    // Configuración de html2pdf
-    const opt = {
-      margin: [15, 15, 15, 15], // [top, left, bottom, right] en mm
-      filename: `DJC_${djcData.numero_djc}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      },
-      pagebreak: {
-        mode: ['avoid-all', 'css', 'legacy'],
-        before: '.section-header'
-      }
-    };
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-    // Generar PDF directamente desde HTML
-    const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
+    // Usar el método html() de jsPDF que renderiza HTML directamente
+    await pdf.html(element, {
+      callback: () => {
+        // Limpiar el elemento del DOM
+        document.body.removeChild(element);
+      },
+      x: 15,
+      y: 15,
+      width: 180, // 210mm - 30mm (15mm cada lado)
+      windowWidth: 700, // Debe coincidir con el ancho del elemento
+      autoPaging: 'text', // Paginación automática inteligente
+      margin: [15, 15, 15, 15]
+    });
 
+    // Convertir a blob
+    const pdfBlob = pdf.output('blob');
     return pdfBlob;
   } catch (error) {
+    // Asegurar limpieza en caso de error
+    if (document.body.contains(element)) {
+      document.body.removeChild(element);
+    }
     console.error('Error generando PDF:', error);
     throw error;
   }
