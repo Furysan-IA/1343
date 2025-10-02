@@ -113,22 +113,25 @@ export class DJCPdfGenerator {
     this.pdf.setDrawColor(200, 200, 200);
     this.pdf.rect(this.margin, this.yPos, this.pageWidth - 2 * this.margin, rowHeight, 'S');
 
-    // Texto de la etiqueta
+    // Texto de la etiqueta - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
-    let labelYPos = this.yPos + padding + lineHeight;
+    const labelContentHeight = labelLines.length * lineHeight;
+    let labelYPos = this.yPos + (rowHeight - labelContentHeight) / 2 + lineHeight;
     labelLines.forEach(line => {
       this.pdf.text(line, this.margin + 3, labelYPos);
       labelYPos += lineHeight;
     });
 
-    // Texto del valor
+    // Texto del valor - centrado verticalmente
     this.pdf.setFont('helvetica', 'normal');
     if (!value || value.trim() === '') {
       this.pdf.setTextColor(255, 0, 0);
-      this.pdf.text('VACIO', this.margin + labelWidth + 3, this.yPos + padding + lineHeight);
+      const valueYPos = this.yPos + (rowHeight - lineHeight) / 2 + lineHeight;
+      this.pdf.text('VACIO', this.margin + labelWidth + 3, valueYPos);
       this.pdf.setTextColor(0, 0, 0);
     } else {
-      let valueYPos = this.yPos + padding + lineHeight;
+      const valueContentHeight = valueLines.length * lineHeight;
+      let valueYPos = this.yPos + (rowHeight - valueContentHeight) / 2 + lineHeight;
       valueLines.forEach(line => {
         this.pdf.text(line, this.margin + labelWidth + 3, valueYPos);
         valueYPos += lineHeight;
@@ -177,10 +180,11 @@ export class DJCPdfGenerator {
     this.pdf.setDrawColor(200, 200, 200);
     this.pdf.rect(this.margin, this.yPos, labelWidth, totalHeight, 'S');
 
-    // Texto de la etiqueta principal
+    // Texto de la etiqueta principal - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
     const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
-    let labelYPos = this.yPos + padding + lineHeight;
+    const labelContentHeight = labelLines.length * lineHeight;
+    let labelYPos = this.yPos + (totalHeight - labelContentHeight) / 2 + lineHeight;
     labelLines.forEach(line => {
       this.pdf.text(line, this.margin + 3, labelYPos);
       labelYPos += lineHeight;
@@ -201,22 +205,34 @@ export class DJCPdfGenerator {
       // Calcular ancho de la etiqueta del campo
       this.pdf.setFont('helvetica', 'bold');
       const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
-      this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, subYPos + padding + lineHeight);
 
       // Texto del valor
       this.pdf.setFont('helvetica', 'normal');
       const availableWidth = valueWidth - labelTextWidth - 6;
 
       if (!field.value || field.value.trim() === '') {
+        // Centrar verticalmente el texto de una línea
+        const textYPos = subYPos + (subRowHeight - lineHeight) / 2 + lineHeight;
+        this.pdf.setFont('helvetica', 'bold');
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textYPos);
+        this.pdf.setFont('helvetica', 'normal');
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, subYPos + padding + lineHeight);
+        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, textYPos);
         this.pdf.setTextColor(0, 0, 0);
       } else {
         const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
-        let valueYPos = subYPos + padding + lineHeight;
+        const contentHeight = valueLines.length * lineHeight;
+        let textYPos = subYPos + (subRowHeight - contentHeight) / 2 + lineHeight;
+
+        // Dibujar etiqueta en la misma línea que el primer valor
+        this.pdf.setFont('helvetica', 'bold');
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textYPos);
+
+        // Dibujar valores
+        this.pdf.setFont('helvetica', 'normal');
         valueLines.forEach(line => {
-          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, valueYPos);
-          valueYPos += lineHeight;
+          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, textYPos);
+          textYPos += lineHeight;
         });
       }
 
