@@ -326,13 +326,13 @@ const DJCGenerator: React.FC = () => {
 
       // Generar el documento Word
       const wordBlob = await generateDJCWord(previewData);
-      const fileName = `DJC_${previewData.numero_djc}.docx`;
+      const fileName = `DJC_${previewData.numero_djc}.doc`;
 
       // Guardar en bucket 'djcs'
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('djcs')
         .upload(fileName, wordBlob, {
-          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          contentType: 'application/msword',
           upsert: true
         });
 
