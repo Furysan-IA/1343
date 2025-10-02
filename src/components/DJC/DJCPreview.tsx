@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Download, Loader as Loader2 } from 'lucide-react';
+import { X, Download, Loader as Loader2, Printer } from 'lucide-react';
 
 interface DJCPreviewData {
   numero_djc: string;
@@ -48,12 +48,16 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
   onConfirm,
   isGenerating,
 }) => {
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (!isOpen || !djcData) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
-        <div className="flex justify-between items-center p-6 border-b">
+        <div className="flex justify-between items-center p-6 border-b print:hidden">
           <h2 className="text-xl font-bold text-gray-900">Vista Previa DJC</h2>
           <button
             onClick={onClose}
@@ -64,8 +68,8 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-          <div className="max-w-4xl mx-auto">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] print:overflow-visible print:max-h-none">
+          <div className="max-w-4xl mx-auto print:max-w-full">
             <div className="text-center mb-6">
               <h1 className="text-xl font-bold mb-2">
                 DECLARACIÓN JURADA DE CONFORMIDAD (DJC)
@@ -343,13 +347,21 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6 border-t flex justify-end gap-4">
+        <div className="p-6 border-t flex justify-end gap-4 print:hidden">
           <button
             onClick={onClose}
             disabled={isGenerating}
             className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             Cancelar
+          </button>
+          <button
+            onClick={handlePrint}
+            disabled={isGenerating}
+            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <Printer className="h-5 w-5" />
+            Imprimir / Guardar PDF
           </button>
           <button
             onClick={onConfirm}
