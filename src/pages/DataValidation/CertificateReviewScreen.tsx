@@ -12,11 +12,7 @@ interface CertificateReviewScreenProps {
   batchId: string;
   referenceDate: Date;
   onReadyToConfirm: () => void;
-  showConfirmation?: boolean;
-  onCancelConfirmation?: () => void;
-  onConfirmProcessing?: () => void;
-  isProcessing?: boolean;
-  onProcessingComplete?: () => void;
+  onAnalysisComplete: (analyses: DualMatchResult[]) => void;
 }
 
 export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = ({
@@ -24,11 +20,7 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   batchId,
   referenceDate,
   onReadyToConfirm,
-  showConfirmation = false,
-  onCancelConfirmation,
-  onConfirmProcessing,
-  isProcessing = false,
-  onProcessingComplete
+  onAnalysisComplete
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [analyses, setAnalyses] = useState<DualMatchResult[]>([]);
@@ -36,21 +28,12 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   const [currentPage, setCurrentPage] = useState(1);
   const [showBackupHistory, setShowBackupHistory] = useState(false);
   const [showSkipReport, setShowSkipReport] = useState(false);
-  const [createBackup, setCreateBackup] = useState(true);
 
   const itemsPerPage = 10;
 
   useEffect(() => {
-    if (!isProcessing) {
-      analyzeAllCertificates();
-    }
+    analyzeAllCertificates();
   }, []);
-
-  useEffect(() => {
-    if (isProcessing && analyses.length > 0) {
-      handleProcessAll();
-    }
-  }, [isProcessing]);
 
   const analyzeAllCertificates = async () => {
     setIsAnalyzing(true);
@@ -75,6 +58,7 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
       }
 
       setAnalyses(results);
+      onAnalysisComplete(results);
       toast.success(`Análisis completado: ${results.length} certificados`);
     } catch (error: any) {
       console.error('Error in analyzeAllCertificates:', error);
@@ -85,31 +69,6 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
   };
 
 
-  const handleProcessAll = async () => {
-    try {
-      const autoProcessable = analyses.filter(a =>
-        a.action !== 'needs_completion' && a.action !== 'skip'
-      );
-
-      const stats = await processAllCertificates(
-        autoProcessable,
-        batchId,
-        parsedData.metadata.filename,
-        createBackup
-      );
-      await updateBatchStats(batchId, stats);
-
-      toast.success(
-        `Procesamiento completo: ${stats.clientsInserted + stats.clientsUpdated} clientes, ${stats.productsInserted + stats.productsUpdated} productos`
-      );
-
-      if (onProcessingComplete) {
-        onProcessingComplete();
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Error al procesar certificados');
-    }
-  };
 
   if (isAnalyzing) {
     return (
@@ -123,17 +82,6 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
     );
   }
 
-  if (isProcessing) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 text-lg">Procesando certificados...</p>
-          <p className="text-slate-500 text-sm mt-2">Actualizando base de datos</p>
-        </div>
-      </div>
-    );
-  }
 
   const stats = {
     insertBoth: analyses.filter(a => a.action === 'insert_both').length,
@@ -385,22 +333,6 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
           </div>
 
           <div className="flex items-center justify-between pt-6 border-t">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={createBackup}
-                onChange={(e) => setCreateBackup(e.target.checked)}
-                className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <div>
-                <span className="text-slate-700 font-medium">
-                  Crear backup antes de procesar
-                </span>
-                <p className="text-sm text-slate-500">
-                  Podrás restaurar los datos si algo sale mal
-                </p>
-              </div>
-            </label>
 
             <button
               onClick={onReadyToConfirm}
@@ -426,166 +358,6 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
         totalInFile={parsedData.metadata.totalRecords + parsedData.metadata.totalRejected}
       />
 
-      {showConfirmation && onCancelConfirmation && onConfirmProcessing && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
-              <h2 className="text-2xl font-bold mb-2">Confirmar Procesamiento de Certificados</h2>
-              <p className="text-blue-100">Revisa cuidadosamente las acciones que se realizarán</p>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-250px)]">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-amber-900 mb-2">¡Importante! Lee antes de continuar</h3>
-                    <p className="text-sm text-amber-800 mb-2">
-                      Estás a punto de procesar <strong>{analyses.length}</strong> certificados.
-                      Esta acción modificará tu base de datos según el análisis siguiente:
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <h4 className="font-semibold text-green-900">Registros que se INSERTARÁN</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-green-700">Nuevos clientes y productos:</p>
-                      <p className="text-2xl font-bold text-green-900">{stats.insertBoth}</p>
-                    </div>
-                    <div>
-                      <p className="text-green-700">Operaciones mixtas:</p>
-                      <p className="text-2xl font-bold text-green-900">
-                        {stats.insertClientUpdateProduct + stats.updateClientInsertProduct}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Database className="w-5 h-5 text-blue-600" />
-                    <h4 className="font-semibold text-blue-900">Registros que se ACTUALIZARÁN</h4>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-blue-700 mb-1">Clientes y productos existentes:</p>
-                    <p className="text-2xl font-bold text-blue-900">{stats.updateBoth}</p>
-                    <p className="text-xs text-blue-600 mt-2">
-                      Solo se actualizarán si el certificado es más reciente que el registro existente
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 border-l-4 border-slate-400 p-4 rounded-r-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Package className="w-5 h-5 text-slate-600" />
-                    <h4 className="font-semibold text-slate-900">Certificados que se OMITIRÁN</h4>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-slate-700 mb-1">Ya existen registros más recientes:</p>
-                    <p className="text-2xl font-bold text-slate-900">{stats.skip}</p>
-                    <button
-                      onClick={() => {
-                        if (onCancelConfirmation) {
-                          onCancelConfirmation();
-                        }
-                        setShowSkipReport(true);
-                      }}
-                      className="text-xs text-amber-600 hover:text-amber-700 underline mt-2"
-                    >
-                      Ver detalles de certificados omitidos
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" />
-                    <h4 className="font-semibold text-amber-900">Clientes que NECESITAN COMPLETAR información</h4>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-amber-700 mb-1">Se marcarán para completar manualmente después:</p>
-                    <p className="text-2xl font-bold text-amber-900">{stats.needsCompletion}</p>
-                    <p className="text-xs text-amber-600 mt-2">
-                      Estos clientes NO se insertarán automáticamente. Deberás completar su información en Gestión de Clientes
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-3">Resumen Total</h4>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-blue-700">Se procesarán automáticamente:</span>
-                    <span className="font-bold text-blue-900">
-                      {stats.insertBoth + stats.updateBoth + stats.insertClientUpdateProduct + stats.updateClientInsertProduct}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700">Se omitirán:</span>
-                    <span className="font-bold text-blue-900">{stats.skip}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700">Necesitan completar:</span>
-                    <span className="font-bold text-blue-900">{stats.needsCompletion}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700">Total analizado:</span>
-                    <span className="font-bold text-blue-900">{analyses.length}</span>
-                  </div>
-                </div>
-              </div>
-
-              {createBackup && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <p className="text-sm text-green-800">
-                      <strong>Backup activado:</strong> Se creará un respaldo antes de procesar. Podrás restaurar si es necesario.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-slate-50 p-6 border-t flex items-center justify-between gap-4">
-              <button
-                onClick={onCancelConfirmation}
-                className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
-              >
-                Cancelar
-              </button>
-
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    checked={createBackup}
-                    onChange={(e) => setCreateBackup(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-slate-700">Crear backup</span>
-                </label>
-
-                <button
-                  onClick={onConfirmProcessing}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                >
-                  Sí, Procesar Certificados
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

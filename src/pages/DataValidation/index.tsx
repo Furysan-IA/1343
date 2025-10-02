@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
 import { CertificateUploadScreen } from './CertificateUploadScreen';
 import { CertificateReviewScreen } from './CertificateReviewScreen';
+import { ConfirmationScreen } from './ConfirmationScreen';
+import { CertificateSkipReport } from '../../components/CertificateSkipReport';
 import { ParsedCertificates } from '../../services/certificateProcessing.service';
+import { DualMatchResult } from '../../services/dualTableUpdate.service';
 
-type Step = 'upload' | 'review' | 'confirm' | 'processing' | 'complete';
+type Step = 'upload' | 'review' | 'confirm' | 'complete';
 
 export const DataValidation: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [batchId, setBatchId] = useState<string>('');
   const [parsedData, setParsedData] = useState<ParsedCertificates | null>(null);
   const [referenceDate, setReferenceDate] = useState<Date>(new Date());
+  const [analyses, setAnalyses] = useState<DualMatchResult[]>([]);
+  const [showSkipReport, setShowSkipReport] = useState(false);
 
   const handleUploadComplete = (id: string, data: ParsedCertificates, refDate: Date) => {
     setBatchId(id);
     setParsedData(data);
     setReferenceDate(refDate);
     setCurrentStep('review');
+  };
+
+  const handleAnalysisComplete = (results: DualMatchResult[]) => {
+    setAnalyses(results);
   };
 
   const handleReadyToConfirm = () => {
@@ -26,12 +35,12 @@ export const DataValidation: React.FC = () => {
     setCurrentStep('review');
   };
 
-  const handleConfirmProcessing = () => {
-    setCurrentStep('processing');
-  };
-
   const handleProcessingComplete = () => {
     setCurrentStep('complete');
+  };
+
+  const handleViewSkippedReport = () => {
+    setShowSkipReport(true);
   };
 
   const handleRestart = () => {
@@ -52,31 +61,28 @@ export const DataValidation: React.FC = () => {
           batchId={batchId}
           referenceDate={referenceDate}
           onReadyToConfirm={handleReadyToConfirm}
+          onAnalysisComplete={handleAnalysisComplete}
         />
       )}
 
       {currentStep === 'confirm' && parsedData && (
-        <CertificateReviewScreen
-          parsedData={parsedData}
+        <ConfirmationScreen
+          analyses={analyses}
           batchId={batchId}
-          referenceDate={referenceDate}
-          onReadyToConfirm={handleReadyToConfirm}
-          showConfirmation={true}
-          onCancelConfirmation={handleCancelConfirmation}
-          onConfirmProcessing={handleConfirmProcessing}
+          filename={parsedData.metadata.filename}
+          onCancel={handleCancelConfirmation}
+          onComplete={handleProcessingComplete}
+          onViewSkippedReport={handleViewSkippedReport}
         />
       )}
 
-      {currentStep === 'processing' && parsedData && (
-        <CertificateReviewScreen
-          parsedData={parsedData}
-          batchId={batchId}
-          referenceDate={referenceDate}
-          onReadyToConfirm={handleReadyToConfirm}
-          isProcessing={true}
-          onProcessingComplete={handleProcessingComplete}
-        />
-      )}
+      <CertificateSkipReport
+        isOpen={showSkipReport}
+        onClose={() => setShowSkipReport(false)}
+        batchId={batchId}
+        filename={parsedData?.metadata.filename || ''}
+        totalInFile={(parsedData?.metadata.totalRecords || 0) + (parsedData?.metadata.totalRejected || 0)}
+      />
 
       {currentStep === 'complete' && (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-8">
