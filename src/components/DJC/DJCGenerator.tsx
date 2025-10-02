@@ -654,7 +654,7 @@ const DJCGenerator: React.FC = () => {
                     );
                     return (
                       <option key={product.codificacion} value={product.codificacion}>
-                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'}
+                        [{product.codificacion}] {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'}
                         {product.nro_certificado && ` [Cert: ${product.nro_certificado}]`}
                         {client && ` (${client.razon_social})`}
                       </option>
