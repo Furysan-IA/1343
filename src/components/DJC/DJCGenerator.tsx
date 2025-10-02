@@ -4,7 +4,7 @@ import { formatCuit } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
-import { generateDJCWord } from '../../services/djcWordGenerator.service';
+import { generateDJCWithTemplate } from '../../services/djcPdfGenerator.service';
 
 interface Client {
   id: string;
@@ -108,6 +108,8 @@ const DJCGenerator: React.FC = () => {
   });
   const [useCustomLink, setUseCustomLink] = useState(false);
   const [customLink, setCustomLink] = useState('');
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   const resolutions = [
     { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
@@ -118,6 +120,9 @@ const DJCGenerator: React.FC = () => {
   useEffect(() => {
     fetchClients();
     fetchProducts();
+
+    const templates = JSON.parse(localStorage.getItem('djc_templates') || '[]');
+    setAvailableTemplates(templates);
   }, []);
 
   useEffect(() => {
@@ -324,15 +329,15 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
-      // Generar el documento Word
-      const wordBlob = await generateDJCWord(previewData);
-      const fileName = `DJC_${previewData.numero_djc}.doc`;
+      // Generar el documento PDF
+      const pdfBlob = await generateDJCWithTemplate(previewData, selectedTemplateId);
+      const fileName = `DJC_${previewData.numero_djc}.pdf`;
 
       // Guardar en bucket 'djcs'
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('djcs')
-        .upload(fileName, wordBlob, {
-          contentType: 'application/msword',
+        .upload(fileName, pdfBlob, {
+          contentType: 'application/pdf',
           upsert: true
         });
 
@@ -400,9 +405,9 @@ const DJCGenerator: React.FC = () => {
         throw updateError;
       }
 
-      // Descargar el documento Word
+      // Descargar el documento PDF
       const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(wordBlob);
+      downloadLink.href = URL.createObjectURL(pdfBlob);
       downloadLink.download = fileName;
       downloadLink.click();
       URL.revokeObjectURL(downloadLink.href);
@@ -473,9 +478,9 @@ const DJCGenerator: React.FC = () => {
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Vista previa antes de generar el documento Word final</li>
+                <li>Vista previa antes de generar el documento PDF final</li>
                 <li>Cada DJC es individual por producto</li>
-                <li>Las DJC se guardan en el bucket "djcs"</li>
+                <li>Las DJC se generan en formato PDF y se guardan en el bucket "djcs"</li>
                 <li>Puede agregar un representante autorizado si corresponde</li>
               </ul>
             </div>
@@ -747,6 +752,27 @@ const DJCGenerator: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Selección de Plantilla (Opcional) */}
+        {selectedProduct && availableTemplates.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Plantilla de DJC (Opcional)
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Plantilla por defecto</option>
+              {availableTemplates.map(tpl => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.name} - {tpl.description}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

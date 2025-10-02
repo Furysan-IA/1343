@@ -1,4 +1,12 @@
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable: { finalY: number };
+  }
+}
 
 interface DJCData {
   numero_djc: string;
@@ -32,246 +40,302 @@ interface DJCData {
   fecha_lugar: string;
 }
 
-export class DJCPdfGenerator {
-  private pdf: jsPDF;
-  private pageWidth: number;
-  private margin: number;
-  private yPos: number;
+const hexToRgb = (hex: string): [number, number, number] => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [0, 0, 0];
+};
 
-  constructor() {
-    this.pdf = new jsPDF();
-    this.pageWidth = this.pdf.internal.pageSize.getWidth();
-    this.margin = 15;
-    this.yPos = 20;
+export const generateDJCWithTemplate = async (
+  data: DJCData,
+  templateId?: string
+): Promise<Blob> => {
+  let template = null;
+  if (templateId) {
+    const templates = JSON.parse(localStorage.getItem('djc_templates') || '[]');
+    template = templates.find((t: any) => t.id === templateId);
   }
 
-  private addHeader(djcData: DJCData) {
-    // Título
-    this.pdf.setFontSize(14);
-    this.pdf.setFont('helvetica', 'bold');
-    this.pdf.text('DECLARACIÓN JURADA DE CONFORMIDAD (DJC)', this.pageWidth / 2, this.yPos, { align: 'center' });
-
-    this.yPos += 7;
-    this.pdf.setFontSize(9);
-    this.pdf.setFont('helvetica', 'normal');
-    this.pdf.text('SEGÚN RESOLUCIÓN M.E.S.I.C. N° 237/2024, MODIFICACIONES Y COMPLEMENTOS', this.pageWidth / 2, this.yPos, { align: 'center' });
-
-    this.yPos += 10;
+  if (!template) {
+    return generateDefaultPDF(data);
   }
 
-  private addSectionHeader(title: string) {
-    // Fondo gris
-    this.pdf.setFillColor(64, 64, 64);
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, 7, 'F');
+  return generateCustomTemplatePDF(data, template);
+};
 
-    // Texto blanco
-    this.pdf.setTextColor(255, 255, 255);
-    this.pdf.setFontSize(9);
-    this.pdf.setFont('helvetica', 'bold');
-    this.pdf.text(title, this.margin + 2, this.yPos, { maxWidth: this.pageWidth - 2 * this.margin - 4 });
+const generateDefaultPDF = async (data: DJCData): Promise<Blob> => {
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const margin = 15;
+  let yPos = 20;
 
-    // Resetear color de texto
-    this.pdf.setTextColor(0, 0, 0);
-    this.yPos += 9;
-  }
+  const darkGray = [55, 65, 81];
+  const lightGray = [243, 244, 246];
+  const white = [255, 255, 255];
+  const red = [239, 68, 68];
 
-  private addTableRow(label: string, value: string, isGray: boolean = false, isHighlight: boolean = false) {
-    const rowHeight = 8;
-    const labelWidth = 70;
-    const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('DECLARACIÓN JURADA DE CONFORMIDAD (DJC)', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 7;
 
-    // Fondo de la fila
-    if (isGray) {
-      this.pdf.setFillColor(245, 245, 245);
-    } else if (isHighlight) {
-      this.pdf.setFillColor(255, 255, 200); // Amarillo claro
-    } else {
-      this.pdf.setFillColor(255, 255, 255);
-    }
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'F');
+  pdf.setFontSize(10);
+  pdf.text('SEGÚN RESOLUCIÓN M.E.S.I.C. N° 237/2024, MODIFICACIONES Y COMPLEMENTOS', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 10;
 
-    // Borde de la fila
-    this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'S');
+  pdf.autoTable({
+    startY: yPos,
+    head: [[`(1) IDENTIFICACIÓN DE DECLARACIÓN DE CONFORMIDAD: ${data.numero_djc}`]],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-    // Texto de la etiqueta
-    this.pdf.setFontSize(8);
-    this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+  yPos = pdf.lastAutoTable.finalY + 2;
 
-    // Texto del valor
-    this.pdf.setFont('helvetica', 'normal');
-
-    // Verificar si el valor está vacío o es "CAMPO NO ENCONTRADO"
-    if (!value || value.trim() === '') {
-      this.pdf.setTextColor(255, 0, 0);
-      this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2, this.yPos);
-      this.pdf.setTextColor(0, 0, 0);
-    } else {
-      const valueLines = this.pdf.splitTextToSize(value, valueWidth - 4);
-      this.pdf.text(valueLines, this.margin + labelWidth + 2, this.yPos, { maxWidth: valueWidth - 4 });
-    }
-
-    this.yPos += rowHeight;
-  }
-
-  private addMultiRowField(label: string, fields: { label: string; value: string; highlight?: boolean }[]) {
-    const labelWidth = 70;
-    const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
-    const totalHeight = fields.length * 7;
-
-    // Fondo gris para la etiqueta principal
-    this.pdf.setFillColor(245, 245, 245);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'F');
-
-    // Borde para la etiqueta
-    this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'S');
-
-    // Texto de la etiqueta principal
-    this.pdf.setFontSize(8);
-    this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
-
-    // Agregar cada subfila
-    let subYPos = this.yPos;
-    fields.forEach((field, index) => {
-      const rowHeight = 7;
-
-      // Fondo de la subfila
-      if (field.highlight) {
-        this.pdf.setFillColor(255, 255, 200);
-      } else {
-        this.pdf.setFillColor(255, 255, 255);
+  pdf.autoTable({
+    startY: yPos,
+    head: [['(2) INFORMACIÓN DEL FABRICANTE O IMPORTADOR']],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    body: [
+      ['Razón Social', data.razon_social || 'No especificado'],
+      ['C.U.I.T.', data.cuit || 'No especificado'],
+      ['Nombre Comercial o Marca Registrada', data.marca || 'No especificado'],
+      ['Domicilio legal', data.domicilio_legal || 'No especificado'],
+      ['Domicilio de la planta de producción o del depósito del importador', data.domicilio_planta || 'No especificado'],
+      ['Telefono', data.telefono || 'CAMPO NO ENCONTRADO'],
+      ['Correo electrónico', data.email || 'No especificado']
+    ],
+    bodyStyles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold', fillColor: lightGray },
+      1: {
+        cellWidth: 'auto'
       }
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
-
-      // Borde de la subfila
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
-
-      // Texto
-      this.pdf.setFontSize(7);
-      this.pdf.setFont('helvetica', 'bold');
-      this.pdf.text(field.label + ': ', this.margin + labelWidth + 2, subYPos);
-
-      this.pdf.setFont('helvetica', 'normal');
-      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
-
-      if (!field.value || field.value.trim() === '') {
-        this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth, subYPos);
-        this.pdf.setTextColor(0, 0, 0);
-      } else {
-        const valueText = this.pdf.splitTextToSize(field.value, valueWidth - labelTextWidth - 6);
-        this.pdf.text(valueText, this.margin + labelWidth + 2 + labelTextWidth, subYPos, { maxWidth: valueWidth - labelTextWidth - 6 });
+    },
+    didParseCell: function(data: any) {
+      if (data.section === 'body' && data.column.index === 1 && data.row.index === 5) {
+        if (!data.cell.text[0] || data.cell.text[0] === 'CAMPO NO ENCONTRADO') {
+          data.cell.styles.textColor = red;
+        }
       }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-      subYPos += rowHeight;
-    });
+  yPos = pdf.lastAutoTable.finalY + 2;
 
-    this.yPos += totalHeight;
-  }
+  pdf.autoTable({
+    startY: yPos,
+    head: [['(3) REPRESENTANTE AUTORIZADO (SI FUERA APLICABLE)']],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    body: [
+      ['Nombre y Apellido / Razón Social', data.representante_nombre || 'No aplica'],
+      ['C.U.I.T.', data.representante_cuit || 'No aplica'],
+      ['Domicilio legal', data.representante_domicilio || 'No aplica']
+    ],
+    bodyStyles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold', fillColor: lightGray },
+      1: { cellWidth: 'auto' }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-  private checkPageBreak(requiredSpace: number = 40) {
-    if (this.yPos + requiredSpace > this.pdf.internal.pageSize.getHeight() - this.margin) {
-      this.pdf.addPage();
-      this.yPos = this.margin + 10;
-    }
-  }
+  yPos = pdf.lastAutoTable.finalY + 2;
 
-  public generate(djcData: DJCData): jsPDF {
-    // Encabezado
-    this.addHeader(djcData);
+  pdf.autoTable({
+    startY: yPos,
+    head: [['(4) INFORMACIÓN DEL PRODUCTO']],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    body: [
+      ['Código de identificación único del producto (Autodeterminado)', data.codigo_producto || 'No especificado'],
+      ['Fabricante (Nombre y dirección de la planta de producción)', data.fabricante || 'No especificado'],
+      ['Identificación del producto', data.identificacion_producto || 'No especificado'],
+      ['Marca/s', data.producto_marca || 'No especificado'],
+      ['Modelo/s', data.producto_modelo || 'No especificado'],
+      ['Características técnicas', data.caracteristicas_tecnicas || 'No especificado']
+    ],
+    bodyStyles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold', fillColor: lightGray },
+      1: { cellWidth: 'auto' }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-    // Sección 1: Identificación
-    this.addSectionHeader(`(1) IDENTIFICACIÓN DE DECLARACIÓN DE CONFORMIDAD: ${djcData.numero_djc}`);
-    this.yPos += 2;
+  yPos = pdf.lastAutoTable.finalY + 2;
 
-    // Sección 2: Fabricante/Importador
-    this.checkPageBreak();
-    this.addSectionHeader('(2) INFORMACIÓN DEL FABRICANTE O IMPORTADOR');
-    this.addTableRow('Razón Social', djcData.razon_social, true);
-    this.addTableRow('C.U.I.T.', djcData.cuit);
-    this.addTableRow('Nombre Comercial o Marca Registrada', djcData.marca, true);
-    this.addTableRow('Domicilio legal', djcData.domicilio_legal);
-    this.addTableRow('Domicilio de la planta de producción o del depósito del importador', djcData.domicilio_planta, true);
-    this.addTableRow('Telefono', djcData.telefono);
-    this.addTableRow('Correo electrónico', djcData.email, true);
-    this.yPos += 3;
+  const certificadoData = [
+    ['N° de Certificado:', data.numero_certificado || 'CAMPO NO ENCONTRADO'],
+    ['Organismo de Certificación:', data.organismo_certificacion || 'CAMPO NO ENCONTRADO'],
+    ['Esquema de certificacion:', data.esquema_certificacion || 'CAMPO NO ENCONTRADO'],
+    ['Fecha de emision (Certificado / Ultima Vigilancia):', data.fecha_emision_certificado || 'CAMPO NO ENCONTRADO'],
+    ['Fecha de proxima vigilancia:', data.fecha_proxima_vigilancia || '-'],
+    ['Laboratorio de ensayos:', data.laboratorio_ensayos || 'CAMPO NO ENCONTRADO'],
+    ['Informe de ensayos:', data.informe_ensayos || 'CAMPO NO ENCONTRADO']
+  ];
 
-    // Sección 3: Representante
-    this.checkPageBreak();
-    this.addSectionHeader('(3) REPRESENTANTE AUTORIZADO (SI FUERA APLICABLE)');
-    this.addTableRow('Nombre y Apellido / Razón Social', djcData.representante_nombre || 'No aplica', true);
-    this.addTableRow('C.U.I.T.', djcData.representante_cuit || 'No aplica');
-    this.addTableRow('Domicilio legal', djcData.representante_domicilio || 'No aplica', true);
-    this.yPos += 3;
+  pdf.autoTable({
+    startY: yPos,
+    head: [['(5) NORMAS Y EVALUACIÓN DE LA CONFORMIDAD']],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    body: [
+      ['Reglamento/s por el que se encuentra alcanzado', data.reglamento_alcanzado || 'No especificado'],
+      ['Norma/s Técnica/s', data.normas_tecnicas || 'CAMPO NO ENCONTRADO']
+    ],
+    bodyStyles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold', fillColor: lightGray },
+      1: {
+        cellWidth: 'auto'
+      }
+    },
+    didParseCell: function(data: any) {
+      if (data.section === 'body' && data.column.index === 1 && data.row.index === 1) {
+        if (!data.cell.text[0] || data.cell.text[0] === 'CAMPO NO ENCONTRADO') {
+          data.cell.styles.textColor = red;
+        }
+      }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-    // Sección 4: Información del Producto
-    this.checkPageBreak();
-    this.addSectionHeader('(4) INFORMACIÓN DEL PRODUCTO');
-    this.addTableRow('Código de identificación único del producto (Autodeterminado)', djcData.codigo_producto, true);
-    this.addTableRow('Fabricante (Nombre y dirección de la planta de producción)', djcData.fabricante);
-    this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
-    this.addTableRow('Marca/s', djcData.producto_marca);
-    this.addTableRow('Modelo/s', djcData.producto_modelo, true);
-    this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
-    this.yPos += 3;
+  yPos = pdf.lastAutoTable.finalY;
 
-    // Sección 5: Normas y Evaluación
-    this.checkPageBreak(60);
-    this.addSectionHeader('(5) NORMAS Y EVALUACIÓN DE LA CONFORMIDAD');
-    this.addTableRow('Reglamento/s por el que se encuentra alcanzado', djcData.reglamento_alcanzado, true);
-    this.addTableRow('Norma/s Técnica/s', djcData.normas_tecnicas);
-
-    // Referencia al certificado (campo multilínea)
-    this.addMultiRowField(
-      'Referencia Certificado de conformidad emitido por Organismo de Certificación',
+  pdf.autoTable({
+    startY: yPos,
+    body: [
       [
-        { label: 'N° de Certificado', value: djcData.numero_certificado },
-        { label: 'Organismo de Certificación', value: djcData.organismo_certificacion },
-        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion, highlight: true },
-        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado, highlight: true },
-        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia, highlight: true },
-        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos, highlight: true },
-        { label: 'Informe de ensayos', value: djcData.informe_ensayos, highlight: true }
-      ]
-    );
-    this.yPos += 3;
+        {
+          content: 'Referencia Certificado de conformidad emitido por Organismo de Certificación',
+          rowSpan: 7,
+          styles: { valign: 'top', fontStyle: 'bold', fillColor: lightGray, cellWidth: 70 }
+        },
+        { content: certificadoData[0][0] + ' ' + certificadoData[0][1], styles: { fontStyle: 'normal' } }
+      ],
+      ['', { content: certificadoData[1][0] + ' ' + certificadoData[1][1] }],
+      ['', { content: certificadoData[2][0] + ' ' + certificadoData[2][1] }],
+      ['', { content: certificadoData[3][0] + ' ' + certificadoData[3][1] }],
+      ['', { content: certificadoData[4][0] + ' ' + certificadoData[4][1] }],
+      ['', { content: certificadoData[5][0] + ' ' + certificadoData[5][1] }],
+      ['', { content: certificadoData[6][0] + ' ' + certificadoData[6][1] }]
+    ],
+    bodyStyles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 70 },
+      1: { cellWidth: 'auto' }
+    },
+    didParseCell: function(data: any) {
+      if (data.section === 'body' && data.column.index === 1) {
+        const text = data.cell.text[0] || '';
+        if (text.includes('CAMPO NO ENCONTRADO')) {
+          data.cell.styles.textColor = red;
+        }
+      }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-    // Sección 6: Otros Datos
-    this.checkPageBreak();
-    this.addSectionHeader('(6) OTROS DATOS');
-    this.addTableRow('Enlace a la copia de la declaración de conformidad en Internet', djcData.enlace_declaracion, true);
-    this.yPos += 5;
+  yPos = pdf.lastAutoTable.finalY + 2;
 
-    // Texto legal
-    this.pdf.setFontSize(8);
-    this.pdf.setFont('helvetica', 'normal');
-    const textoLegal = 'La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.';
-    const legalLines = this.pdf.splitTextToSize(textoLegal, this.pageWidth - 2 * this.margin);
-    this.pdf.text(legalLines, this.margin, this.yPos);
-    this.yPos += legalLines.length * 4 + 5;
+  pdf.autoTable({
+    startY: yPos,
+    head: [['(6) OTROS DATOS']],
+    headStyles: {
+      fillColor: darkGray,
+      textColor: white,
+      fontSize: 10,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    body: [
+      ['Enlace a la copia de la declaración de conformidad en Internet', data.enlace_declaracion || 'No especificado']
+    ],
+    bodyStyles: {
+      fontSize: 9,
+      cellPadding: 3
+    },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold', fillColor: lightGray, textColor: [0, 0, 0] },
+      1: { cellWidth: 'auto', textColor: [37, 99, 235] }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto'
+  });
 
-    // Fecha y lugar
-    this.pdf.setFont('helvetica', 'bold');
-    this.pdf.text('Fecha y Lugar:', this.margin, this.yPos);
-    this.yPos += 5;
-    this.pdf.setFont('helvetica', 'normal');
-    this.pdf.text(djcData.fecha_lugar, this.margin, this.yPos);
-    this.yPos += 10;
+  yPos = pdf.lastAutoTable.finalY + 5;
 
-    // Firma
-    this.pdf.setFont('helvetica', 'bold');
-    this.pdf.text('Firma y Aclaracion del Apoderado Legal:', this.margin, this.yPos);
-    this.yPos += 20;
+  pdf.setFillColor(245, 245, 245);
+  pdf.rect(margin, yPos, pageWidth - 2 * margin, 20, 'F');
+  pdf.rect(margin, yPos, pageWidth - 2 * margin, 20, 'S');
 
-    // Línea para firma
-    this.pdf.setDrawColor(100, 100, 100);
-    this.pdf.line(this.margin, this.yPos, this.margin + 80, this.yPos);
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'bold');
+  const declaracionText = 'La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.';
+  const declaracionLines = pdf.splitTextToSize(declaracionText, pageWidth - 2 * margin - 10);
 
-    return this.pdf;
-  }
-}
+  let declaracionY = yPos + 5;
+  declaracionLines.forEach((line: string) => {
+    pdf.text(line, margin + 5, declaracionY);
+    declaracionY += 5;
+  });
+
+  yPos += 25;
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text('Fecha y Lugar:', margin, yPos);
+  yPos += 5;
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(data.fecha_lugar || new Date().toLocaleDateString('es-AR'), margin, yPos);
+  yPos += 10;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Firma y Aclaracion del Apoderado Legal:', margin, yPos);
+  yPos += 15;
+  pdf.line(margin, yPos, margin + 80, yPos);
+
+  return pdf.output('blob');
+};
+
+const generateCustomTemplatePDF = async (data: DJCData, template: any): Promise<Blob> => {
+  return generateDefaultPDF(data);
+};
+
+export { generateDefaultPDF };

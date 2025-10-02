@@ -380,7 +380,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
             ) : (
               <>
                 <Download className="h-5 w-5" />
-                Generar y Descargar Word
+                Generar y Descargar PDF
               </>
             )}
           </button>
