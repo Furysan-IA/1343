@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
-import { FileText, Search, User, Package, Download, Trash2, AlertCircle, Loader2 } from 'lucide-react';
+import { FileText, Search, User, Package, Download, Trash2, CircleAlert as AlertCircle, Loader as Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateDJCPDF, type DJCData } from '../../services/djcPdf.service';
 
