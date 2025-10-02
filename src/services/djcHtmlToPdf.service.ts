@@ -36,6 +36,10 @@ const formatFieldValue = (value: string | null | undefined): string => {
   if (!value || value.trim() === '') {
     return '<span style="color: #dc2626; font-weight: bold;">CAMPO NO ENCONTRADO</span>';
   }
+  // Si el valor es solo un guión, devolverlo tal cual (no es un error)
+  if (value.trim() === '-') {
+    return value;
+  }
   return value;
 };
 

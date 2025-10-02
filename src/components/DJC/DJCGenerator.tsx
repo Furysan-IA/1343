@@ -259,7 +259,7 @@ const DJCGenerator: React.FC = () => {
           month: '2-digit',
           year: 'numeric'
         })
-      : '';
+      : '-';
 
     // Formatear fecha de próxima vigilancia
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
