@@ -822,6 +822,22 @@ export const detectDuplicates = async (
 
       const existingProduct = productsByCodificacion.get(codificacionStr);
 
+      // Detectar campos inválidos (que no existen en la DB)
+      const invalidFields: string[] = [];
+      Object.keys(record).forEach(key => {
+        if (!VALID_PRODUCT_COLUMNS.has(key) && key !== '_validation_warning') {
+          invalidFields.push(key);
+        }
+      });
+
+      // Detectar campos requeridos faltantes
+      const missingFields: string[] = [];
+      PRODUCT_REQUIRED_FIELDS.forEach(field => {
+        if (!record[field] || record[field] === '' || record[field] === null) {
+          missingFields.push(field);
+        }
+      });
+
       if (existingProduct) {
         const changes = detectFieldChanges(existingProduct, record, productFieldsToCheck);
 
@@ -833,7 +849,25 @@ export const detectDuplicates = async (
           hasChanges: changes.length > 0
         });
       } else {
-        newProducts.push(record);
+        // Si tiene campos inválidos o faltantes, va a incompleteProducts
+        if (invalidFields.length > 0 || missingFields.length > 0) {
+          let warning = '';
+          if (invalidFields.length > 0) {
+            warning += `Campos inválidos: ${invalidFields.join(', ')}. `;
+          }
+          if (missingFields.length > 0) {
+            warning += `Campos faltantes: ${missingFields.join(', ')}.`;
+          }
+
+          incompleteProducts.push({
+            ...record,
+            _validation_warning: warning.trim(),
+            _invalid_fields: invalidFields,
+            _missing_fields: missingFields
+          });
+        } else {
+          newProducts.push(record);
+        }
       }
     } else if (codificacionStr) {
       incompleteProducts.push({

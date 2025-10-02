@@ -72,6 +72,46 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
     }
   };
 
+  const fillMissingFieldsWithDefault = () => {
+    const updatedClients = incompleteClients.map(client => {
+      const updated = { ...client };
+      if (client._missing_fields) {
+        (client._missing_fields as string[]).forEach(field => {
+          if (!updated[field] || updated[field] === '') {
+            updated[field] = 'No encontrado';
+          }
+        });
+      }
+      delete updated._validation_warning;
+      delete updated._missing_fields;
+      delete updated._invalid_fields;
+      return updated;
+    });
+
+    const updatedProducts = incompleteProducts.map(product => {
+      const updated = { ...product };
+      if (product._missing_fields) {
+        (product._missing_fields as string[]).forEach(field => {
+          if (!updated[field] || updated[field] === '') {
+            updated[field] = 'No encontrado';
+          }
+        });
+      }
+      delete updated._validation_warning;
+      delete updated._missing_fields;
+      delete updated._invalid_fields;
+      return updated;
+    });
+
+    setNewClients([...newClients, ...updatedClients]);
+    setNewProducts([...newProducts, ...updatedProducts]);
+    setIncompleteClients([]);
+    setIncompleteProducts([]);
+    setIncludeIncomplete(false);
+
+    toast.success(`Completados ${updatedClients.length + updatedProducts.length} registros con valores por defecto`);
+  };
+
   const handleProcess = async () => {
     setProcessing(true);
 
@@ -409,7 +449,7 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
                       ⚠️ Registros con Datos Incompletos o Inválidos
                     </h3>
                     <p className="text-red-800 mb-3">
-                      Se encontraron <strong>{incompleteClients.length + incompleteProducts.length}</strong> registros con campos CUIT o Codificación inválidos (como "NA", "N/A", vacíos, etc.).
+                      Se encontraron <strong>{incompleteClients.length + incompleteProducts.length}</strong> registros con campos inválidos, incompletos o columnas que no existen en la base de datos.
                     </p>
                     <div className="space-y-2 mb-4">
                       {incompleteClients.length > 0 && (
@@ -426,23 +466,38 @@ export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
                       )}
                     </div>
 
-                    <div className="bg-white rounded-lg p-4 border border-red-200 mb-4">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={includeIncomplete}
-                          onChange={(e) => setIncludeIncomplete(e.target.checked)}
-                          className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                        />
-                        <div>
-                          <span className="font-medium text-slate-800 block mb-1">
-                            Sí, incluir estos registros de todas formas
-                          </span>
-                          <span className="text-sm text-slate-600">
-                            Los campos incompletos quedarán vacíos o con el valor actual, y podrás completarlos manualmente después en la sección de Gestión de Clientes/Productos.
-                          </span>
-                        </div>
-                      </label>
+                    <div className="space-y-3 mb-4">
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <button
+                          onClick={fillMissingFieldsWithDefault}
+                          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                          Completar campos faltantes con "No encontrado"
+                        </button>
+                        <p className="text-sm text-slate-600 mt-2 text-center">
+                          Los campos inválidos se eliminarán y los campos faltantes se completarán automáticamente
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={includeIncomplete}
+                            onChange={(e) => setIncludeIncomplete(e.target.checked)}
+                            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="font-medium text-slate-800 block mb-1">
+                              O incluir estos registros tal como están
+                            </span>
+                            <span className="text-sm text-slate-600">
+                              Los campos incompletos quedarán vacíos, los campos inválidos se omitirán, y podrás completarlos manualmente después.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
                     </div>
 
                     {incompleteClients.length > 0 && (
