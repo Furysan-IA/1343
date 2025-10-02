@@ -618,7 +618,7 @@ const DJCGenerator: React.FC = () => {
                   type="text"
                   value={productSearch}
                   onChange={(e) => handleProductSearch(e.target.value)}
-                  placeholder="Buscar por producto, marca o código..."
+                  placeholder="Buscar por producto, marca, código o N° certificado..."
                   className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -641,11 +641,12 @@ const DJCGenerator: React.FC = () => {
               >
                 <option value="">Seleccione un producto...</option>
                 {products
-                  .filter(product => 
+                  .filter(product =>
                     !productSearch ||
                     product.producto?.toLowerCase().includes(productSearch.toLowerCase()) ||
                     product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
-                    product.codificacion?.toLowerCase().includes(productSearch.toLowerCase())
+                    product.codificacion?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.nro_certificado?.toLowerCase().includes(productSearch.toLowerCase())
                   )
                   .map(product => {
                     const client = clients.find(c => 
@@ -653,7 +654,8 @@ const DJCGenerator: React.FC = () => {
                     );
                     return (
                       <option key={product.codificacion} value={product.codificacion}>
-                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} 
+                        {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'}
+                        {product.nro_certificado && ` [Cert: ${product.nro_certificado}]`}
                         {client && ` (${client.razon_social})`}
                       </option>
                     );

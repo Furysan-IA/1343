@@ -307,7 +307,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
     };
 
     // Generar PDF
-    const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+    const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
 
     // Limpiar
     document.body.removeChild(element);
