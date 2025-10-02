@@ -75,7 +75,7 @@ export class DJCPdfGenerator {
     this.yPos += 9;
   }
 
-  private addTableRow(label: string, value: string, isGray: boolean = false, isHighlight: boolean = false) {
+  private addTableRow(label: string, value: string, isGray: boolean = false) {
     const rowHeight = 8;
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
@@ -83,8 +83,6 @@ export class DJCPdfGenerator {
     // Fondo de la fila
     if (isGray) {
       this.pdf.setFillColor(245, 245, 245);
-    } else if (isHighlight) {
-      this.pdf.setFillColor(255, 255, 200); // Amarillo claro
     } else {
       this.pdf.setFillColor(255, 255, 255);
     }
@@ -116,10 +114,11 @@ export class DJCPdfGenerator {
     this.yPos += rowHeight;
   }
 
-   private addMultiRowField(label: string, fields: { label: string; value: string; highlight?: boolean }[]) {
+   private addMultiRowField(label: string, fields: { label: string; value: string }[]) {
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
-    const totalHeight = fields.length * 7;
+    const rowHeight = 8;
+    const totalHeight = fields.length * rowHeight;
 
     // Fondo gris para la etiqueta principal
     this.pdf.setFillColor(245, 245, 245);
@@ -138,34 +137,42 @@ export class DJCPdfGenerator {
     // Agregar cada subfila
     let subYPos = this.yPos;
     fields.forEach((field, index) => {
-      const rowHeight = 7;
-
-      // Fondo de la subfila
-      if (field.highlight) {
-        this.pdf.setFillColor(255, 255, 200);
-      } else {
-        this.pdf.setFillColor(255, 255, 255);
-      }
+      // Fondo blanco uniforme para todas las subfilas
+      this.pdf.setFillColor(255, 255, 255);
       this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
 
       // Borde de la subfila
       this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
 
-      // Texto
-      this.pdf.setFontSize(7);
+      // Texto de la etiqueta
+      this.pdf.setFontSize(8);
       this.pdf.setFont('helvetica', 'bold');
-      this.pdf.text(field.label + ': ', this.margin + labelWidth + 2, subYPos);
+      this.pdf.text(field.label + ':', this.margin + labelWidth + 2, subYPos);
 
+      // Calcular ancho de la etiqueta y agregar padding
       this.pdf.setFont('helvetica', 'normal');
-      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
+      const labelTextWidth = this.pdf.getTextWidth(field.label + ':');
+      const padding = 4;
 
       if (!field.value || field.value.trim() === '') {
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth, subYPos);
+        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth + padding, subYPos);
         this.pdf.setTextColor(0, 0, 0);
       } else {
-        const valueText = this.pdf.splitTextToSize(field.value, valueWidth - labelTextWidth - 6);
-        this.pdf.text(valueText, this.margin + labelWidth + 2 + labelTextWidth, subYPos, { maxWidth: valueWidth - labelTextWidth - 6 });
+        // Truncar el texto si es muy largo para mantenerlo en una línea
+        const availableWidth = valueWidth - labelTextWidth - padding - 4;
+        let displayValue = field.value;
+
+        // Verificar si el texto cabe en el ancho disponible
+        if (this.pdf.getTextWidth(displayValue) > availableWidth) {
+          // Truncar el texto y agregar puntos suspensivos
+          while (this.pdf.getTextWidth(displayValue + '...') > availableWidth && displayValue.length > 0) {
+            displayValue = displayValue.slice(0, -1);
+          }
+          displayValue = displayValue + '...';
+        }
+
+        this.pdf.text(displayValue, this.margin + labelWidth + 2 + labelTextWidth + padding, subYPos);
       }
 
       subYPos += rowHeight;
@@ -232,11 +239,11 @@ export class DJCPdfGenerator {
       [
         { label: 'N° de Certificado', value: djcData.numero_certificado },
         { label: 'Organismo de Certificación', value: djcData.organismo_certificacion },
-        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion, highlight: true },
-        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado, highlight: true },
-        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia, highlight: true },
-        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos, highlight: true },
-        { label: 'Informe de ensayos', value: djcData.informe_ensayos, highlight: true }
+        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion },
+        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado },
+        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia },
+        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos },
+        { label: 'Informe de ensayos', value: djcData.informe_ensayos }
       ]
     );
     this.yPos += 3;
