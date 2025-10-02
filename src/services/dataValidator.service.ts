@@ -7,6 +7,12 @@ export class DataValidator {
     existingClients: Client[],
     existingProducts: Product[]
   ): Promise<ValidatedData> {
+    console.log('🔍 DataValidator - Iniciando validación...');
+    console.log('📊 Clientes mapeados:', uploadedClients.length);
+    console.log('📦 Productos mapeados:', uploadedProducts.length);
+    console.log('📊 Clientes existentes en BD:', existingClients.length);
+    console.log('📦 Productos existentes en BD:', existingProducts.length);
+
     const newClients: Client[] = [];
     const updatedClients: ChangeDetail[] = [];
     const newProducts: Product[] = [];
@@ -60,7 +66,7 @@ export class DataValidator {
       }
     });
 
-    uploadedProducts.forEach(product => {
+    uploadedProducts.forEach((product, index) => {
       if (uploadedCodificaciones.has(product.codificacion)) {
         issues.push({
           type: 'duplicate_product',
@@ -73,21 +79,23 @@ export class DataValidator {
 
       const clientExists = existingClientMap.has(product.cuit) || uploadedCUITs.has(product.cuit);
       if (!clientExists) {
+        console.warn(`⚠️ Producto ${index + 1}: ${product.codificacion} - CUIT ${product.cuit} no existe en clientes (ni existentes ni del archivo)`);
         issues.push({
           type: 'invalid_data',
-          severity: 'error',
-          message: `Producto ${product.codificacion} - CUIT ${product.cuit} no existe en clientes`
+          severity: 'warning',
+          message: `Producto ${product.codificacion} - CUIT ${product.cuit} no encontrado. Se insertará igualmente.`
         });
-        return;
       }
 
       const existing = existingProductMap.get(product.codificacion);
 
       if (!existing) {
+        console.log(`✅ Producto NUEVO detectado: ${product.codificacion}`);
         newProducts.push(product);
       } else {
         const changes = this.detectProductChanges(existing, product);
         if (changes.length > 0) {
+          console.log(`🔄 Producto a ACTUALIZAR: ${product.codificacion} - cambios en: ${changes.join(', ')}`);
           updatedProducts.push({
             existing,
             new: { ...product },
@@ -99,9 +107,18 @@ export class DataValidator {
             severity: 'info',
             message: `Producto ${product.codificacion} tiene cambios en: ${changes.join(', ')}`
           });
+        } else {
+          console.log(`⏭️ Producto sin cambios: ${product.codificacion}`);
         }
       }
     });
+
+    console.log('✅ Resultados de validación:');
+    console.log('  - Nuevos clientes:', newClients.length);
+    console.log('  - Clientes a actualizar:', updatedClients.length);
+    console.log('  - Nuevos productos:', newProducts.length);
+    console.log('  - Productos a actualizar:', updatedProducts.length);
+    console.log('  - Issues detectados:', issues.length);
 
     return {
       newClients,

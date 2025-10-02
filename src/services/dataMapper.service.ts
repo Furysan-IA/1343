@@ -38,6 +38,10 @@ export class DataMapper {
   };
 
   static mapData(rows: any[], headers: string[]): MappingResult {
+    console.log('🗺️ DataMapper - Iniciando mapeo...');
+    console.log('📝 Total de filas:', rows.length);
+    console.log('📋 Headers:', headers);
+
     const clients: Client[] = [];
     const products: Product[] = [];
     const errors: string[] = [];
@@ -142,9 +146,19 @@ export class DataMapper {
       }
     });
 
+    const finalClients = Array.from(clientMap.values());
+    const finalProducts = Array.from(productMap.values());
+
+    console.log('✅ Mapeo completado:');
+    console.log('  - Clientes únicos:', finalClients.length);
+    console.log('  - Productos únicos:', finalProducts.length);
+    console.log('  - Errores:', errors.length);
+    console.log('  - Warnings:', warnings.length);
+    console.log('  - Columnas sin mapear:', unmappedColumns.length);
+
     return {
-      clients: Array.from(clientMap.values()),
-      products: Array.from(productMap.values()),
+      clients: finalClients,
+      products: finalProducts,
       errors,
       warnings,
       unmappedColumns
