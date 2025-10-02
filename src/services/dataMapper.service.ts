@@ -125,10 +125,12 @@ export class DataMapper {
           }
         }
 
-        const codificacion = mappedRow.codificacion?.toString().trim();
+        // IMPORTANTE: La codificación SIEMPRE está en la columna 1 (índice 0)
+        const firstColumnHeader = headers[0];
+        const codificacion = row[firstColumnHeader]?.toString().trim();
 
         if (rowIndex < 3) {
-          console.log(`🔍 Fila ${rowIndex + 2}: codificacion="${codificacion}", existe en mapa=${productMap.has(codificacion || '')}, mappedRow.codificacion="${mappedRow.codificacion}"`);
+          console.log(`🔍 Fila ${rowIndex + 2}: Columna 1 header="${firstColumnHeader}", valor="${row[firstColumnHeader]}", codificacion="${codificacion}", existe en mapa=${productMap.has(codificacion || '')}`);
         }
 
         if (codificacion && !productMap.has(codificacion)) {
