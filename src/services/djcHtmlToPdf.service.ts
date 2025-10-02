@@ -1,5 +1,4 @@
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import html2pdf from 'html2pdf.js';
 
 interface DJCData {
   numero_djc: string;
@@ -90,12 +89,20 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           margin-top: 10px;
           margin-bottom: 6px;
           font-size: 9pt;
+          page-break-inside: avoid;
+          page-break-after: avoid;
         }
 
         table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 8px;
+          page-break-inside: auto;
+        }
+
+        tr {
+          page-break-inside: avoid;
+          page-break-after: auto;
         }
 
         td {
@@ -298,73 +305,34 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
   // Crear un elemento temporal para renderizar el HTML
   const element = document.createElement('div');
   element.innerHTML = htmlContent;
-  element.style.position = 'absolute';
-  element.style.left = '-9999px';
-  element.style.width = '700px'; // Ancho reducido para dejar márgenes
-  element.style.backgroundColor = '#ffffff';
-  document.body.appendChild(element);
 
   try {
-    // Esperar un momento para que el DOM se renderice completamente
-    await new Promise(resolve => setTimeout(resolve, 250));
+    // Configuración de html2pdf
+    const opt = {
+      margin: [15, 15, 15, 15], // [top, left, bottom, right] en mm
+      filename: `DJC_${djcData.numero_djc}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      },
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait'
+      },
+      pagebreak: {
+        mode: ['avoid-all', 'css', 'legacy'],
+        before: '.section-header'
+      }
+    };
 
-    // Capturar el elemento como canvas
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width: 700,
-      height: element.scrollHeight
-    });
+    // Generar PDF directamente desde HTML
+    const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
 
-    // Limpiar elemento del DOM
-    document.body.removeChild(element);
-
-    // Crear PDF
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    // Calcular dimensiones con márgenes
-    const marginSide = 15; // 15mm de margen lateral
-    const marginTop = 15; // 15mm margen superior página 1
-    const marginBottom = 15; // 15mm margen inferior
-    const marginTopNext = 25; // 25mm margen superior páginas siguientes
-    const imgWidth = 210 - (marginSide * 2); // 180mm de contenido
-    const pageHeight = 297; // A4 height in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    // Altura útil de primera página
-    const firstPageHeight = pageHeight - marginTop - marginBottom;
-    let heightLeft = imgHeight - firstPageHeight;
-
-    // Agregar primera página
-    pdf.addImage(imgData, 'JPEG', marginSide, marginTop, imgWidth, imgHeight);
-
-    // Agregar páginas adicionales con margen superior mayor
-    while (heightLeft > 0) {
-      pdf.addPage();
-      // La posición Y debe ser negativa para mostrar la parte correcta de la imagen
-      // y debe considerar el margen superior adicional
-      const yPosition = -(imgHeight - heightLeft) + marginTopNext;
-      pdf.addImage(imgData, 'JPEG', marginSide, yPosition, imgWidth, imgHeight);
-
-      // Altura útil de páginas siguientes
-      const nextPageHeight = pageHeight - marginTopNext - marginBottom;
-      heightLeft -= nextPageHeight;
-    }
-
-    // Convertir a blob
-    const pdfBlob = pdf.output('blob');
     return pdfBlob;
   } catch (error) {
-    if (document.body.contains(element)) {
-      document.body.removeChild(element);
-    }
     console.error('Error generando PDF:', error);
     throw error;
   }
