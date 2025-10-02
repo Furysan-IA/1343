@@ -11,30 +11,46 @@ interface CertificateReviewScreenProps {
   parsedData: ParsedCertificates;
   batchId: string;
   referenceDate: Date;
-  onComplete: () => void;
+  onReadyToConfirm: () => void;
+  showConfirmation?: boolean;
+  onCancelConfirmation?: () => void;
+  onConfirmProcessing?: () => void;
+  isProcessing?: boolean;
+  onProcessingComplete?: () => void;
 }
 
 export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = ({
   parsedData,
   batchId,
   referenceDate,
-  onComplete
+  onReadyToConfirm,
+  showConfirmation = false,
+  onCancelConfirmation,
+  onConfirmProcessing,
+  isProcessing = false,
+  onProcessingComplete
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [analyses, setAnalyses] = useState<DualMatchResult[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [showNewClients, setShowNewClients] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [showBackupHistory, setShowBackupHistory] = useState(false);
   const [showSkipReport, setShowSkipReport] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [createBackup, setCreateBackup] = useState(true);
 
   const itemsPerPage = 10;
 
   useEffect(() => {
-    analyzeAllCertificates();
+    if (!isProcessing) {
+      analyzeAllCertificates();
+    }
   }, []);
+
+  useEffect(() => {
+    if (isProcessing && analyses.length > 0) {
+      handleProcessAll();
+    }
+  }, [isProcessing]);
 
   const analyzeAllCertificates = async () => {
     setIsAnalyzing(true);
@@ -68,17 +84,8 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
     }
   };
 
-  const handleShowConfirmation = () => {
-    setShowConfirmation(true);
-  };
-
-  const handleCancelProcessing = () => {
-    setShowConfirmation(false);
-  };
 
   const handleProcessAll = async () => {
-    setIsProcessing(true);
-
     try {
       const autoProcessable = analyses.filter(a =>
         a.action !== 'needs_completion' && a.action !== 'skip'
@@ -96,11 +103,11 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
         `Procesamiento completo: ${stats.clientsInserted + stats.clientsUpdated} clientes, ${stats.productsInserted + stats.productsUpdated} productos`
       );
 
-      onComplete();
+      if (onProcessingComplete) {
+        onProcessingComplete();
+      }
     } catch (error: any) {
       toast.error(error.message || 'Error al procesar certificados');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -111,6 +118,18 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600 text-lg">Analizando certificados...</p>
           <p className="text-slate-500 text-sm mt-2">Verificando en tablas de clientes y productos</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 text-lg">Procesando certificados...</p>
+          <p className="text-slate-500 text-sm mt-2">Actualizando base de datos</p>
         </div>
       </div>
     );
@@ -384,9 +403,8 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
             </label>
 
             <button
-              onClick={handleShowConfirmation}
-              disabled={isProcessing}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:bg-slate-400"
+              onClick={onReadyToConfirm}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
             >
               Revisar y Confirmar
               <ChevronRight className="w-5 h-5" />
@@ -408,7 +426,7 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
         totalInFile={parsedData.metadata.totalRecords + parsedData.metadata.totalRejected}
       />
 
-      {showConfirmation && (
+      {showConfirmation && onCancelConfirmation && onConfirmProcessing && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
@@ -474,7 +492,9 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
                     <p className="text-2xl font-bold text-slate-900">{stats.skip}</p>
                     <button
                       onClick={() => {
-                        setShowConfirmation(false);
+                        if (onCancelConfirmation) {
+                          onCancelConfirmation();
+                        }
                         setShowSkipReport(true);
                       }}
                       className="text-xs text-amber-600 hover:text-amber-700 underline mt-2"
@@ -537,9 +557,8 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
 
             <div className="bg-slate-50 p-6 border-t flex items-center justify-between gap-4">
               <button
-                onClick={handleCancelProcessing}
-                disabled={isProcessing}
-                className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium disabled:opacity-50"
+                onClick={onCancelConfirmation}
+                className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
               >
                 Cancelar
               </button>
@@ -556,24 +575,11 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
                 </label>
 
                 <button
-                  onClick={() => {
-                    setShowConfirmation(false);
-                    handleProcessAll();
-                  }}
-                  disabled={isProcessing}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:bg-slate-400"
+                  onClick={onConfirmProcessing}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                 >
-                  {isProcessing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Procesando...
-                    </>
-                  ) : (
-                    <>
-                      Sí, Procesar Certificados
-                      <ChevronRight className="w-5 h-5" />
-                    </>
-                  )}
+                  Sí, Procesar Certificados
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
             </div>

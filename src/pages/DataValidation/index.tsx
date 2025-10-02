@@ -3,7 +3,7 @@ import { CertificateUploadScreen } from './CertificateUploadScreen';
 import { CertificateReviewScreen } from './CertificateReviewScreen';
 import { ParsedCertificates } from '../../services/certificateProcessing.service';
 
-type Step = 'upload' | 'review' | 'complete';
+type Step = 'upload' | 'review' | 'confirm' | 'processing' | 'complete';
 
 export const DataValidation: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
@@ -18,7 +18,19 @@ export const DataValidation: React.FC = () => {
     setCurrentStep('review');
   };
 
-  const handleReviewComplete = () => {
+  const handleReadyToConfirm = () => {
+    setCurrentStep('confirm');
+  };
+
+  const handleCancelConfirmation = () => {
+    setCurrentStep('review');
+  };
+
+  const handleConfirmProcessing = () => {
+    setCurrentStep('processing');
+  };
+
+  const handleProcessingComplete = () => {
     setCurrentStep('complete');
   };
 
@@ -39,7 +51,30 @@ export const DataValidation: React.FC = () => {
           parsedData={parsedData}
           batchId={batchId}
           referenceDate={referenceDate}
-          onComplete={handleReviewComplete}
+          onReadyToConfirm={handleReadyToConfirm}
+        />
+      )}
+
+      {currentStep === 'confirm' && parsedData && (
+        <CertificateReviewScreen
+          parsedData={parsedData}
+          batchId={batchId}
+          referenceDate={referenceDate}
+          onReadyToConfirm={handleReadyToConfirm}
+          showConfirmation={true}
+          onCancelConfirmation={handleCancelConfirmation}
+          onConfirmProcessing={handleConfirmProcessing}
+        />
+      )}
+
+      {currentStep === 'processing' && parsedData && (
+        <CertificateReviewScreen
+          parsedData={parsedData}
+          batchId={batchId}
+          referenceDate={referenceDate}
+          onReadyToConfirm={handleReadyToConfirm}
+          isProcessing={true}
+          onProcessingComplete={handleProcessingComplete}
         />
       )}
 
