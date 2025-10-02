@@ -63,7 +63,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           font-size: 9pt;
           line-height: 1.4;
           color: #000;
-          padding: 20px;
+          padding: 15mm;
         }
 
         .header {
@@ -87,6 +87,8 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           color: white;
           padding: 6px 10px;
           font-weight: bold;
+          page-break-after: avoid;
+          break-after: avoid;
           margin-top: 15px;
           margin-bottom: 8px;
           font-size: 9pt;
@@ -96,6 +98,8 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 12px;
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
 
         td {
@@ -306,47 +310,26 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
 
   try {
     // Esperar un momento para que el DOM se renderice completamente
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Capturar el elemento como canvas
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width: 794,
-      height: element.scrollHeight
-    });
-
-    // Limpiar elemento del DOM
-    document.body.removeChild(element);
-
-    // Crear PDF
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     });
 
-    // Calcular dimensiones
-    const imgWidth = 210; // A4 width in mm
-    const pageHeight = 297; // A4 height in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    // Agregar imagen al PDF
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    // Agregar páginas adicionales si es necesario
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
+    // Usar html() de jsPDF que respeta page-break CSS
+    await pdf.html(element, {
+      callback: () => {
+        // Limpiar elemento del DOM
+        document.body.removeChild(element);
+      },
+      x: 10,
+      y: 10,
+      width: 190, // 210mm - 20mm (márgenes)
+      windowWidth: 794,
+      margin: [10, 10, 10, 10]
+    });
 
     // Convertir a blob
     const pdfBlob = pdf.output('blob');
