@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, RefreshCw, FileSpreadsheet, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { Upload, RefreshCw, FileSpreadsheet, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Circle as XCircle } from 'lucide-react';
 import { ProductUpdateService, UpdateStats } from '../services/productUpdate.service';
 import { DataMapper } from '../services/dataMapper.service';
 import { parseFile } from '../services/universalDataValidation.service';
