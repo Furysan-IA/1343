@@ -2,11 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase, Database } from '../lib/supabase';
-import { 
-  Package, Users, CheckCircle, AlertCircle, 
-  FileText, QrCode, Calendar, TrendingUp,
-  Activity, Shield, Award, Clock, RefreshCw
-} from 'lucide-react';
+import { Package, Users, CircleCheck as CheckCircle, CircleAlert as AlertCircle, FileText, QrCode, Calendar, TrendingUp, Activity, Shield, Award, Clock, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
