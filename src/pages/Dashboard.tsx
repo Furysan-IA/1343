@@ -64,22 +64,29 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setRefreshing(true);
-      console.log('Iniciando carga de datos del dashboard...');
+      console.log('🔄 Iniciando carga de datos del dashboard...');
 
       // 1. Obtener conteo total de productos (más eficiente)
       const { count: totalProducts, error: countError } = await supabase
         .from('products')
         .select('*', { count: 'exact', head: true });
 
-      if (countError) throw countError;
-      console.log('Total de productos:', totalProducts);
+      if (countError) {
+        console.error('❌ Error al obtener conteo de productos:', countError);
+        throw countError;
+      }
+      console.log('✅ Total de productos:', totalProducts);
 
       // 2. Obtener conteo de clientes
       const { count: totalClients, error: clientsCountError } = await supabase
         .from('clients')
         .select('*', { count: 'exact', head: true });
 
-      if (clientsCountError) throw clientsCountError;
+      if (clientsCountError) {
+        console.error('❌ Error al obtener conteo de clientes:', clientsCountError);
+        throw clientsCountError;
+      }
+      console.log('✅ Total de clientes:', totalClients);
 
       // 3. Obtener estadísticas usando consultas optimizadas
       const now = new Date();
@@ -87,14 +94,18 @@ export function Dashboard() {
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
       // Consulta para productos con estadísticas
+      console.log('📥 Solicitando productos...');
       const { data: products, error: productsError } = await supabase
         .from('products')
         .select('codificacion, producto, marca, vencimiento, qr_path, djc_path, created_at')
         .order('created_at', { ascending: false });
 
-      if (productsError) throw productsError;
+      if (productsError) {
+        console.error('❌ Error al obtener productos:', productsError);
+        throw productsError;
+      }
 
-      console.log('Productos cargados:', products?.length);
+      console.log('✅ Productos cargados:', products?.length);
 
       // Inicializar estadísticas
       const statsData: DashboardStats = {
@@ -242,7 +253,7 @@ export function Dashboard() {
   if (loading && !refreshing) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         <p className="text-gray-600 mt-4">Cargando dashboard...</p>
       </div>
     );
@@ -251,7 +262,7 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-700 rounded-xl p-6 text-white">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold mb-2">{t('welcome')}</h1>
@@ -282,7 +293,7 @@ export function Dashboard() {
           title="Total Productos"
           value={stats.totalProducts}
           icon={Package}
-          color="bg-purple-500"
+          color="bg-emerald-500"
           onClick={() => navigate('/products')}
           loading={refreshing}
         />
@@ -310,7 +321,7 @@ export function Dashboard() {
           title="Productos con QR"
           value={stats.productsWithQR}
           icon={QrCode}
-          color="bg-indigo-500"
+          color="bg-teal-500"
           subtitle={`${stats.productsWithoutQR.toLocaleString('es-AR')} sin QR`}
           loading={refreshing}
         />
@@ -401,7 +412,7 @@ export function Dashboard() {
               {stats.expiringProducts > 10 && (
                 <button
                   onClick={() => navigate('/products')}
-                  className="w-full text-center text-sm text-purple-600 hover:text-purple-800 mt-2"
+                  className="w-full text-center text-sm text-blue-600 hover:text-blue-800 mt-2"
                 >
                   Ver todos ({stats.expiringProducts})
                 </button>
