@@ -120,12 +120,9 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
         }
 
         .footer-text {
-          font-size: 9pt;
+          font-size: 10pt;
           margin: 20px 0;
           line-height: 1.6;
-          padding: 12px;
-          border: 2px solid #404040;
-          background-color: #f9fafb;
           font-weight: bold;
         }
 
@@ -299,14 +296,24 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
   element.innerHTML = htmlContent;
   element.style.position = 'absolute';
   element.style.left = '-9999px';
+  element.style.width = '210mm';
   document.body.appendChild(element);
 
   try {
+    // Esperar a que el DOM se actualice
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const opt = {
       margin: [10, 10, 10, 10],
       filename: `DJC_${djcData.numero_djc}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        logging: false,
+        windowWidth: 794
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
