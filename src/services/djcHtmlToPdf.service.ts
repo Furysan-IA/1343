@@ -43,6 +43,14 @@ const formatFieldValue = (value: string | null | undefined): string => {
   return value;
 };
 
+const formatLinkField = (value: string | null | undefined): string => {
+  // Para el campo de enlace, si está vacío simplemente devolver cadena vacía
+  if (!value || value.trim() === '') {
+    return '';
+  }
+  return value;
+};
+
 export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> => {
   // Crear el HTML completo del documento
   const htmlContent = `
@@ -272,7 +280,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
       <table>
         <tr>
           <td class="label">Enlace a la copia de la declaración de conformidad en Internet</td>
-          <td class="value">${formatFieldValue(djcData.enlace_declaracion)}</td>
+          <td class="value">${formatLinkField(djcData.enlace_declaracion)}</td>
         </tr>
       </table>
 

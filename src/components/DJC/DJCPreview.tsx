@@ -314,12 +314,8 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                       Enlace a la copia de la declaración de conformidad en
                       Internet
                     </td>
-                    <td className="p-2 break-all">
-                      {djcData.enlace_declaracion ? (
-                        <span className="text-blue-600">{djcData.enlace_declaracion}</span>
-                      ) : (
-                        <span className="text-red-600">VACIO</span>
-                      )}
+                    <td className="p-2 text-blue-600 break-all">
+                      {djcData.enlace_declaracion}
                     </td>
                   </tr>
                 </tbody>
