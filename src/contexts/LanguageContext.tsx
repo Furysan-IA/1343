@@ -17,6 +17,7 @@ const translations = {
     informationValidation: 'Validación de Información',
     clientDataValidation: 'Carga de Certificados',
     dataUpload: 'Carga de Datos',
+    dataUpdate: 'Actualizar Datos',
     djcManagement: 'Gestión de DJC',
     logout: 'Cerrar Sesión',
     
@@ -104,6 +105,7 @@ const translations = {
     informationValidation: 'Information Validation',
     clientDataValidation: 'Certificate Upload',
     dataUpload: 'Data Upload',
+    dataUpdate: 'Update Data',
     djcManagement: 'DJC Management',
     logout: 'Logout',
     

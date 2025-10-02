@@ -8,6 +8,7 @@ import { ProductManagement } from './pages/ProductManagement';
 import { ClientManagement } from './pages/ClientManagement';
 import { InformationValidation } from './pages/InformationValidation';
 import DataUploadPage from './pages/DataUpload';
+import DataUpdate from './pages/DataUpdate';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
 import { QRLanding } from './pages/QRLanding';
@@ -54,6 +55,7 @@ function AppContent() {
         <Route path="/clients" element={<ClientManagement />} />
         <Route path="/validation" element={<InformationValidation />} />
         <Route path="/data-upload" element={<DataUploadPage />} />
+        <Route path="/data-update" element={<DataUpdate />} />
         <Route path="/djc" element={<DJCManagement />} />
         <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
