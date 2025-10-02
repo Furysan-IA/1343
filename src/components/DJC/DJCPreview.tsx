@@ -322,7 +322,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
               </table>
 
               <div className="mt-6 pt-4 border-t">
-                <p className="text-sm text-justify mb-4 p-3 border-2 border-gray-700 bg-gray-50 font-bold">
+                <p className="text-[0.9375rem] text-justify mb-4 font-bold">
                   La presente declaración jurada de conformidad se emite, en todo
                   de acuerdo con el/los Reglamentos Técnicos aludidos
                   precedentemente, asumiendo la responsabilidad directa por los

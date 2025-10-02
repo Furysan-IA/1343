@@ -248,8 +248,8 @@ export class DJCPdfGenerator {
     this.yPos += 5;
 
     // Texto legal
-    this.pdf.setFontSize(8);
-    this.pdf.setFont('helvetica', 'normal');
+    this.pdf.setFontSize(9);
+    this.pdf.setFont('helvetica', 'bold');
     const textoLegal = 'La presente declaración jurada de conformidad se emite, en todo de acuerdo con el/los Reglamentos Técnicos aludidos precedentemente, asumiendo la responsabilidad directa por los datos declarados, así como por la conformidad del producto.';
     const legalLines = this.pdf.splitTextToSize(textoLegal, this.pageWidth - 2 * this.margin);
     this.pdf.text(legalLines, this.margin, this.yPos);
