@@ -2,6 +2,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync, createPortal } from 'react-dom';
 import { Upload, FileSpreadsheet, CircleAlert as AlertCircle, CircleCheck as CheckCircle, X, Users, Package, RefreshCw } from 'lucide-react';
 import { validateFile, parseFile, validateParsedData, createBatch, checkExistingCertificates, ParsedData, EntityType } from '../../services/universalDataValidation.service';
+import { ProductUpdateService, UpdateStats } from '../../services/productUpdate.service';
+import { DataMapper } from '../../services/dataMapper.service';
 import toast from 'react-hot-toast';
 import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
 
@@ -45,6 +47,7 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateCheckResult | null>(null);
   const [parsedDataCache, setParsedDataCache] = useState<ParsedData | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -176,6 +179,58 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
     setProgress(0);
     setProcessingStep('');
     toast.info('Carga cancelada');
+  };
+
+  const handleUpdateExisting = async () => {
+    if (!parsedDataCache || !duplicateCheckResult) {
+      toast.error('Error: Datos faltantes');
+      return;
+    }
+
+    setIsUpdating(true);
+    setShowDuplicateModal(false);
+
+    try {
+      console.log('🔄 Iniciando actualización masiva...');
+      toast.loading('Actualizando productos existentes...', { id: 'update-toast' });
+
+      const mappingResult = DataMapper.mapData(parsedDataCache.rows, parsedDataCache.headers);
+
+      if (mappingResult.products.length === 0) {
+        toast.error('No se encontraron productos para actualizar', { id: 'update-toast' });
+        setIsUpdating(false);
+        return;
+      }
+
+      console.log(`📦 Productos a procesar: ${mappingResult.products.length}`);
+
+      const updateStats: UpdateStats = await ProductUpdateService.updateProductsFromExcel(
+        mappingResult.products,
+        (current, total) => {
+          setProgress(Math.round((current / total) * 100));
+          setProcessingStep(`Actualizando ${current} de ${total} productos...`);
+        }
+      );
+
+      console.log('✅ Actualización completada:', updateStats);
+
+      toast.success(
+        `Actualización completada: ${updateStats.updated} actualizados, ${updateStats.unchanged} sin cambios, ${updateStats.notFound} no encontrados`,
+        { id: 'update-toast', duration: 5000 }
+      );
+
+      setIsUpdating(false);
+      setSelectedFile(null);
+      setProgress(0);
+      setProcessingStep('');
+      setParsedDataCache(null);
+      setDuplicateCheckResult(null);
+
+    } catch (error) {
+      console.error('❌ Error en actualización masiva:', error);
+      toast.error('Error al actualizar productos', { id: 'update-toast' });
+      setIsUpdating(false);
+    }
   };
 
   const progressCallback = useCallback((progressPercent: number, message: string) => {
@@ -313,13 +368,17 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8 relative">
       {/* Modal de Progreso */}
-      {isProcessing && (
+      {(isProcessing || isUpdating) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
             <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">🔍 Validando Archivo</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">
+              {isUpdating ? '🔄 Actualizando Productos' : '🔍 Validando Archivo'}
+            </h2>
             <p className="text-slate-600 mb-2">{processingStep || 'Iniciando...'}</p>
-            <p className="text-sm text-slate-500 mb-4">Sin modificar la base de datos</p>
+            {!isUpdating && (
+              <p className="text-sm text-slate-500 mb-4">Sin modificar la base de datos</p>
+            )}
             <div className="mt-4 w-full bg-slate-200 rounded-full h-3 overflow-hidden">
               <div
                 className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
@@ -647,31 +706,61 @@ export const UniversalUploadScreen: React.FC<UniversalUploadScreenProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="bg-slate-50 p-6 flex gap-3 justify-end border-t border-slate-200">
-              <button
-                onClick={handleCancelDuplicateCheck}
-                className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  console.log('🎯 Modal "Continuar" button clicked');
-                  console.log('📦 Current state:', {
-                    hasFile: !!selectedFile,
-                    hasParsedData: !!parsedDataCache,
-                    hasDuplicateResult: !!duplicateCheckResult
-                  });
-                  handleContinueAfterDuplicateCheck();
-                }}
-                className={`px-6 py-2.5 text-white rounded-lg transition-colors font-medium ${
-                  duplicateCheckResult.stats.duplicatesFound > 0
-                    ? 'bg-orange-600 hover:bg-orange-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                Continuar
-              </button>
+            <div className="bg-slate-50 p-6 border-t border-slate-200">
+              <div className="flex flex-col gap-4">
+                {duplicateCheckResult.stats.duplicatesFound > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <RefreshCw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-blue-900 mb-1">¿Actualizar productos existentes?</h4>
+                        <p className="text-sm text-blue-800">
+                          Si los productos ya cargados tienen campos vacíos (como dirección legal, laboratorio, etc.),
+                          puedes actualizarlos automáticamente con los datos del Excel sin crear duplicados.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={handleCancelDuplicateCheck}
+                    className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+
+                  {duplicateCheckResult.stats.duplicatesFound > 0 && (
+                    <button
+                      onClick={handleUpdateExisting}
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Actualizar Existentes
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      console.log('🎯 Modal "Continuar" button clicked');
+                      console.log('📦 Current state:', {
+                        hasFile: !!selectedFile,
+                        hasParsedData: !!parsedDataCache,
+                        hasDuplicateResult: !!duplicateCheckResult
+                      });
+                      handleContinueAfterDuplicateCheck();
+                    }}
+                    className={`px-6 py-2.5 text-white rounded-lg transition-colors font-medium ${
+                      duplicateCheckResult.stats.duplicatesFound > 0
+                        ? 'bg-orange-600 hover:bg-orange-700'
+                        : 'bg-green-600 hover:bg-green-700'
+                    }`}
+                  >
+                    {duplicateCheckResult.stats.duplicatesFound > 0 ? 'Revisar Todos' : 'Continuar'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>,
