@@ -34,11 +34,19 @@ interface DJCData {
 
 const formatFieldValue = (value: string | null | undefined): string => {
   if (!value || value.trim() === '') {
-    return '<span style="color: #dc2626; font-weight: bold;">CAMPO NO ENCONTRADO</span>';
+    return '<span style="color: #dc2626; font-weight: bold;">VACIO</span>';
   }
   // Si el valor es solo un guión, devolverlo tal cual (no es un error)
   if (value.trim() === '-') {
     return value;
+  }
+  return value;
+};
+
+const formatLinkField = (value: string | null | undefined): string => {
+  // Para el campo de enlace, si está vacío simplemente devolver cadena vacía
+  if (!value || value.trim() === '') {
+    return '';
   }
   return value;
 };
@@ -272,7 +280,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
       <table>
         <tr>
           <td class="label">Enlace a la copia de la declaración de conformidad en Internet</td>
-          <td class="value">${djcData.enlace_declaracion}</td>
+          <td class="value">${formatLinkField(djcData.enlace_declaracion)}</td>
         </tr>
       </table>
 

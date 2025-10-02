@@ -121,7 +121,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     <td className="p-2 font-semibold bg-gray-50">Telefono</td>
                     <td className="p-2">
                       {djcData.telefono || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -225,7 +225,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     </td>
                     <td className="p-2">
                       {djcData.normas_tecnicas || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -248,7 +248,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                         Organismo de Certificación:
                       </span>{' '}
                       {djcData.organismo_certificacion || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -258,7 +258,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                         Esquema de certificacion:
                       </span>{' '}
                       {djcData.esquema_certificacion || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -268,7 +268,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                         Fecha de emision (Certificado / Ultima Vigilancia):
                       </span>{' '}
                       {djcData.fecha_emision_certificado || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -278,7 +278,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                         Fecha de proxima vigilancia:
                       </span>{' '}
                       {djcData.fecha_proxima_vigilancia || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -288,7 +288,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                         Laboratorio de ensayos:
                       </span>{' '}
                       {djcData.laboratorio_ensayos || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
@@ -296,7 +296,7 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     <td className="p-2">
                       <span className="font-semibold">Informe de ensayos:</span>{' '}
                       {djcData.informe_ensayos || (
-                        <span className="text-red-600">CAMPO NO ENCONTRADO</span>
+                        <span className="text-red-600">VACIO</span>
                       )}
                     </td>
                   </tr>
