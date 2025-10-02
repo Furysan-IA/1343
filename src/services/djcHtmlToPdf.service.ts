@@ -1,4 +1,5 @@
-import html2pdf from 'html2pdf.js';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 interface DJCData {
   numero_djc: string;
@@ -299,37 +300,61 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
   element.innerHTML = htmlContent;
   element.style.position = 'absolute';
   element.style.left = '-9999px';
-  element.style.width = '210mm';
+  element.style.width = '794px'; // A4 width in pixels at 96 DPI
+  element.style.backgroundColor = '#ffffff';
   document.body.appendChild(element);
 
   try {
     // Esperar un momento para que el DOM se renderice completamente
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: `DJC_${djcData.numero_djc}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        letterRendering: true,
-        logging: false,
-        windowWidth: 794,
-        windowHeight: 1123
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
+    // Capturar el elemento como canvas
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: 794,
+      height: element.scrollHeight
+    });
 
-    // Generar PDF
-    const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
-
-    // Limpiar
+    // Limpiar elemento del DOM
     document.body.removeChild(element);
 
-    return pdfBlob as Blob;
+    // Crear PDF
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Calcular dimensiones
+    const imgWidth = 210; // A4 width in mm
+    const pageHeight = 297; // A4 height in mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // Agregar imagen al PDF
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    // Agregar páginas adicionales si es necesario
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    // Convertir a blob
+    const pdfBlob = pdf.output('blob');
+    return pdfBlob;
   } catch (error) {
-    document.body.removeChild(element);
+    if (document.body.contains(element)) {
+      document.body.removeChild(element);
+    }
     console.error('Error generando PDF:', error);
     throw error;
   }
