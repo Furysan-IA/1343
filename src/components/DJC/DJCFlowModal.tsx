@@ -11,6 +11,9 @@ interface DJCFlowModalProps {
 }
 
 const RESOLUTIONS = [
+  'Res. SIYC N° 236/24',
+  'Res. SIYC N° 17/2025',
+  'Res. SIYC N° 16/2025',
   'Resolución 92/98',
   'Resolución 220/95',
   'Resolución 243/96',

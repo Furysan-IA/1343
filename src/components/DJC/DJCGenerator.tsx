@@ -41,6 +41,9 @@ interface Product {
 }
 
 const RESOLUCIONES = [
+  'Res. SIYC N° 236/24',
+  'Res. SIYC N° 17/2025',
+  'Res. SIYC N° 16/2025',
   'Resolución 531/2020',
   'Resolución 620/2024',
   'Resolución 437/2016',
@@ -73,9 +76,6 @@ export const DJCGenerator: React.FC = () => {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
-      .not('pag', 'is', null)
-      .not('res', 'is', null)
-      .not('qr', 'is', null)
       .order('razon_social');
 
     if (!error && data) {
@@ -87,9 +87,6 @@ export const DJCGenerator: React.FC = () => {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .not('pag', 'is', null)
-      .not('res', 'is', null)
-      .not('qr', 'is', null)
       .order('producto');
 
     if (!error && data) {
