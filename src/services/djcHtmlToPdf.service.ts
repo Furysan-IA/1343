@@ -330,26 +330,32 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
     });
 
     // Calcular dimensiones con márgenes
-    const margin = 15; // 15mm de margen lateral
+    const marginSide = 15; // 15mm de margen lateral
     const marginTop = 15; // 15mm margen superior página 1
+    const marginBottom = 15; // 15mm margen inferior
     const marginTopNext = 25; // 25mm margen superior páginas siguientes
-    const imgWidth = 210 - (margin * 2); // 180mm de contenido
+    const imgWidth = 210 - (marginSide * 2); // 180mm de contenido
     const pageHeight = 297; // A4 height in mm
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    let heightLeft = imgHeight;
-    let position = marginTop;
+    // Altura útil de primera página
+    const firstPageHeight = pageHeight - marginTop - marginBottom;
+    let heightLeft = imgHeight - firstPageHeight;
 
-    // Agregar primera página con márgenes normales
-    pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-    heightLeft -= (pageHeight - marginTop - margin);
+    // Agregar primera página
+    pdf.addImage(imgData, 'JPEG', marginSide, marginTop, imgWidth, imgHeight);
 
     // Agregar páginas adicionales con margen superior mayor
     while (heightLeft > 0) {
-      position = -(imgHeight - heightLeft) + marginTopNext;
       pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - marginTopNext - margin);
+      // La posición Y debe ser negativa para mostrar la parte correcta de la imagen
+      // y debe considerar el margen superior adicional
+      const yPosition = -(imgHeight - heightLeft) + marginTopNext;
+      pdf.addImage(imgData, 'JPEG', marginSide, yPosition, imgWidth, imgHeight);
+
+      // Altura útil de páginas siguientes
+      const nextPageHeight = pageHeight - marginTopNext - marginBottom;
+      heightLeft -= nextPageHeight;
     }
 
     // Convertir a blob
