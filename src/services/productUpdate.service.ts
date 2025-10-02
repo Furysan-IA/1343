@@ -137,6 +137,24 @@ export class ProductUpdateService {
       }
     }
 
+    // Siempre establecer IACSA como organismo si está vacío
+    if (!existing.organismo_certificacion ||
+        existing.organismo_certificacion === '' ||
+        existing.organismo_certificacion === null) {
+      updates.organismo_certificacion = 'IACSA';
+    }
+
+    // Determinar esquema basado en la codificación si está vacío
+    if (!existing.esquema_certificacion ||
+        existing.esquema_certificacion === '' ||
+        existing.esquema_certificacion === null) {
+      if (existing.codificacion?.startsWith('CSE')) {
+        updates.esquema_certificacion = 'Licencia de Marca (Sistema Nº 5)';
+      } else if (existing.codificacion?.startsWith('TCSE')) {
+        updates.esquema_certificacion = 'Licencia de Tipo (Sistema Nº 2)';
+      }
+    }
+
     return updates;
   }
 

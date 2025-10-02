@@ -142,6 +142,17 @@ export const parseUnifiedFile = async (file: File): Promise<UnifiedRecord[]> => 
 
           if (clientData.cuit && productData.codificacion) {
             productData.cuit = clientData.cuit;
+            productData.organismo_certificacion = 'IACSA';
+
+            // Determinar esquema basado en la codificación
+            if (!productData.esquema_certificacion) {
+              if (productData.codificacion.startsWith('CSE')) {
+                productData.esquema_certificacion = 'Licencia de Marca (Sistema Nº 5)';
+              } else if (productData.codificacion.startsWith('TCSE')) {
+                productData.esquema_certificacion = 'Licencia de Tipo (Sistema Nº 2)';
+              }
+            }
+
             records.push({
               client: clientData as ClientData,
               product: productData as ProductData

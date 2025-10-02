@@ -135,6 +135,16 @@ export class DataMapper {
         }
 
         if (codificacion && !productMap.has(codificacion)) {
+          // Determinar esquema de certificación basado en la codificación
+          let esquema = mappedRow.esquema_certificacion;
+          if (!esquema) {
+            if (codificacion.startsWith('CSE')) {
+              esquema = 'Licencia de Marca (Sistema Nº 5)';
+            } else if (codificacion.startsWith('TCSE')) {
+              esquema = 'Licencia de Tipo (Sistema Nº 2)';
+            }
+          }
+
           const product: Product = {
             codificacion,
             cuit,
@@ -164,8 +174,8 @@ export class DataMapper {
             fecha_cancelacion: this.parseDate(mappedRow.fecha_cancelacion),
             motivo_cancelacion: mappedRow.motivo_cancelacion,
             dias_para_vencer: mappedRow.dias_para_vencer ? Number(mappedRow.dias_para_vencer) : undefined,
-            organismo_certificacion: mappedRow.organismo_certificacion,
-            esquema_certificacion: mappedRow.esquema_certificacion
+            organismo_certificacion: 'IACSA',
+            esquema_certificacion: esquema
           };
 
           productMap.set(codificacion, product);
