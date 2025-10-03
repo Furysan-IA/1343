@@ -174,10 +174,33 @@ export function DJCManagement() {
   const prepareDJCData = () => {
     if (!selectedProduct || !selectedClient) return null;
 
-    const domicilio = `${selectedClient.direccion || ''}${selectedClient.ciudad ? ', ' + selectedClient.ciudad : ''}${selectedClient.provincia ? ', ' + selectedClient.provincia : ''}`.trim();
-    const domicilioPlanta = selectedClient.direccion_planta || domicilio;
+    const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
 
-    const djcNumber = `${selectedClient.cuit}-${selectedProduct.codificacion}-${Date.now()}`;
+    let domicilioPlanta = domicilio;
+    if (selectedClient.direccion_planta &&
+        selectedClient.direccion_planta.trim() !== '' &&
+        selectedClient.direccion_planta.trim() !== domicilio.trim()) {
+      domicilioPlanta = selectedClient.direccion_planta;
+    }
+
+    const djcNumber = `DJC-${selectedProduct.codificacion}`;
+    const currentDate = new Date().toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const finalLink = useCustomLink && customLink
+      ? customLink
+      : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
+
+    const fechaEmisionCertificado = selectedProduct.fecha_emision
+      ? new Date(selectedProduct.fecha_emision).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : '-';
 
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
       ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
@@ -192,8 +215,6 @@ export function DJCManagement() {
           year: 'numeric'
         })
       : '-';
-
-    const finalLink = useCustomLink && customLink ? customLink : (selectedProduct.qr_link || '');
 
     return {
       numero_djc: djcNumber,
@@ -216,15 +237,17 @@ export function DJCManagement() {
       caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
       reglamento_alcanzado: selectedResolution,
       normas_tecnicas: selectedProduct.normas_aplicacion || '',
-      numero_certificado: selectedProduct.n_certificado_extranjero || '',
-      organismo_certificacion: selectedProduct.ocp_extranjero || '',
+      numero_certificado: selectedProduct.codificacion,
+      organismo_certificacion: selectedProduct.organismo_certificacion === 'IACSA'
+        ? 'Intertek Argentina Certificaciones SA'
+        : (selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones SA'),
       esquema_certificacion: selectedProduct.esquema_certificacion || '',
-      fecha_emision_certificado: selectedProduct.fecha_emision || '',
+      fecha_emision_certificado: fechaEmisionCertificado,
       fecha_proxima_vigilancia: fechaProximaVigilancia,
       laboratorio_ensayos: selectedProduct.laboratorio || '',
       informe_ensayos: selectedProduct.informe_ensayo_nro || '',
       enlace_declaracion: finalLink,
-      fecha_lugar: `Buenos Aires, ${new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}`
+      fecha_lugar: `Buenos Aires, ${currentDate}`
     };
   };
 
@@ -272,6 +295,7 @@ export function DJCManagement() {
       if (updateError) throw updateError;
 
       toast.success('DJC generada exitosamente');
+      setShowPreview(false);
       setShowDJCModal(false);
       await fetchProducts();
     } catch (error) {
@@ -757,16 +781,13 @@ export function DJCManagement() {
       )}
 
       {/* Modal de Vista Previa */}
-      {showPreview && previewData && (
-        <DJCPreviewModal
-          djcData={previewData}
-          onClose={() => setShowPreview(false)}
-          onConfirm={() => {
-            setShowPreview(false);
-            generateDJC();
-          }}
-        />
-      )}
+      <DJCPreviewModal
+        isOpen={showPreview}
+        djcData={previewData}
+        onClose={() => setShowPreview(false)}
+        onConfirm={generateDJC}
+        isGenerating={generating}
+      />
     </div>
   );
 }
