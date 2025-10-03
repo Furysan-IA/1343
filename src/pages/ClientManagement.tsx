@@ -5,34 +5,7 @@ import { supabase, Database } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
 import { Dialog, Transition } from '@headlessui/react';
-import { 
-  RefreshCw, 
-  Search, 
-  Users,
-  AlertCircle,
-  Edit2,
-  Save,
-  X,
-  Package,
-  Phone,
-  Mail,
-  MapPin,
-  Building2,
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  Eye,
-  Filter,
-  Calendar,
-  FileText,
-  Clock,
-  ExternalLink,
-  Plus,
-  Trash2,
-  CheckCircle,
-  GripVertical,
-  RotateCcw
-} from 'lucide-react';
+import { RefreshCw, Search, Users, CircleAlert as AlertCircle, CreditCard as Edit2, Save, X, Package, Phone, Mail, MapPin, Building2, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Info, Eye, ListFilter as Filter, Calendar, FileText, Clock, ExternalLink, Plus, Trash2, CircleCheck as CheckCircle, GripVertical, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCuit } from '../utils/formatters';
 
