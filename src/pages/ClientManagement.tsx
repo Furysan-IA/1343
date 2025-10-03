@@ -40,6 +40,7 @@ interface Client {
   cuit: number;
   razon_social: string;
   direccion: string;
+  direccion_planta?: string | null;
   email: string;
   created_at: string;
   updated_at: string;
@@ -82,6 +83,8 @@ export function ClientManagement() {
     razon_social: '',
     cuit: '',
     direccion: '',
+    direccion_planta: '',
+    usarDireccionLegal: true,
     telefono: '',
     email: '',
     contacto: ''
@@ -561,6 +564,7 @@ export function ClientManagement() {
             razon_social: formData.razon_social,
             cuit: Number(formData.cuit),
             direccion: formData.direccion,
+            direccion_planta: formData.usarDireccionLegal ? null : (formData.direccion_planta || null),
             telefono: formData.telefono || null,
             email: formData.email,
             contacto: formData.contacto || null,
@@ -578,6 +582,7 @@ export function ClientManagement() {
             razon_social: formData.razon_social,
             cuit: Number(formData.cuit),
             direccion: formData.direccion,
+            direccion_planta: formData.usarDireccionLegal ? null : (formData.direccion_planta || null),
             telefono: formData.telefono || null,
             email: formData.email,
             contacto: formData.contacto || null,
@@ -596,6 +601,8 @@ export function ClientManagement() {
         razon_social: '',
         cuit: '',
         direccion: '',
+        direccion_planta: '',
+        usarDireccionLegal: true,
         telefono: '',
         email: '',
         contacto: ''
@@ -613,6 +620,8 @@ export function ClientManagement() {
       razon_social: client.razon_social,
       cuit: String(client.cuit),
       direccion: client.direccion,
+      direccion_planta: client.direccion_planta || '',
+      usarDireccionLegal: !client.direccion_planta,
       telefono: client.telefono || '',
       email: client.email,
       contacto: client.contacto || ''
@@ -887,7 +896,7 @@ export function ClientManagement() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dirección *
+                    Dirección Legal *
                   </label>
                   <input
                     type="text"
@@ -896,6 +905,36 @@ export function ClientManagement() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                     required
                   />
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      id="usarDireccionLegal"
+                      checked={formData.usarDireccionLegal}
+                      onChange={(e) => setFormData(prev => ({ ...prev, usarDireccionLegal: e.target.checked }))}
+                      className="rounded text-purple-600"
+                    />
+                    <label htmlFor="usarDireccionLegal" className="text-sm text-gray-700">
+                      La dirección de planta/depósito es la misma que la dirección legal
+                    </label>
+                  </div>
+
+                  {!formData.usarDireccionLegal && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Dirección de Planta/Depósito
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.direccion_planta}
+                        onChange={(e) => setFormData(prev => ({ ...prev, direccion_planta: e.target.value }))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="Ingrese la dirección de la planta o depósito"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>

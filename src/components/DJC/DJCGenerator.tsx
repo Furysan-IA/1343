@@ -11,6 +11,7 @@ interface Client {
   razon_social: string;
   cuit: string;
   direccion?: string;
+  direccion_planta?: string;
   ciudad?: string;
   provincia?: string;
   telefono?: string;
@@ -227,9 +228,8 @@ const DJCGenerator: React.FC = () => {
     }
   };
 
-  const generateDJCNumber = (): string => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `DJC-2025-${timestamp}`;
+  const generateDJCNumber = (certificateNumber: string): string => {
+    return `DJC-${certificateNumber}`;
   };
 
   const preparePreview = () => {
@@ -238,7 +238,7 @@ const DJCGenerator: React.FC = () => {
       return;
     }
 
-    const djcNumber = generateDJCNumber();
+    const djcNumber = generateDJCNumber(selectedProduct.codificacion);
     const currentDate = new Date().toLocaleDateString('es-AR', {
       day: 'numeric',
       month: 'long',
@@ -246,6 +246,7 @@ const DJCGenerator: React.FC = () => {
     });
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
+    const domicilioPlanta = selectedClient.direccion_planta || selectedProduct.planta_fabricacion || domicilio;
 
     // Usar link personalizado o generar el link automático según la opción seleccionada
     const qrLink = useCustomLink
@@ -283,7 +284,7 @@ const DJCGenerator: React.FC = () => {
       cuit: formatCuit(selectedClient.cuit || ''),
       marca: selectedProduct.marca || selectedProduct.titular || '',
       domicilio_legal: domicilio,
-      domicilio_planta: selectedProduct.planta_fabricacion || selectedProduct.fabricante || 'No especificado',
+      domicilio_planta: domicilioPlanta,
       telefono: selectedClient.telefono || '',
       email: selectedClient.email || '',
       representante_nombre: representante.nombre,
