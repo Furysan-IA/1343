@@ -4,12 +4,13 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
-import { FileText, Upload, CreditCard as Edit, Send, RefreshCw, Search, ListFilter as Filter, Package, CircleAlert as AlertCircle, Download, X, User, Building2, MapPin, Phone, Mail } from 'lucide-react';
+import { FileText, Upload, CreditCard as Edit, Send, RefreshCw, Search, ListFilter as Filter, Package, CircleAlert as AlertCircle, Download, X, User, Building2, MapPin, Phone, Mail, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DJCPdfGenerator } from '../services/djcPdfGenerator.service';
 import { formatCuit } from '../utils/formatters';
+import { DJCPreviewModal } from '../components/DJC/DJCPreview';
 
 interface Product {
   codificacion: string;
@@ -70,6 +71,10 @@ export function DJCManagement() {
     domicilio: '',
     cuit: ''
   });
+  const [useCustomLink, setUseCustomLink] = useState(false);
+  const [customLink, setCustomLink] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -166,69 +171,89 @@ export function DJCManagement() {
     }
   };
 
+  const prepareDJCData = () => {
+    if (!selectedProduct || !selectedClient) return null;
+
+    const domicilio = `${selectedClient.direccion || ''}${selectedClient.ciudad ? ', ' + selectedClient.ciudad : ''}${selectedClient.provincia ? ', ' + selectedClient.provincia : ''}`.trim();
+    const domicilioPlanta = selectedClient.direccion_planta || domicilio;
+
+    const djcNumber = `${selectedClient.cuit}-${selectedProduct.codificacion}-${Date.now()}`;
+
+    const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
+      ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : selectedProduct.vencimiento
+      ? new Date(selectedProduct.vencimiento).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })
+      : '-';
+
+    const finalLink = useCustomLink && customLink ? customLink : (selectedProduct.qr_link || '');
+
+    return {
+      numero_djc: djcNumber,
+      resolucion: selectedResolution,
+      razon_social: selectedClient.razon_social,
+      cuit: formatCuit(selectedClient.cuit?.toString() || ''),
+      marca: selectedProduct.marca || selectedProduct.titular || '',
+      domicilio_legal: domicilio,
+      domicilio_planta: domicilioPlanta,
+      telefono: selectedClient.telefono || '',
+      email: selectedClient.email || '',
+      representante_nombre: representante.nombre,
+      representante_domicilio: representante.domicilio,
+      representante_cuit: representante.cuit,
+      codigo_producto: selectedProduct.codificacion,
+      fabricante: selectedProduct.fabricante || '',
+      identificacion_producto: selectedProduct.producto || '',
+      producto_marca: selectedProduct.marca || '',
+      producto_modelo: selectedProduct.modelo || '',
+      caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
+      reglamento_alcanzado: selectedResolution,
+      normas_tecnicas: selectedProduct.normas_aplicacion || '',
+      numero_certificado: selectedProduct.n_certificado_extranjero || '',
+      organismo_certificacion: selectedProduct.ocp_extranjero || '',
+      esquema_certificacion: selectedProduct.esquema_certificacion || '',
+      fecha_emision_certificado: selectedProduct.fecha_emision || '',
+      fecha_proxima_vigilancia: fechaProximaVigilancia,
+      laboratorio_ensayos: selectedProduct.laboratorio || '',
+      informe_ensayos: selectedProduct.informe_ensayo_nro || '',
+      enlace_declaracion: finalLink,
+      fecha_lugar: `Buenos Aires, ${new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    };
+  };
+
+  const handlePreview = () => {
+    const djcData = prepareDJCData();
+    if (djcData) {
+      setPreviewData(djcData);
+      setShowPreview(true);
+    }
+  };
+
   const generateDJC = async () => {
     if (!selectedProduct || !selectedClient) return;
 
     setGenerating(true);
     try {
-      const domicilio = `${selectedClient.direccion || ''}${selectedClient.ciudad ? ', ' + selectedClient.ciudad : ''}${selectedClient.provincia ? ', ' + selectedClient.provincia : ''}`.trim();
-      const domicilioPlanta = selectedClient.direccion_planta || domicilio;
+      const djcData = prepareDJCData();
+      if (!djcData) {
+        throw new Error('No se pudo preparar los datos de DJC');
+      }
 
-      const djcNumber = `${selectedClient.cuit}-${selectedProduct.codificacion}-${Date.now()}`;
-
-      const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
-        ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })
-        : selectedProduct.vencimiento
-        ? new Date(selectedProduct.vencimiento).toLocaleDateString('es-AR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })
-        : '-';
-
-      const djcData = {
-        numero_djc: djcNumber,
-        resolucion: selectedResolution,
-        razon_social: selectedClient.razon_social,
-        cuit: formatCuit(selectedClient.cuit?.toString() || ''),
-        marca: selectedProduct.marca || selectedProduct.titular || '',
-        domicilio_legal: domicilio,
-        domicilio_planta: domicilioPlanta,
-        telefono: selectedClient.telefono || '',
-        email: selectedClient.email || '',
-        representante_nombre: representante.nombre,
-        representante_domicilio: representante.domicilio,
-        representante_cuit: representante.cuit,
-        codigo_producto: selectedProduct.codificacion,
-        fabricante: selectedProduct.fabricante || '',
-        identificacion_producto: selectedProduct.producto || '',
-        producto_marca: selectedProduct.marca || '',
-        producto_modelo: selectedProduct.modelo || '',
-        caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
-        reglamento_alcanzado: selectedResolution,
-        normas_tecnicas: selectedProduct.normas_aplicacion || '',
-        numero_certificado: selectedProduct.n_certificado_extranjero || '',
-        organismo_certificacion: selectedProduct.ocp_extranjero || '',
-        esquema_certificacion: selectedProduct.esquema_certificacion || '',
-        fecha_emision_certificado: selectedProduct.fecha_emision || '',
-        fecha_proxima_vigilancia: fechaProximaVigilancia,
-        laboratorio_ensayos: selectedProduct.laboratorio || '',
-        informe_ensayos: selectedProduct.informe_ensayo_nro || '',
-        enlace_declaracion: selectedProduct.qr_link || '',
-        fecha_lugar: `Buenos Aires, ${new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}`
-      };
-
-      const pdfBytes = await DJCPdfGenerator.generateDJC(djcData);
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const pdfGenerator = new DJCPdfGenerator();
+      const pdf = pdfGenerator.generate(djcData);
+      const pdfBlob = pdf.output('blob');
       const fileName = `DJC_${selectedProduct.codificacion}_${Date.now()}.pdf`;
 
       const { error: uploadError } = await supabase.storage
         .from('djcs')
-        .upload(fileName, blob, {
+        .upload(fileName, pdfBlob, {
           contentType: 'application/pdf',
           upsert: false
         });
@@ -613,7 +638,7 @@ export function DJCManagement() {
                   <select
                     value={selectedResolution}
                     onChange={(e) => setSelectedResolution(e.target.value)}
-                    className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     disabled={generating}
                   >
                     <option value="Res. SICyC N° 236/24">Res. SICyC N° 236/24</option>
@@ -633,7 +658,7 @@ export function DJCManagement() {
                       placeholder="Nombre y Apellido / Razón Social"
                       value={representante.nombre}
                       onChange={(e) => setRepresentante({ ...representante, nombre: e.target.value })}
-                      className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={generating}
                     />
                     <input
@@ -641,7 +666,7 @@ export function DJCManagement() {
                       placeholder="CUIT"
                       value={representante.cuit}
                       onChange={(e) => setRepresentante({ ...representante, cuit: e.target.value })}
-                      className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={generating}
                     />
                     <input
@@ -649,42 +674,98 @@ export function DJCManagement() {
                       placeholder="Domicilio Legal"
                       value={representante.domicilio}
                       onChange={(e) => setRepresentante({ ...representante, domicilio: e.target.value })}
-                      className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       disabled={generating}
                     />
                   </div>
                 </div>
+
+                {/* Enlace Personalizado (Opcional) */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      Enlace QR Personalizado
+                    </h4>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useCustomLink}
+                        onChange={(e) => setUseCustomLink(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        disabled={generating}
+                      />
+                      <span className="text-sm text-gray-600">Usar enlace personalizado</span>
+                    </label>
+                  </div>
+                  {useCustomLink && (
+                    <input
+                      type="text"
+                      placeholder="https://ejemplo.com/producto"
+                      value={customLink}
+                      onChange={(e) => setCustomLink(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={generating}
+                    />
+                  )}
+                  {!useCustomLink && selectedProduct?.qr_link && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Usando enlace del producto: {selectedProduct.qr_link}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+            <div className="flex justify-between items-center gap-3 p-6 border-t bg-gray-50">
               <button
-                onClick={() => setShowDJCModal(false)}
+                onClick={handlePreview}
                 disabled={generating}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors flex items-center gap-2"
               >
-                Cancelar
+                <Eye className="w-5 h-5" />
+                Vista Previa
               </button>
-              <button
-                onClick={generateDJC}
-                disabled={generating}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-              >
-                {generating ? (
-                  <>
-                    <LoadingSpinner />
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-5 h-5" />
-                    Generar DJC
-                  </>
-                )}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDJCModal(false)}
+                  disabled={generating}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={generateDJC}
+                  disabled={generating}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {generating ? (
+                    <>
+                      <LoadingSpinner />
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-5 h-5" />
+                      Generar DJC
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Vista Previa */}
+      {showPreview && previewData && (
+        <DJCPreviewModal
+          djcData={previewData}
+          onClose={() => setShowPreview(false)}
+          onConfirm={() => {
+            setShowPreview(false);
+            generateDJC();
+          }}
+        />
       )}
     </div>
   );
