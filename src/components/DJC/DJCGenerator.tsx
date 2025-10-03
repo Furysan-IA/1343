@@ -271,12 +271,15 @@ const DJCGenerator: React.FC = () => {
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
 
-    // Si direccion_planta está vacío o es igual al domicilio legal, usar el domicilio legal
-    let domicilioPlanta = selectedClient.direccion_planta || selectedProduct.planta_fabricacion || '';
+    // Lógica para domicilio de planta:
+    // 1. Si el cliente tiene direccion_planta Y es diferente al domicilio legal → usar direccion_planta
+    // 2. En cualquier otro caso → usar el domicilio legal (no planta_fabricacion del producto)
+    let domicilioPlanta = domicilio;
 
-    // Si no hay direccion_planta específica o es igual al domicilio legal, usar el domicilio legal
-    if (!domicilioPlanta || domicilioPlanta.trim() === domicilio.trim()) {
-      domicilioPlanta = domicilio;
+    if (selectedClient.direccion_planta &&
+        selectedClient.direccion_planta.trim() !== '' &&
+        selectedClient.direccion_planta.trim() !== domicilio.trim()) {
+      domicilioPlanta = selectedClient.direccion_planta;
     }
 
     // Usar link personalizado o generar el link automático según la opción seleccionada
