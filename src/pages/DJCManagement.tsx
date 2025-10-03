@@ -3,18 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
-import { 
-  FileText, 
-  Upload, 
-  Edit, 
-  Send, 
-  RefreshCw, 
-  Search, 
-  Filter,
-  Package,
-  AlertCircle,
-  Download
-} from 'lucide-react';
+import { FileText, Upload, CreditCard as Edit, Send, RefreshCw, Search, ListFilter as Filter, Package, CircleAlert as AlertCircle, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
