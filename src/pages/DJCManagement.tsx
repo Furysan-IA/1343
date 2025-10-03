@@ -260,51 +260,107 @@ export function DJCManagement() {
   };
 
   const generateDJC = async () => {
-    if (!selectedProduct || !selectedClient) {
-      console.error('Missing product or client:', { selectedProduct, selectedClient });
-      toast.error('Faltan datos del producto o cliente');
+    if (!previewData || !selectedProduct || !selectedClient) {
+      console.error('Missing data:', { previewData, selectedProduct, selectedClient });
+      toast.error('Faltan datos para generar la DJC');
       return;
     }
 
     setGenerating(true);
     try {
-      const djcData = previewData || prepareDJCData();
-      if (!djcData) {
-        throw new Error('No se pudo preparar los datos de DJC');
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error('Debe estar autenticado para generar DJCs');
+        setGenerating(false);
+        return;
       }
 
       const pdfGenerator = new DJCPdfGenerator();
-      const pdf = pdfGenerator.generate(djcData);
+      const pdf = pdfGenerator.generate(previewData);
       const pdfBlob = pdf.output('blob');
-      const fileName = `DJC_${selectedProduct.codificacion}_${Date.now()}.pdf`;
+      const fileName = `DJC_${previewData.numero_djc}.pdf`;
 
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('djcs')
         .upload(fileName, pdfBlob, {
           contentType: 'application/pdf',
-          upsert: false
+          upsert: true
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('djcs')
+        .getPublicUrl(fileName);
+
+      const { error: djcError } = await supabase
+        .from('djc')
+        .insert({
+          numero_djc: previewData.numero_djc,
+          resolucion: previewData.resolucion,
+          razon_social: previewData.razon_social,
+          cuit: selectedClient.cuit,
+          marca: previewData.marca,
+          domicilio_legal: previewData.domicilio_legal,
+          domicilio_planta: previewData.domicilio_planta,
+          telefono: previewData.telefono,
+          email: previewData.email,
+          representante_nombre: previewData.representante_nombre || null,
+          representante_domicilio: previewData.representante_domicilio || null,
+          representante_cuit: previewData.representante_cuit || null,
+          codigo_producto: previewData.codigo_producto,
+          fabricante: previewData.fabricante,
+          identificacion_producto: previewData.identificacion_producto,
+          reglamentos: previewData.resolucion,
+          normas_tecnicas: previewData.normas_tecnicas,
+          documento_evaluacion: previewData.informe_ensayos,
+          enlace_declaracion: previewData.enlace_declaracion,
+          fecha_lugar: previewData.fecha_lugar,
+          pdf_url: urlData.publicUrl,
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (djcError) {
+        console.error('Error saving DJC:', djcError);
+        if (djcError.code === '42501') {
+          toast.error('Error de permisos. Verifique las políticas RLS en Supabase');
+          throw new Error('Row Level Security error - check database policies');
+        }
+        throw djcError;
+      }
 
       const { error: updateError } = await supabase
         .from('products')
         .update({
-          djc_status: 'Generada',
-          djc_path: fileName,
-          updated_at: new Date().toISOString()
+          djc_status: 'Generada Pendiente de Firma',
+          djc_path: urlData.publicUrl
         })
         .eq('codificacion', selectedProduct.codificacion);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating product:', updateError);
+        throw updateError;
+      }
 
-      toast.success('DJC generada exitosamente');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+
+      toast.success('DJC generada y guardada exitosamente');
       setShowPreview(false);
       setShowDJCModal(false);
       await fetchProducts();
     } catch (error) {
       console.error('Error generating DJC:', error);
-      toast.error('Error al generar DJC');
+      toast.error('Error al generar la DJC. Verifique los permisos en la base de datos.');
     } finally {
       setGenerating(false);
     }
