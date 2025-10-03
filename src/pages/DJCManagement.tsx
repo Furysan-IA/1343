@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
@@ -51,6 +52,7 @@ interface Product {
 
 export function DJCManagement() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -128,19 +130,8 @@ export function DJCManagement() {
     }
   };
 
-  const handleGenerateDJC = async (product: Product) => {
-    try {
-      toast(`Generando DJC para producto ${product.codificacion}...`);
-      
-      // TODO: Implementar lógica de generación de DJC
-      // Por ahora solo mostramos un mensaje de confirmación
-      setTimeout(() => {
-        toast.success(`DJC generada exitosamente para ${product.codificacion}`);
-      }, 1000);
-      
-    } catch (error: any) {
-      toast.error(`Error al generar DJC: ${error.message}`);
-    }
+  const handleGenerateDJC = (product: Product) => {
+    navigate('/djc', { state: { selectedProduct: product } });
   };
 
   const handleUploadCertificate = async (product: Product) => {
@@ -281,31 +272,31 @@ export function DJCManagement() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('codification')}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('titular')}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Producto
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('expirationDate')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vencimiento
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('daysToExpire')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Días
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('djcStatus')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    DJC
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('certificateStatus')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Certificado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('sentToClient')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Enviado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
@@ -313,42 +304,42 @@ export function DJCManagement() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map((product) => (
                   <tr key={product.codificacion} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900 max-w-xs truncate" title={product.codificacion}>
                       {product.codificacion}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 text-sm text-gray-700 max-w-xs truncate" title={product.titular || 'N/A'}>
                       {product.titular || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 text-sm text-gray-700 max-w-xs truncate" title={product.producto || 'N/A'}>
                       {product.producto || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {product.vencimiento ? format(new Date(product.vencimiento), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 text-center">
+                      {product.vencimiento ? format(new Date(product.vencimiento), 'dd/MM/yyyy', { locale: es }) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       {product.dias_para_vencer !== null ? (
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          product.dias_para_vencer < 0 
-                            ? 'bg-red-100 text-red-800' 
-                            : product.dias_para_vencer <= 30 
-                            ? 'bg-yellow-100 text-yellow-800' 
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          product.dias_para_vencer < 0
+                            ? 'bg-red-100 text-red-800'
+                            : product.dias_para_vencer <= 30
+                            ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-green-100 text-green-800'
                         }`}>
-                          {product.dias_para_vencer} días
+                          {product.dias_para_vencer}
                         </span>
-                      ) : 'N/A'}
+                      ) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.djc_status} type="djc" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.certificado_status} type="certificate" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.enviado_cliente} type="sent" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center justify-center space-x-1">
                         {/* Generar DJC Button */}
                         <button
                           onClick={() => handleGenerateDJC(product)}

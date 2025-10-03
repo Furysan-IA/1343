@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { formatCuit } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
@@ -86,6 +87,7 @@ interface DJCPreviewData {
 }
 
 const DJCGenerator: React.FC = () => {
+  const location = useLocation();
   const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -120,6 +122,21 @@ const DJCGenerator: React.FC = () => {
     fetchClients();
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    const stateProduct = location.state?.selectedProduct;
+    if (stateProduct && products.length > 0 && clients.length > 0) {
+      const product = products.find(p => p.codificacion === stateProduct.codificacion);
+      if (product) {
+        setSelectedProduct(product);
+        const client = clients.find(c => c.cuit?.toString() === product.cuit?.toString());
+        if (client) {
+          setSelectedClient(client);
+        }
+        toast.success(`Producto ${product.codificacion} seleccionado`);
+      }
+    }
+  }, [location.state, products, clients]);
 
   useEffect(() => {
     if (selectedClient && products.length > 0) {
