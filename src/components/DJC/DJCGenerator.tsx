@@ -270,7 +270,14 @@ const DJCGenerator: React.FC = () => {
     });
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
-    const domicilioPlanta = selectedClient.direccion_planta || selectedProduct.planta_fabricacion || domicilio;
+
+    // Si direccion_planta está vacío o es igual al domicilio legal, usar el domicilio legal
+    let domicilioPlanta = selectedClient.direccion_planta || selectedProduct.planta_fabricacion || '';
+
+    // Si no hay direccion_planta específica o es igual al domicilio legal, usar el domicilio legal
+    if (!domicilioPlanta || domicilioPlanta.trim() === domicilio.trim()) {
+      domicilioPlanta = domicilio;
+    }
 
     // Usar link personalizado o generar el link automático según la opción seleccionada
     const qrLink = useCustomLink
