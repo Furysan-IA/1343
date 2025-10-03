@@ -260,11 +260,15 @@ export function DJCManagement() {
   };
 
   const generateDJC = async () => {
-    if (!selectedProduct || !selectedClient) return;
+    if (!selectedProduct || !selectedClient) {
+      console.error('Missing product or client:', { selectedProduct, selectedClient });
+      toast.error('Faltan datos del producto o cliente');
+      return;
+    }
 
     setGenerating(true);
     try {
-      const djcData = prepareDJCData();
+      const djcData = previewData || prepareDJCData();
       if (!djcData) {
         throw new Error('No se pudo preparar los datos de DJC');
       }
@@ -740,41 +744,22 @@ export function DJCManagement() {
               </div>
             </div>
 
-            <div className="flex justify-between items-center gap-3 p-6 border-t bg-gray-50">
+            <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+              <button
+                onClick={() => setShowDJCModal(false)}
+                disabled={generating}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
               <button
                 onClick={handlePreview}
                 disabled={generating}
-                className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors flex items-center gap-2"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
               >
                 <Eye className="w-5 h-5" />
-                Vista Previa
+                Vista Previa DJC
               </button>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDJCModal(false)}
-                  disabled={generating}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={generateDJC}
-                  disabled={generating}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-                >
-                  {generating ? (
-                    <>
-                      <LoadingSpinner />
-                      Generando...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-5 h-5" />
-                      Generar DJC
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </div>
         </div>
