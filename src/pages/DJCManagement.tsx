@@ -65,30 +65,39 @@ export function DJCManagement() {
     try {
       setLoading(true);
 
-      // Cargar TODOS los productos sin límite
-      let allProducts: Product[] = [];
-      let from = 0;
-      const limit = 1000;
-      let hasMore = true;
+      // Primero obtener el conteo total
+      const { count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true });
 
-      while (hasMore) {
+      console.log('Total de productos en DB:', count);
+
+      // Cargar TODOS los productos en lotes
+      const allProducts: Product[] = [];
+      const batchSize = 1000;
+      const totalBatches = Math.ceil((count || 0) / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = from + batchSize - 1;
+
+        console.log(`Cargando lote ${i + 1}/${totalBatches}: registros ${from}-${to}`);
+
         const { data, error } = await supabase
           .from('products')
           .select('*')
           .order('created_at', { ascending: false })
-          .range(from, from + limit - 1);
+          .range(from, to);
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-          allProducts = [...allProducts, ...data];
-          from += limit;
-          hasMore = data.length === limit;
-        } else {
-          hasMore = false;
+        if (data) {
+          allProducts.push(...data);
+          console.log(`Lote ${i + 1} cargado: ${data.length} productos. Total acumulado: ${allProducts.length}`);
         }
       }
 
+      console.log('Total de productos cargados:', allProducts.length);
       setProducts(allProducts);
     } catch (error: any) {
       toast.error(`Error al cargar productos: ${error.message}`);
