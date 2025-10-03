@@ -75,13 +75,32 @@ export function DJCManagement() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setProducts(data || []);
+      // Cargar TODOS los productos sin límite
+      let allProducts: Product[] = [];
+      let from = 0;
+      const limit = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + limit - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allProducts = [...allProducts, ...data];
+          from += limit;
+          hasMore = data.length === limit;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      setProducts(allProducts);
     } catch (error: any) {
       toast.error(`Error al cargar productos: ${error.message}`);
       
