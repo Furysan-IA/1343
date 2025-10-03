@@ -164,13 +164,37 @@ const DJCGenerator: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase
+      // Primero obtener el conteo total
+      const { count } = await supabase
         .from('products')
-        .select('*')
-        .order('producto');
-      
-      if (error) throw error;
-      setProducts(data || []);
+        .select('*', { count: 'exact', head: true });
+
+      console.log('Total de productos en DB:', count);
+
+      // Cargar TODOS los productos en lotes
+      const allProducts: Product[] = [];
+      const batchSize = 1000;
+      const totalBatches = Math.ceil((count || 0) / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = from + batchSize - 1;
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('producto')
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data) {
+          allProducts.push(...data);
+        }
+      }
+
+      console.log('Total de productos cargados en DJCGenerator:', allProducts.length);
+      setProducts(allProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Error al cargar los productos');

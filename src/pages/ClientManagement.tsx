@@ -434,12 +434,30 @@ export function ClientManagement() {
 
       if (error) throw error;
       
-      // Cargar productos para contar por cliente
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select('cuit');
+      // Cargar productos para contar por cliente - en lotes
+      const allProducts: any[] = [];
+      const batchSize = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      if (productsError) throw productsError;
+      while (hasMore) {
+        const { data: batchData, error: productsError } = await supabase
+          .from('products')
+          .select('cuit')
+          .range(from, from + batchSize - 1);
+
+        if (productsError) throw productsError;
+
+        if (batchData && batchData.length > 0) {
+          allProducts.push(...batchData);
+          hasMore = batchData.length === batchSize;
+          from += batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const products = allProducts;
 
       // Contar productos por CUIT
       const productCounts: Record<number, number> = {};
