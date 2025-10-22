@@ -397,9 +397,49 @@ export function ProductManagement() {
       syncWithSupabase();
     }, 5 * 60 * 1000);
 
+    // Configurar suscripción Realtime para actualizaciones en vivo
+    const channel = supabase
+      .channel('products-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          console.log('🔄 Realtime update detected:', payload);
+
+          // Actualizar el producto específico en el estado
+          setProducts(prevProducts => {
+            const updatedProducts = prevProducts.map(product =>
+              product.codificacion === payload.new.codificacion
+                ? { ...product, ...payload.new }
+                : product
+            );
+            return updatedProducts;
+          });
+
+          // Mostrar notificación solo para cambios en QR
+          if (
+            payload.new.qr_link !== payload.old?.qr_link ||
+            payload.new.qr_status !== payload.old?.qr_status
+          ) {
+            toast.success('QR actualizado en tiempo real', {
+              icon: '🔄',
+              duration: 3000
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+      });
+
     return () => {
       unsubscribe();
       clearInterval(syncInterval);
+      supabase.removeChannel(channel);
     };
   }, []);
 

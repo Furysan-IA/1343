@@ -490,15 +490,17 @@ export default function ProductPassport() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">DJC</span>
-                  {product.djc_path ? (
+                  {/* Priorizar DJC subida (djc.pdf_url) sobre DJC generada (product.djc_path) */}
+                  {djc?.pdf_url || product.djc_path ? (
                     <a
-                      href={product.djc_path}
+                      href={djc?.pdf_url || product.djc_path}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                      title={djc?.pdf_url ? 'DJC subida manualmente' : 'DJC generada automáticamente'}
                     >
                       <Eye className="w-4 h-4" />
-                      Ver
+                      Ver {djc?.pdf_url && <span className="text-xs text-green-600 ml-1">✓</span>}
                     </a>
                   ) : (
                     <span className="text-gray-400 text-sm">No disponible</span>

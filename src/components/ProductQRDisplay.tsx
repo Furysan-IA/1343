@@ -38,6 +38,56 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
   useEffect(() => {
     checkIfQRNeedsRegeneration();
+
+    // Configurar suscripción Realtime para este producto específico
+    const channel = supabase
+      .channel(`product-qr-${product.codificacion}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products',
+          filter: `codificacion=eq.${product.codificacion}`
+        },
+        (payload) => {
+          console.log('🔄 QR Realtime update for product:', payload);
+
+          // Verificar si cambió información relevante del QR
+          if (
+            payload.new.qr_link !== payload.old?.qr_link ||
+            payload.new.qr_status !== payload.old?.qr_status ||
+            payload.new.qr_path !== payload.old?.qr_path
+          ) {
+            console.log('✅ QR data changed, triggering update');
+
+            // Actualizar el link del QR si cambió
+            if (payload.new.qr_link && payload.new.qr_link !== product.qr_link) {
+              setQrLink(payload.new.qr_link);
+
+              // Regenerar el QR visual con el nuevo link
+              if (payload.new.qr_path) {
+                setQrDataUrl(payload.new.qr_path);
+              }
+            }
+
+            // Notificar al componente padre para actualizar
+            onUpdate();
+
+            toast.success('QR actualizado automáticamente', {
+              icon: '✨',
+              duration: 2000
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 QR Realtime subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [product]);
 
   const checkIfQRNeedsRegeneration = () => {
