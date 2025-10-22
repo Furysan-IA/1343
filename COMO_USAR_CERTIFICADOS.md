@@ -1,5 +1,33 @@
 # Cómo Usar el Sistema de Carga de Certificados
 
+## 🎉 Mejoras v2 - Sistema de Actualización Dinámico
+
+**¡IMPORTANTE! El sistema ha sido mejorado significativamente:**
+
+### ✅ Lo que cambió (para mejor):
+
+1. **Captura de TODOS los campos**: El sistema ahora extrae y actualiza TODOS los campos de producto que estén presentes en tu archivo Excel, no solo los básicos.
+
+2. **Actualización inteligente**:
+   - Detecta automáticamente qué campos están en tu archivo
+   - Actualiza solo los campos que tengan valores (no sobrescribe con vacíos)
+   - Protege campos críticos del sistema (QR, DJC, timestamps)
+
+3. **Soporte para certificado_path**: Si incluyes la columna `certificado_path` con rutas de archivos, el sistema automáticamente actualizará el estado del certificado a "Subido".
+
+4. **Logging detallado**: Ahora puedes ver exactamente qué campos fueron actualizados en cada certificado procesado.
+
+5. **35+ campos soportados**: Desde información básica hasta datos técnicos completos (ver lista completa abajo).
+
+### ⚠️ Lo que NO cambió:
+
+- El flujo de carga sigue siendo el mismo
+- Los campos obligatorios siguen siendo los mismos
+- La lógica de fechas (más reciente = actualiza) no cambió
+- Los campos protegidos nunca se sobrescriben
+
+---
+
 ## Ubicación en la Aplicación
 
 ### En el Menú Lateral (Sidebar)
@@ -165,12 +193,55 @@ contacto            (persona de contacto)
 
 ### Columnas de Producto (Opcionales)
 
+**Campos principales:**
 ```
-codificacion            (identificador único)
-titular_responsable     (nombre del titular)
-tipo_certificacion      (tipo del certificado)
-fecha_vencimiento       (fecha de expiración)
+codificacion                          (identificador único - REQUERIDO)
+titular / titular_responsable         (nombre del titular)
+tipo_certificacion                    (tipo del certificado)
+vencimiento / fecha_vencimiento       (fecha de expiración)
 ```
+
+**Campos adicionales soportados (NUEVO en v2):**
+```
+estado                                (estado del certificado)
+producto                              (nombre del producto)
+marca                                 (marca del producto)
+modelo                                (modelo del producto)
+fabricante                            (nombre del fabricante)
+planta_fabricacion                    (ubicación de la planta)
+origen                                (país de origen)
+direccion_legal_empresa               (dirección legal)
+caracteristicas_tecnicas              (especificaciones técnicas)
+normas_aplicacion                     (normas aplicables)
+informe_ensayo_nro                    (número de informe de ensayo)
+laboratorio                           (laboratorio que realizó ensayos)
+ocp_extranjero                        (organismo certificador extranjero)
+n_certificado_extranjero              (número de certificado extranjero)
+fecha_emision_certificado_extranjero  (fecha de emisión certificado extranjero)
+disposicion_convenio                  (disposición o convenio aplicable)
+cod_rubro                             (código de rubro)
+cod_subrubro                          (código de subrubro)
+nombre_subrubro                       (nombre del subrubro)
+fecha_cancelacion                     (fecha de cancelación si aplica)
+motivo_cancelacion                    (motivo de cancelación)
+certificado_path                      (ruta del archivo de certificado)
+organismo_certificacion               (organismo que emitió la certificación)
+esquema_certificacion                 (esquema o sistema de certificación)
+fecha_proxima_vigilancia              (fecha de próxima auditoría)
+en_proceso_renovacion                 (si está en proceso de renovación)
+```
+
+**Campos protegidos (NO se sobrescriben automáticamente):**
+```
+qr_path, qr_link, qr_status           (información de códigos QR)
+djc_path, djc_status                  (información de DJC)
+certificado_status                    (estado de carga de certificado)*
+enviado_cliente                       (estado de envío)
+uuid, created_at, updated_at          (metadatos del sistema)
+dias_para_vencer                      (calculado automáticamente)
+```
+
+*Nota: `certificado_status` se actualiza automáticamente a "Subido" si se proporciona `certificado_path` en el archivo.
 
 ### Ejemplo de Archivo
 

@@ -332,6 +332,34 @@ export const CertificateReviewScreen: React.FC<CertificateReviewScreenProps> = (
             </ul>
           </div>
 
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+            <h3 className="font-semibold text-green-900 mb-3">Sistema Mejorado de Actualización de Campos</h3>
+            <div className="space-y-2 text-sm text-green-800">
+              <p className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  El sistema ahora extrae y actualiza <strong>TODOS los campos</strong> disponibles en el archivo de certificados
+                </span>
+              </p>
+              <p className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  Campos protegidos (QR, DJC, timestamps) nunca se sobrescriben
+                </span>
+              </p>
+              <p className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  Si el certificado incluye <strong>certificado_path</strong>, el estado se actualizará automáticamente
+                </span>
+              </p>
+              <p className="text-xs text-green-700 mt-2">
+                Campos soportados: producto, marca, modelo, titular, tipo_certificacion, estado, fabricante, planta_fabricacion,
+                origen, caracteristicas_tecnicas, normas_aplicacion, organismo_certificacion, esquema_certificacion, y más...
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between pt-6 border-t">
 
             <button
