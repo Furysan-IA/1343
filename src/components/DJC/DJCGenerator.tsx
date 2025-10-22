@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { formatCuit } from '../../utils/formatters';
+import { formatCuit, formatDateWithoutTimezone } from '../../utils/formatters';
 import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
@@ -304,28 +304,21 @@ const DJCGenerator: React.FC = () => {
       ? (customLink || '')
       : `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
 
-    // Formatear fecha de emisión del certificado
-    const fechaEmisionCertificado = selectedProduct.fecha_emision
-      ? new Date(selectedProduct.fecha_emision).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
-      : '-';
+    console.log('DJC Link Configuration:', {
+      useCustomLink,
+      customLink,
+      generatedLink: qrLink,
+      productCode: selectedProduct.codificacion
+    });
+
+    // Formatear fecha de emisión del certificado (sin conversión de zona horaria)
+    const fechaEmisionCertificado = formatDateWithoutTimezone(selectedProduct.fecha_emision, 'short');
 
     // Formatear fecha de próxima vigilancia - usar vencimiento si no está disponible
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
-      ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+      ? formatDateWithoutTimezone(selectedProduct.fecha_proxima_vigilancia, 'short')
       : selectedProduct.vencimiento
-      ? new Date(selectedProduct.vencimiento).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+      ? formatDateWithoutTimezone(selectedProduct.vencimiento, 'short')
       : '-';
 
     const data: DJCPreviewData = {
@@ -382,6 +375,9 @@ const DJCGenerator: React.FC = () => {
         return;
       }
 
+      // Verificar el enlace antes de generar
+      console.log('Generating DJC PDF with link:', previewData.enlace_declaracion);
+
       // Generar el PDF usando jsPDF directamente
       const pdfGenerator = new DJCPdfGenerator();
       const pdf = pdfGenerator.generate(previewData);
@@ -407,6 +403,8 @@ const DJCGenerator: React.FC = () => {
         .getPublicUrl(fileName);
 
       // Guardar registro en tabla djc con created_by
+      console.log('Saving DJC to database with link:', previewData.enlace_declaracion);
+
       const { error: djcError } = await supabase
         .from('djc')
         .insert({
@@ -428,7 +426,7 @@ const DJCGenerator: React.FC = () => {
           reglamentos: previewData.resolucion,
           normas_tecnicas: previewData.normas_tecnicas,
           documento_evaluacion: previewData.informe_ensayos,
-          enlace_declaracion: previewData.enlace_declaracion,
+          enlace_declaracion: previewData.enlace_declaracion || '',
           fecha_lugar: previewData.fecha_lugar,
           pdf_url: urlData.publicUrl,
           created_by: user.id,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabasePublic } from '../lib/supabase';
 import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home } from 'lucide-react';
+import { formatDateWithoutTimezone } from '../utils/formatters';
 
 interface Product {
   codificacion: string;
@@ -184,11 +185,7 @@ export default function ProductPassport() {
   };
 
   const formatDate = (date: string): string => {
-    return new Date(date).toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    return formatDateWithoutTimezone(date, 'short');
   };
 
   if (loading) {

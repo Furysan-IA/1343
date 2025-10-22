@@ -8,6 +8,7 @@ import { FileText, Upload, CreditCard as Edit, Send, RefreshCw, Search, ListFilt
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatDateWithoutTimezone } from '../utils/formatters';
 import { DJCPdfGenerator } from '../services/djcPdfGenerator.service';
 import { formatCuit } from '../utils/formatters';
 import { DJCPreviewModal } from '../components/DJC/DJCPreview';
@@ -194,26 +195,13 @@ export function DJCManagement() {
       ? customLink
       : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
 
-    const fechaEmisionCertificado = selectedProduct.fecha_emision
-      ? new Date(selectedProduct.fecha_emision).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
-      : '-';
+    // Formatear fechas sin conversión de zona horaria
+    const fechaEmisionCertificado = formatDateWithoutTimezone(selectedProduct.fecha_emision, 'short');
 
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
-      ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+      ? formatDateWithoutTimezone(selectedProduct.fecha_proxima_vigilancia, 'short')
       : selectedProduct.vencimiento
-      ? new Date(selectedProduct.vencimiento).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+      ? formatDateWithoutTimezone(selectedProduct.vencimiento, 'short')
       : '-';
 
     return {
