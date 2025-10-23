@@ -4,6 +4,12 @@
 
 El sistema está configurado para actualizar **AUTOMÁTICAMENTE** el QR link en DJCGenerator cada vez que se regenera un QR, sin necesidad de intervención manual.
 
+### Actualizaciones Automáticas Incluyen:
+
+1. ✅ **Cuadro "QR Link actual"** - Muestra el link del producto seleccionado
+2. ✅ **Sección "Enlace de la Declaración"** - El enlace automático se actualiza en tiempo real
+3. ✅ **Generación de DJC** - Usa el `qr_link` más reciente de la base de datos
+
 ---
 
 ## Cómo Funciona (Técnicamente)

@@ -372,16 +372,17 @@ const DJCGenerator: React.FC = () => {
       domicilioPlanta = selectedClient.direccion_planta;
     }
 
-    // Usar link personalizado o generar el link automático según la opción seleccionada
+    // Usar link personalizado o el qr_link de la base de datos (actualizado en tiempo real)
     const qrLink = useCustomLink
       ? (customLink || '')
-      : `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+      : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
 
     console.log('DJC Link Configuration:', {
       useCustomLink,
       customLink,
       generatedLink: qrLink,
-      productCode: selectedProduct.codificacion
+      productCode: selectedProduct.codificacion,
+      qr_link_from_db: selectedProduct.qr_link
     });
 
     // Formatear fecha de emisión del certificado (sin conversión de zona horaria)
@@ -983,8 +984,13 @@ const DJCGenerator: React.FC = () => {
                 <div className="p-3 bg-white rounded border border-gray-300">
                   <p className="text-sm text-gray-600 mb-1 font-medium">Enlace automático:</p>
                   <p className="text-sm text-blue-600 break-all">
-                    https://verificar.argentina.gob.ar/qr/{selectedProduct.codificacion}
+                    {selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`}
                   </p>
+                  {!selectedProduct.qr_link && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Este producto no tiene QR generado. El enlace se generará cuando se cree el QR.
+                    </p>
+                  )}
                 </div>
               )}
 
