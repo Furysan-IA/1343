@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { formatCuit, formatDateWithoutTimezone } from '../../utils/formatters';
-import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
+import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
 import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
@@ -121,6 +121,45 @@ const DJCGenerator: React.FC = () => {
   useEffect(() => {
     fetchClients();
     fetchProducts();
+
+    // Suscribirse a cambios en tiempo real de la tabla products
+    const subscription = supabase
+      .channel('djc-generator-products')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          console.log('🔄 Producto actualizado en tiempo real:', payload.new);
+
+          // Actualizar en la lista de productos
+          setProducts(prevProducts => {
+            return prevProducts.map(p =>
+              p.codificacion === payload.new.codificacion
+                ? { ...p, ...payload.new as Product }
+                : p
+            );
+          });
+
+          // Si es el producto seleccionado, actualizarlo también
+          setSelectedProduct(prevSelected => {
+            if (prevSelected && prevSelected.codificacion === payload.new.codificacion) {
+              console.log('✨ Actualizando producto seleccionado con nuevo qr_link:', payload.new.qr_link);
+              return { ...prevSelected, ...payload.new as Product };
+            }
+            return prevSelected;
+          });
+        }
+      )
+      .subscribe();
+
+    // Cleanup: desuscribirse al desmontar
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -225,9 +264,9 @@ const DJCGenerator: React.FC = () => {
         .select('id, created_at, numero_djc, resolucion, pdf_url')
         .eq('codigo_producto', productCode)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       const mappedData = (data || []).map(djc => ({
         id: djc.id,
         created_at: djc.created_at,
@@ -236,11 +275,45 @@ const DJCGenerator: React.FC = () => {
         status: djc.pdf_url ? 'Generada' : 'Pendiente',
         conformity_status: 'Conforme'
       }));
-      
+
       setDjcHistory(mappedData);
     } catch (error) {
       console.error('Error fetching DJC history:', error);
       setDjcHistory([]);
+    }
+  };
+
+  const refreshSelectedProduct = async () => {
+    if (!selectedProduct) {
+      toast.error('No hay producto seleccionado');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('codificacion', selectedProduct.codificacion)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        console.log('🔄 Producto refrescado manualmente:', data);
+        setSelectedProduct(data);
+
+        // También actualizar en la lista
+        setProducts(prevProducts => {
+          return prevProducts.map(p =>
+            p.codificacion === data.codificacion ? data : p
+          );
+        });
+
+        toast.success('Datos del producto actualizados');
+      }
+    } catch (error) {
+      console.error('Error refreshing product:', error);
+      toast.error('Error al actualizar el producto');
     }
   };
 
@@ -744,7 +817,17 @@ const DJCGenerator: React.FC = () => {
 
         {selectedProduct && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-700">Producto Seleccionado:</h3>
+              <button
+                onClick={refreshSelectedProduct}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                title="Refrescar datos del producto"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Actualizar
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <p className="text-sm text-gray-600">
@@ -770,6 +853,16 @@ const DJCGenerator: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {/* Mostrar QR Link actual */}
+            {selectedProduct.qr_link && (
+              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs text-blue-700">
+                  <span className="font-semibold">QR Link actual:</span>{' '}
+                  <span className="text-blue-600 break-all">{selectedProduct.qr_link}</span>
+                </p>
+              </div>
+            )}
             
             {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
               <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
