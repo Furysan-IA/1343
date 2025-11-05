@@ -74,6 +74,9 @@ interface DJC {
   created_at: string;
   numero_djc: string | null;
   updated_at: string;
+  djc_source?: string;
+  djc_version?: number;
+  is_active?: boolean;
 }
 
 export default function ProductPassport() {
@@ -116,16 +119,24 @@ export default function ProductPassport() {
 
       setProduct(productData);
 
-      // Buscar DJC asociada usando codificacion
+      // Buscar DJC asociada usando codificacion - priorizar la activa
       const { data: djcData, error: djcError } = await supabasePublic
         .from('djc')
         .select('*')
         .eq('codigo_producto', productData.codificacion)
+        .eq('is_active', true)
+        .order('djc_version', { ascending: false })
+        .order('created_at', { ascending: false })
         .maybeSingle();
 
       if (djcError && djcError.code !== 'PGRST116') {
         console.warn('Error loading DJC:', djcError);
       } else if (djcData) {
+        console.log('✅ Active DJC loaded:', {
+          source: djcData.djc_source,
+          version: djcData.djc_version,
+          numero_djc: djcData.numero_djc
+        });
         setDjc(djcData);
       }
 
@@ -370,10 +381,23 @@ export default function ProductPassport() {
             {/* DJC Information */}
             {djc && (
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-indigo-600" />
-                  Declaración Jurada de Conformidad
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FileText className="w-6 h-6 text-indigo-600" />
+                    Declaración Jurada de Conformidad
+                  </h2>
+                  {djc.djc_source === 'manually_uploaded' && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Firmada
+                    </span>
+                  )}
+                  {djc.djc_version && djc.djc_version > 1 && (
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                      Versión {djc.djc_version}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Número DJC</label>
@@ -391,6 +415,16 @@ export default function ProductPassport() {
                     <label className="text-sm font-medium text-gray-500">Creado</label>
                     <p className="text-gray-900">{formatDate(djc.created_at)}</p>
                   </div>
+                  {djc.djc_source === 'manually_uploaded' && (
+                    <div className="md:col-span-2">
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-800">
+                          <CheckCircle className="w-4 h-4 inline mr-1" />
+                          Esta es una DJC firmada y subida manualmente por el titular
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {djc.pdf_url && (
                     <div className="md:col-span-2">
                       <a
@@ -400,7 +434,7 @@ export default function ProductPassport() {
                         className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                       >
                         <Download className="w-4 h-4" />
-                        Descargar DJC
+                        Descargar DJC {djc.djc_source === 'manually_uploaded' ? 'Firmada' : ''}
                       </a>
                     </div>
                   )}
@@ -487,17 +521,35 @@ export default function ProductPassport() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">DJC</span>
-                  {/* Priorizar DJC subida (djc.pdf_url) sobre DJC generada (product.djc_path) */}
-                  {djc?.pdf_url || product.djc_path ? (
+                  {/* Priorizar DJC activa de la tabla djc */}
+                  {djc?.pdf_url ? (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={djc.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        title={djc.djc_source === 'manually_uploaded' ? 'DJC firmada y subida manualmente' : 'DJC generada automáticamente'}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Ver
+                      </a>
+                      {djc.djc_source === 'manually_uploaded' && (
+                        <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                          Firmada
+                        </span>
+                      )}
+                    </div>
+                  ) : product.djc_path ? (
                     <a
-                      href={djc?.pdf_url || product.djc_path}
+                      href={product.djc_path}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                      title={djc?.pdf_url ? 'DJC subida manualmente' : 'DJC generada automáticamente'}
+                      title="DJC generada automáticamente"
                     >
                       <Eye className="w-4 h-4" />
-                      Ver {djc?.pdf_url && <span className="text-xs text-green-600 ml-1">✓</span>}
+                      Ver
                     </a>
                   ) : (
                     <span className="text-gray-400 text-sm">No disponible</span>

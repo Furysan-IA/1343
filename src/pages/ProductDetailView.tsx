@@ -123,7 +123,7 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf,.jpg,.jpeg,.png';
-    
+
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -131,24 +131,33 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
       setUploadingFile(field);
       try {
         const fileExt = file.name.split('.').pop();
+        const bucketName = field === 'djc_path' ? 'djcs' : 'documents';
         const fileName = `${field}_${product.codificacion}_${Date.now()}.${fileExt}`;
-        
+
         const { error: uploadError } = await supabase.storage
-          .from('documents')
+          .from(bucketName)
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-          .from('documents')
+          .from(bucketName)
           .getPublicUrl(fileName);
 
         setEditedProduct(prev => ({ ...prev, [field]: publicUrl }));
-        
+
+        // If uploading a DJC, sync with djc table
+        if (field === 'djc_path') {
+          await handleDJCUpload(publicUrl);
+        }
+
         // Auto-guardar después de subir
         const { error: updateError } = await supabase
           .from('products')
-          .update({ [field]: publicUrl })
+          .update({
+            [field]: publicUrl,
+            djc_status: field === 'djc_path' ? 'Firmada' : editedProduct.djc_status
+          })
           .eq('codificacion', product.codificacion);
 
         if (updateError) throw updateError;
@@ -161,8 +170,129 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
         setUploadingFile(null);
       }
     };
-    
+
     input.click();
+  };
+
+  const handleDJCUpload = async (pdfUrl: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      // Check if there's an existing active DJC for this product
+      const { data: existingDJC, error: fetchError } = await supabase
+        .from('djc')
+        .select('*')
+        .eq('codigo_producto', product.codificacion)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      if (existingDJC) {
+        // Deactivate the existing DJC
+        const { error: deactivateError } = await supabase
+          .from('djc')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDJC.id);
+
+        if (deactivateError) throw deactivateError;
+
+        // Create new DJC record as manually uploaded version
+        const { error: insertError } = await supabase
+          .from('djc')
+          .insert({
+            resolucion: existingDJC.resolucion || 'Res. SICyC N° 236/24',
+            razon_social: existingDJC.razon_social,
+            cuit: existingDJC.cuit,
+            marca: existingDJC.marca,
+            domicilio_legal: existingDJC.domicilio_legal,
+            domicilio_planta: existingDJC.domicilio_planta,
+            telefono: existingDJC.telefono,
+            email: existingDJC.email,
+            representante_nombre: existingDJC.representante_nombre,
+            representante_domicilio: existingDJC.representante_domicilio,
+            representante_cuit: existingDJC.representante_cuit,
+            codigo_producto: product.codificacion,
+            fabricante: existingDJC.fabricante,
+            identificacion_producto: existingDJC.identificacion_producto,
+            reglamentos: existingDJC.reglamentos,
+            normas_tecnicas: existingDJC.normas_tecnicas,
+            documento_evaluacion: existingDJC.documento_evaluacion,
+            enlace_declaracion: existingDJC.enlace_declaracion,
+            fecha_lugar: existingDJC.fecha_lugar,
+            numero_djc: existingDJC.numero_djc,
+            pdf_url: pdfUrl,
+            djc_source: 'manually_uploaded',
+            djc_version: (existingDJC.djc_version || 1) + 1,
+            is_active: true,
+            created_by: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) throw insertError;
+
+        // Update the old record to point to the new one
+        const { data: newDJC } = await supabase
+          .from('djc')
+          .select('id')
+          .eq('codigo_producto', product.codificacion)
+          .eq('is_active', true)
+          .single();
+
+        if (newDJC) {
+          await supabase
+            .from('djc')
+            .update({ replaced_by: newDJC.id })
+            .eq('id', existingDJC.id);
+        }
+      } else {
+        // No existing DJC, create a minimal record for the manually uploaded file
+        const { error: insertError } = await supabase
+          .from('djc')
+          .insert({
+            resolucion: 'Res. SICyC N° 236/24',
+            razon_social: editedProduct.titular || 'N/A',
+            cuit: editedProduct.cuit,
+            marca: editedProduct.marca || 'N/A',
+            domicilio_legal: editedProduct.direccion_legal_empresa || 'N/A',
+            domicilio_planta: editedProduct.planta_fabricacion || editedProduct.direccion_legal_empresa || 'N/A',
+            telefono: '',
+            email: '',
+            codigo_producto: product.codificacion,
+            fabricante: editedProduct.fabricante || 'N/A',
+            identificacion_producto: editedProduct.producto || 'N/A',
+            fecha_lugar: new Date().toLocaleDateString('es-AR', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            }),
+            numero_djc: `DJC-${product.codificacion}`,
+            pdf_url: pdfUrl,
+            djc_source: 'manually_uploaded',
+            djc_version: 1,
+            is_active: true,
+            created_by: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      console.log('✅ DJC table synced with manually uploaded file');
+    } catch (error) {
+      console.error('Error syncing DJC table:', error);
+      throw error;
+    }
   };
 
   const getProductStatus = () => {

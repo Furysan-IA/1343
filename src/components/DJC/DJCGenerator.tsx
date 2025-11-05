@@ -476,6 +476,25 @@ const DJCGenerator: React.FC = () => {
         .from('djcs')
         .getPublicUrl(fileName);
 
+      // Check if there's an existing active DJC to deactivate
+      const { data: existingDJC } = await supabase
+        .from('djc')
+        .select('id, djc_version')
+        .eq('codigo_producto', previewData.codigo_producto)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      // If there's an existing active DJC, deactivate it
+      if (existingDJC) {
+        await supabase
+          .from('djc')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDJC.id);
+      }
+
       // Guardar registro en tabla djc con created_by
       console.log('Saving DJC to database with link:', previewData.enlace_declaracion);
 
@@ -503,6 +522,9 @@ const DJCGenerator: React.FC = () => {
           enlace_declaracion: previewData.enlace_declaracion || '',
           fecha_lugar: previewData.fecha_lugar,
           pdf_url: urlData.publicUrl,
+          djc_source: 'auto_generated',
+          djc_version: existingDJC ? (existingDJC.djc_version + 1) : 1,
+          is_active: true,
           created_by: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
