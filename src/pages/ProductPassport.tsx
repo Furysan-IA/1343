@@ -86,6 +86,8 @@ export default function ProductPassport() {
   const [djc, setDjc] = useState<DJC | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [showingRevision, setShowingRevision] = useState<boolean>(false);
 
   useEffect(() => {
     if (uuid) {
@@ -117,13 +119,38 @@ export default function ProductPassport() {
         return;
       }
 
-      setProduct(productData);
+      // Check if there are products sharing this product's QR (revisions)
+      const { data: sharingProducts, error: sharingError } = await supabasePublic
+        .from('products')
+        .select('*')
+        .eq('shared_qr_from', productData.codificacion)
+        .order('codificacion', { ascending: false });
 
-      // Buscar DJC asociada usando codificacion - priorizar la activa
+      if (sharingError) {
+        console.error('Error fetching sharing products:', sharingError);
+      }
+
+      const relatedProductsList = sharingProducts || [];
+      setRelatedProducts(relatedProductsList);
+
+      // If there are products sharing this QR, show the most recent revision
+      if (relatedProductsList.length > 0) {
+        // Get the latest revision (highest R# number)
+        const latestRevision = relatedProductsList[0];
+        console.log('🔄 Found revision products, showing latest:', latestRevision.codificacion);
+        setProduct(latestRevision);
+        setShowingRevision(true);
+      } else {
+        setProduct(productData);
+        setShowingRevision(false);
+      }
+
+      // Buscar DJC asociada usando codificacion del producto final (original o revisión)
+      const finalProduct = relatedProductsList.length > 0 ? relatedProductsList[0] : productData;
       const { data: djcData, error: djcError } = await supabasePublic
         .from('djc')
         .select('*')
-        .eq('codigo_producto', productData.codificacion)
+        .eq('codigo_producto', finalProduct.codificacion)
         .eq('is_active', true)
         .order('djc_version', { ascending: false })
         .order('created_at', { ascending: false })
@@ -264,6 +291,52 @@ export default function ProductPassport() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Revision Banner */}
+        {showingRevision && product.shared_qr_from && (
+          <div className="mb-6 bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-3 rounded-lg">
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">Información Actualizada</h3>
+                <p className="text-purple-100 mb-3">
+                  El código QR que escaneaste pertenece al producto base <span className="font-mono font-bold">{product.shared_qr_from}</span>.
+                  Se está mostrando la revisión más reciente: <span className="font-mono font-bold">{product.codificacion}</span>
+                </p>
+                <div className="flex items-center gap-4 text-sm text-purple-200">
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Certificado actualizado</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    <span>Última revisión</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {relatedProducts.length > 1 && (
+              <div className="mt-4 pt-4 border-t border-white/20">
+                <p className="text-sm text-purple-200 mb-2">Otras revisiones disponibles:</p>
+                <div className="flex flex-wrap gap-2">
+                  {relatedProducts.slice(1).map((rp) => (
+                    <span
+                      key={rp.codificacion}
+                      className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono"
+                    >
+                      {rp.codificacion}
+                    </span>
+                  ))}
+                  <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono">
+                    {product.shared_qr_from} (original)
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Hero Section */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-12 text-white">

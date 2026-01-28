@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { QRCodeModal } from './QRCodeModal';
 import { qrConfigService } from '../services/qrConfig.service';
-import { 
-  QrCode, RefreshCw, Download, CheckCircle, AlertCircle, 
-  Loader2, Eye, AlertTriangle, ExternalLink 
+import { sharedQRService, Product as SharedProduct } from '../services/sharedQRService';
+import {
+  QrCode, RefreshCw, Download, CheckCircle, AlertCircle,
+  Loader2, Eye, AlertTriangle, ExternalLink, Link as LinkIcon, Unlink, Search, X
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
@@ -21,6 +22,8 @@ interface Product {
   qr_link: string | null;
   qr_status: string | null;
   qr_generated_at: string | null;
+  shared_qr_from: string | null;
+  is_qr_master: boolean;
   updated_at: string;
 }
 
@@ -36,8 +39,19 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [qrLink, setQrLink] = useState<string>('');
   const [shouldRegenerateQR, setShouldRegenerateQR] = useState(false);
 
+  // QR Sharing states
+  const [showQRSharingSection, setShowQRSharingSection] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<SharedProduct[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [suggestedBaseProduct, setSuggestedBaseProduct] = useState<SharedProduct | null>(null);
+  const [productsUsingThisQR, setProductsUsingThisQR] = useState<SharedProduct[]>([]);
+  const [isLinking, setIsLinking] = useState(false);
+
   useEffect(() => {
     checkIfQRNeedsRegeneration();
+    checkForRevisionAndSuggest();
+    loadProductsUsingThisQR();
 
     // Configurar suscripción Realtime para este producto específico
     const channel = supabase
@@ -232,6 +246,90 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     };
   };
 
+  const checkForRevisionAndSuggest = async () => {
+    if (sharedQRService.isRevisionCode(product.codificacion) && !product.shared_qr_from) {
+      const baseProduct = await sharedQRService.findBaseProduct(product.codificacion);
+      if (baseProduct) {
+        setSuggestedBaseProduct(baseProduct);
+      }
+    }
+  };
+
+  const loadProductsUsingThisQR = async () => {
+    const products = await sharedQRService.getProductsUsingThisQR(product.codificacion);
+    setProductsUsingThisQR(products);
+  };
+
+  const handleSearchProducts = async (term: string) => {
+    setSearchTerm(term);
+    if (term.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await sharedQRService.searchProductsWithQR(term);
+      // Exclude current product and products already sharing
+      const filtered = results.filter(
+        p => p.codificacion !== product.codificacion && !p.shared_qr_from
+      );
+      setSearchResults(filtered);
+    } catch (error) {
+      console.error('Error searching products:', error);
+      toast.error('Error al buscar productos');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleLinkToSharedQR = async (sourceProduct: SharedProduct) => {
+    setIsLinking(true);
+    try {
+      const result = await sharedQRService.linkProductToSharedQR(
+        product.codificacion,
+        sourceProduct.codificacion
+      );
+
+      if (result.success) {
+        toast.success(`QR compartido desde ${sourceProduct.codificacion}`);
+        setShowQRSharingSection(false);
+        setSuggestedBaseProduct(null);
+        onUpdate();
+      } else {
+        toast.error(result.error || 'Error al vincular QR');
+      }
+    } catch (error) {
+      console.error('Error linking QR:', error);
+      toast.error('Error inesperado al vincular QR');
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const handleUnlinkSharedQR = async () => {
+    if (!confirm('¿Está seguro de desvincular este QR compartido? El producto volverá a usar su propio QR.')) {
+      return;
+    }
+
+    setIsLinking(true);
+    try {
+      const result = await sharedQRService.unlinkSharedQR(product.codificacion);
+
+      if (result.success) {
+        toast.success('QR desvinculado correctamente');
+        onUpdate();
+      } else {
+        toast.error(result.error || 'Error al desvincular QR');
+      }
+    } catch (error) {
+      console.error('Error unlinking QR:', error);
+      toast.error('Error inesperado al desvincular QR');
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
   const qrStatus = getQRStatus();
   const StatusIcon = qrStatus.icon;
 
@@ -327,6 +425,188 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Shared QR Info - If product is using shared QR */}
+      {product.shared_qr_from && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-2 flex-1">
+              <LinkIcon className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <p className="font-semibold text-blue-800 mb-1">
+                  QR Compartido
+                </p>
+                <p className="text-sm text-blue-700">
+                  Este producto está usando el código QR de: <span className="font-mono font-bold">{product.shared_qr_from}</span>
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Los clientes que escaneen el QR físico del producto original verán este producto actualizado.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleUnlinkSharedQR}
+              disabled={isLinking}
+              className="px-3 py-1.5 text-sm bg-white hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-lg flex items-center gap-1 transition-colors"
+            >
+              <Unlink className="w-4 h-4" />
+              Desvincular
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Products Using This QR - If other products are using this QR */}
+      {productsUsingThisQR.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-green-800 mb-1">
+                QR compartido por otros productos ({productsUsingThisQR.length})
+              </p>
+              <p className="text-sm text-green-700 mb-2">
+                Los siguientes productos están usando el QR de este producto:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {productsUsingThisQR.map(p => (
+                  <span
+                    key={p.codificacion}
+                    className="px-2 py-1 bg-white text-green-700 rounded text-xs font-mono border border-green-300"
+                  >
+                    {p.codificacion}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Base Product - If revision detected */}
+      {suggestedBaseProduct && !product.shared_qr_from && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-purple-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-purple-800 mb-1">
+                Revisión Detectada
+              </p>
+              <p className="text-sm text-purple-700 mb-3">
+                Detectamos que este producto es una revisión. ¿Desea reutilizar el QR del producto original?
+              </p>
+              <div className="bg-white rounded p-3 mb-3">
+                <p className="text-xs text-gray-600 mb-1">Producto original:</p>
+                <p className="font-mono font-bold text-purple-900">{suggestedBaseProduct.codificacion}</p>
+                <p className="text-sm text-gray-700">{suggestedBaseProduct.producto}</p>
+                {suggestedBaseProduct.qr_link && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    QR generado: {new Date(suggestedBaseProduct.qr_generated_at || '').toLocaleDateString('es-AR')}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => handleLinkToSharedQR(suggestedBaseProduct)}
+                disabled={isLinking}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                {isLinking ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Vinculando...
+                  </>
+                ) : (
+                  <>
+                    <LinkIcon className="w-4 h-4" />
+                    Reutilizar QR Original
+                  </>
+                )}
+              </button>
+            </div>
+            <button
+              onClick={() => setSuggestedBaseProduct(null)}
+              className="text-purple-400 hover:text-purple-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* QR Sharing Section */}
+      {!product.shared_qr_from && (
+        <div className="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <button
+            onClick={() => setShowQRSharingSection(!showQRSharingSection)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-2">
+              <LinkIcon className="w-5 h-5 text-gray-600" />
+              <span className="font-semibold text-gray-900">Reutilizar QR de Otro Producto</span>
+            </div>
+            <span className="text-sm text-gray-500">
+              {showQRSharingSection ? 'Ocultar' : 'Mostrar'}
+            </span>
+          </button>
+
+          {showQRSharingSection && (
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                Si este producto es una revisión o actualización, puede reutilizar el QR de un producto anterior.
+                Esto permite mantener el mismo código QR físico mientras se muestra información actualizada.
+              </p>
+
+              {/* Search Box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => handleSearchProducts(e.target.value)}
+                  placeholder="Buscar por código, nombre, marca..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-600 animate-spin" />
+                )}
+              </div>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2">
+                  {searchResults.map((result) => (
+                    <div
+                      key={result.codificacion}
+                      className="p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      onClick={() => handleLinkToSharedQR(result)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-mono font-bold text-gray-900">{result.codificacion}</p>
+                          <p className="text-sm text-gray-700">{result.producto}</p>
+                          <p className="text-xs text-gray-500">{result.marca} {result.modelo}</p>
+                          {result.qr_generated_at && (
+                            <p className="text-xs text-green-600 mt-1">
+                              QR generado: {new Date(result.qr_generated_at).toLocaleDateString('es-AR')}
+                            </p>
+                          )}
+                        </div>
+                        <LinkIcon className="w-5 h-5 text-purple-600" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchTerm.length >= 2 && searchResults.length === 0 && !isSearching && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No se encontraron productos con QR generado
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
