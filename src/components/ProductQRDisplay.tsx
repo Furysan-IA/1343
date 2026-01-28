@@ -47,6 +47,9 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [suggestedBaseProduct, setSuggestedBaseProduct] = useState<SharedProduct | null>(null);
   const [productsUsingThisQR, setProductsUsingThisQR] = useState<SharedProduct[]>([]);
   const [isLinking, setIsLinking] = useState(false);
+  const [availableProducts, setAvailableProducts] = useState<SharedProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'same_cuit' | 'same_brand' | 'masters'>('all');
 
   useEffect(() => {
     checkIfQRNeedsRegeneration();
@@ -260,26 +263,73 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     setProductsUsingThisQR(products);
   };
 
-  const handleSearchProducts = async (term: string) => {
-    setSearchTerm(term);
-    if (term.length < 2) {
-      setSearchResults([]);
-      return;
+  const loadAvailableProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      // Load recent products with QR generated
+      const { data, error } = await supabase
+        .from('products')
+        .select('codificacion, producto, marca, modelo, cuit, titular, qr_link, qr_generated_at, qr_path, is_qr_master, shared_qr_from')
+        .not('qr_path', 'is', null)
+        .is('shared_qr_from', null) // Only products that own their QR
+        .neq('codificacion', product.codificacion)
+        .order('qr_generated_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      setAvailableProducts(data || []);
+    } catch (error) {
+      console.error('Error loading available products:', error);
+      toast.error('Error al cargar productos disponibles');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  const getFilteredProducts = () => {
+    let filtered = availableProducts;
+
+    switch (filterType) {
+      case 'same_cuit':
+        filtered = availableProducts.filter(p => p.cuit === product.cuit);
+        break;
+      case 'same_brand':
+        filtered = availableProducts.filter(p => p.marca === product.marca);
+        break;
+      case 'masters':
+        filtered = availableProducts.filter(p => p.is_qr_master);
+        break;
+      default:
+        // 'all' - no filter
+        break;
     }
 
-    setIsSearching(true);
-    try {
-      const results = await sharedQRService.searchProductsWithQR(term);
-      // Exclude current product and products already sharing
-      const filtered = results.filter(
-        p => p.codificacion !== product.codificacion && !p.shared_qr_from
+    // Apply search term if exists
+    if (searchTerm.length >= 2) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.codificacion.toLowerCase().includes(term) ||
+        p.producto?.toLowerCase().includes(term) ||
+        p.marca?.toLowerCase().includes(term) ||
+        p.modelo?.toLowerCase().includes(term)
       );
-      setSearchResults(filtered);
-    } catch (error) {
-      console.error('Error searching products:', error);
-      toast.error('Error al buscar productos');
-    } finally {
-      setIsSearching(false);
+    }
+
+    return filtered;
+  };
+
+  const handleSearchProducts = (term: string) => {
+    setSearchTerm(term);
+  };
+
+  const handleToggleQRSharingSection = () => {
+    const newState = !showQRSharingSection;
+    setShowQRSharingSection(newState);
+
+    // Load products when opening section
+    if (newState && availableProducts.length === 0) {
+      loadAvailableProducts();
     }
   };
 
@@ -539,7 +589,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       {!product.shared_qr_from && (
         <div className="bg-white border-2 border-gray-200 rounded-lg p-4">
           <button
-            onClick={() => setShowQRSharingSection(!showQRSharingSection)}
+            onClick={handleToggleQRSharingSection}
             className="w-full flex items-center justify-between text-left"
           >
             <div className="flex items-center gap-2">
@@ -568,15 +618,63 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
                   placeholder="Buscar por código, nombre, marca..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
-                {isSearching && (
-                  <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-600 animate-spin" />
-                )}
               </div>
 
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2">
-                  {searchResults.map((result) => (
+              {/* Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filterType === 'all'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Todos ({availableProducts.length})
+                </button>
+                <button
+                  onClick={() => setFilterType('same_cuit')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filterType === 'same_cuit'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Mismo titular ({availableProducts.filter(p => p.cuit === product.cuit).length})
+                </button>
+                <button
+                  onClick={() => setFilterType('same_brand')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filterType === 'same_brand'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Misma marca ({availableProducts.filter(p => p.marca === product.marca).length})
+                </button>
+                <button
+                  onClick={() => setFilterType('masters')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filterType === 'masters'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Solo maestros ({availableProducts.filter(p => p.is_qr_master).length})
+                </button>
+              </div>
+
+              {/* Loading State */}
+              {isLoadingProducts && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                </div>
+              )}
+
+              {/* Products List */}
+              {!isLoadingProducts && getFilteredProducts().length > 0 && (
+                <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2">
+                  {getFilteredProducts().slice(0, 20).map((result) => (
                     <div
                       key={result.codificacion}
                       className="p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
@@ -584,25 +682,51 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="font-mono font-bold text-gray-900">{result.codificacion}</p>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-mono font-bold text-gray-900">{result.codificacion}</p>
+                            {result.is_qr_master && (
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                Maestro
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-700">{result.producto}</p>
                           <p className="text-xs text-gray-500">{result.marca} {result.modelo}</p>
-                          {result.qr_generated_at && (
-                            <p className="text-xs text-green-600 mt-1">
-                              QR generado: {new Date(result.qr_generated_at).toLocaleDateString('es-AR')}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-3 mt-1">
+                            {result.qr_generated_at && (
+                              <p className="text-xs text-green-600">
+                                QR: {new Date(result.qr_generated_at).toLocaleDateString('es-AR')}
+                              </p>
+                            )}
+                            {result.titular && (
+                              <p className="text-xs text-gray-500">
+                                {result.titular.substring(0, 30)}...
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <LinkIcon className="w-5 h-5 text-purple-600" />
+                        <LinkIcon className="w-5 h-5 text-purple-600 flex-shrink-0 ml-2" />
                       </div>
                     </div>
                   ))}
+                  {getFilteredProducts().length > 20 && (
+                    <p className="text-xs text-gray-500 text-center py-2">
+                      Mostrando 20 de {getFilteredProducts().length} productos. Use el buscador para refinar.
+                    </p>
+                  )}
                 </div>
               )}
 
-              {searchTerm.length >= 2 && searchResults.length === 0 && !isSearching && (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  No se encontraron productos con QR generado
+              {/* Empty State */}
+              {!isLoadingProducts && availableProducts.length > 0 && getFilteredProducts().length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-8">
+                  No se encontraron productos con los filtros aplicados
+                </p>
+              )}
+
+              {!isLoadingProducts && availableProducts.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-8">
+                  No hay productos con QR generado disponibles
                 </p>
               )}
             </div>
