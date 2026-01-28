@@ -49,7 +49,6 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [isLinking, setIsLinking] = useState(false);
   const [availableProducts, setAvailableProducts] = useState<SharedProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'same_cuit' | 'same_brand' | 'masters'>('all');
   const [selectedProductForSharing, setSelectedProductForSharing] = useState<SharedProduct | null>(null);
 
   useEffect(() => {
@@ -267,17 +266,29 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const loadAvailableProducts = async () => {
     setIsLoadingProducts(true);
     try {
-      // Load recent products with QR generated
+      console.log('🔍 Cargando TODOS los productos con QR...');
+      console.log('📦 Producto actual:', product.codificacion);
+
+      // Cargar TODOS los productos que tienen QR generado (qr_link o qr_path)
       const { data, error } = await supabase
         .from('products')
         .select('codificacion, producto, marca, modelo, cuit, titular, qr_link, qr_generated_at, qr_path, is_qr_master, shared_qr_from')
-        .not('qr_path', 'is', null)
-        .is('shared_qr_from', null) // Only products that own their QR
+        .or('qr_link.not.is.null,qr_path.not.is.null')
         .neq('codificacion', product.codificacion)
-        .order('qr_generated_at', { ascending: false })
-        .limit(50);
+        .order('producto', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error en consulta:', error);
+        throw error;
+      }
+
+      console.log('✅ Total productos con QR encontrados:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('📋 Ejemplos de productos:');
+        data.slice(0, 5).forEach(p => {
+          console.log(`  - ${p.codificacion}: ${p.producto} (${p.qr_link ? 'link✓' : 'solo path'})`);
+        });
+      }
 
       setAvailableProducts(data || []);
     } catch (error) {
@@ -291,29 +302,15 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const getFilteredProducts = () => {
     let filtered = availableProducts;
 
-    switch (filterType) {
-      case 'same_cuit':
-        filtered = availableProducts.filter(p => p.cuit === product.cuit);
-        break;
-      case 'same_brand':
-        filtered = availableProducts.filter(p => p.marca === product.marca);
-        break;
-      case 'masters':
-        filtered = availableProducts.filter(p => p.is_qr_master);
-        break;
-      default:
-        // 'all' - no filter
-        break;
-    }
-
-    // Apply search term if exists
-    if (searchTerm.length >= 2) {
-      const term = searchTerm.toLowerCase();
+    // Solo aplicar búsqueda si hay término
+    if (searchTerm.trim().length >= 2) {
+      const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(p =>
         p.codificacion.toLowerCase().includes(term) ||
         p.producto?.toLowerCase().includes(term) ||
         p.marca?.toLowerCase().includes(term) ||
-        p.modelo?.toLowerCase().includes(term)
+        p.modelo?.toLowerCase().includes(term) ||
+        p.titular?.toLowerCase().includes(term)
       );
     }
 
@@ -348,7 +345,6 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     if (!newState) {
       setSelectedProductForSharing(null);
       setSearchTerm('');
-      setFilterType('all');
     }
   };
 
@@ -366,7 +362,6 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         setSuggestedBaseProduct(null);
         setSelectedProductForSharing(null);
         setSearchTerm('');
-        setFilterType('all');
         onUpdate();
       } else {
         toast.error(result.error || 'Error al vincular QR');
@@ -640,95 +635,79 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
               {!isLoadingProducts && availableProducts.length === 0 && (
                 <div className="text-center py-8">
-                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">
-                    No hay productos con QR generado disponibles
+                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    No hay productos con QR disponibles
                   </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Se buscaron todos los productos con QR generado (qr_link o qr_path) en la base de datos
+                  </p>
+                  <button
+                    onClick={loadAvailableProducts}
+                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors flex items-center gap-2 mx-auto"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Recargar lista
+                  </button>
                 </div>
               )}
 
               {!isLoadingProducts && availableProducts.length > 0 && (
                 <>
-                  {/* Search Box */}
+                  {/* Info sobre total de productos */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      Se encontraron <strong>{availableProducts.length}</strong> productos con QR generado
+                    </p>
+                  </div>
+
+                  {/* Search Box (opcional para filtrar la lista) */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => handleSearchProducts(e.target.value)}
-                      placeholder="Buscar por código, nombre, marca, modelo..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Buscar por código, nombre, marca, modelo, titular..."
+                      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                  </div>
-
-                  {/* Filter Buttons */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setFilterType('all')}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        filterType === 'all'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Todos ({availableProducts.length})
-                    </button>
-                    <button
-                      onClick={() => setFilterType('same_cuit')}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        filterType === 'same_cuit'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Mismo titular ({availableProducts.filter(p => p.cuit === product.cuit).length})
-                    </button>
-                    <button
-                      onClick={() => setFilterType('same_brand')}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        filterType === 'same_brand'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Misma marca ({availableProducts.filter(p => p.marca === product.marca).length})
-                    </button>
-                    <button
-                      onClick={() => setFilterType('masters')}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        filterType === 'masters'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Solo maestros ({availableProducts.filter(p => p.is_qr_master).length})
-                    </button>
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Products Dropdown Selector */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Seleccionar producto con QR:
+                      Seleccionar producto del cual reutilizar el QR:
                     </label>
                     <select
                       value={selectedProductForSharing?.codificacion || ''}
                       onChange={(e) => handleSelectProductForSharing(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       disabled={getFilteredProducts().length === 0}
+                      size={Math.min(10, getFilteredProducts().length + 1)}
                     >
                       <option value="">
                         {getFilteredProducts().length === 0
-                          ? 'No hay productos con los filtros aplicados'
-                          : 'Seleccione un producto...'}
+                          ? searchTerm ? 'No se encontraron productos con ese criterio' : 'No hay productos disponibles'
+                          : `-- Seleccione un producto (${getFilteredProducts().length} disponibles) --`}
                       </option>
                       {getFilteredProducts().map((result) => {
                         const qrDate = result.qr_generated_at
                           ? new Date(result.qr_generated_at).toLocaleDateString('es-AR')
                           : 'Sin fecha';
-                        const masterLabel = result.is_qr_master ? ' [Maestro]' : '';
+                        const masterLabel = result.is_qr_master ? ' 🌟' : '';
+                        const sharedLabel = result.shared_qr_from ? ' (usa QR compartido)' : '';
+
                         return (
                           <option key={result.codificacion} value={result.codificacion}>
-                            [{result.codificacion}] {result.producto || 'Sin nombre'} - {result.marca || 'Sin marca'} (QR: {qrDate}){masterLabel}
+                            {result.codificacion} | {result.producto || 'Sin nombre'} | {result.marca || 'Sin marca'} | Titular: {result.titular || 'N/A'}{masterLabel}{sharedLabel}
                           </option>
                         );
                       })}
