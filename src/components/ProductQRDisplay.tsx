@@ -50,6 +50,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [availableProducts, setAvailableProducts] = useState<SharedProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'same_cuit' | 'same_brand' | 'masters'>('all');
+  const [selectedProductForSharing, setSelectedProductForSharing] = useState<SharedProduct | null>(null);
 
   useEffect(() => {
     checkIfQRNeedsRegeneration();
@@ -323,6 +324,17 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     setSearchTerm(term);
   };
 
+  const handleSelectProductForSharing = (codificacion: string) => {
+    const product = availableProducts.find(p => p.codificacion === codificacion);
+    setSelectedProductForSharing(product || null);
+  };
+
+  const handleConfirmLinkToSharedQR = async () => {
+    if (!selectedProductForSharing) return;
+    await handleLinkToSharedQR(selectedProductForSharing);
+    setSelectedProductForSharing(null);
+  };
+
   const handleToggleQRSharingSection = () => {
     const newState = !showQRSharingSection;
     setShowQRSharingSection(newState);
@@ -330,6 +342,13 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
     // Load products when opening section
     if (newState && availableProducts.length === 0) {
       loadAvailableProducts();
+    }
+
+    // Clear selection when closing section
+    if (!newState) {
+      setSelectedProductForSharing(null);
+      setSearchTerm('');
+      setFilterType('all');
     }
   };
 
@@ -345,6 +364,9 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         toast.success(`QR compartido desde ${sourceProduct.codificacion}`);
         setShowQRSharingSection(false);
         setSuggestedBaseProduct(null);
+        setSelectedProductForSharing(null);
+        setSearchTerm('');
+        setFilterType('all');
         onUpdate();
       } else {
         toast.error(result.error || 'Error al vincular QR');
@@ -608,126 +630,186 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
                 Esto permite mantener el mismo código QR físico mientras se muestra información actualizada.
               </p>
 
-              {/* Search Box */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => handleSearchProducts(e.target.value)}
-                  placeholder="Buscar por código, nombre, marca..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Filter Buttons */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filterType === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Todos ({availableProducts.length})
-                </button>
-                <button
-                  onClick={() => setFilterType('same_cuit')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filterType === 'same_cuit'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Mismo titular ({availableProducts.filter(p => p.cuit === product.cuit).length})
-                </button>
-                <button
-                  onClick={() => setFilterType('same_brand')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filterType === 'same_brand'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Misma marca ({availableProducts.filter(p => p.marca === product.marca).length})
-                </button>
-                <button
-                  onClick={() => setFilterType('masters')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filterType === 'masters'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Solo maestros ({availableProducts.filter(p => p.is_qr_master).length})
-                </button>
-              </div>
-
               {/* Loading State */}
               {isLoadingProducts && (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                  <span className="ml-2 text-sm text-gray-600">Cargando productos...</span>
                 </div>
-              )}
-
-              {/* Products List */}
-              {!isLoadingProducts && getFilteredProducts().length > 0 && (
-                <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2">
-                  {getFilteredProducts().slice(0, 20).map((result) => (
-                    <div
-                      key={result.codificacion}
-                      className="p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      onClick={() => handleLinkToSharedQR(result)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-mono font-bold text-gray-900">{result.codificacion}</p>
-                            {result.is_qr_master && (
-                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                                Maestro
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-700">{result.producto}</p>
-                          <p className="text-xs text-gray-500">{result.marca} {result.modelo}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            {result.qr_generated_at && (
-                              <p className="text-xs text-green-600">
-                                QR: {new Date(result.qr_generated_at).toLocaleDateString('es-AR')}
-                              </p>
-                            )}
-                            {result.titular && (
-                              <p className="text-xs text-gray-500">
-                                {result.titular.substring(0, 30)}...
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <LinkIcon className="w-5 h-5 text-purple-600 flex-shrink-0 ml-2" />
-                      </div>
-                    </div>
-                  ))}
-                  {getFilteredProducts().length > 20 && (
-                    <p className="text-xs text-gray-500 text-center py-2">
-                      Mostrando 20 de {getFilteredProducts().length} productos. Use el buscador para refinar.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Empty State */}
-              {!isLoadingProducts && availableProducts.length > 0 && getFilteredProducts().length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-8">
-                  No se encontraron productos con los filtros aplicados
-                </p>
               )}
 
               {!isLoadingProducts && availableProducts.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-8">
-                  No hay productos con QR generado disponibles
-                </p>
+                <div className="text-center py-8">
+                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">
+                    No hay productos con QR generado disponibles
+                  </p>
+                </div>
+              )}
+
+              {!isLoadingProducts && availableProducts.length > 0 && (
+                <>
+                  {/* Search Box */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => handleSearchProducts(e.target.value)}
+                      placeholder="Buscar por código, nombre, marca, modelo..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Filter Buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        filterType === 'all'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Todos ({availableProducts.length})
+                    </button>
+                    <button
+                      onClick={() => setFilterType('same_cuit')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        filterType === 'same_cuit'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Mismo titular ({availableProducts.filter(p => p.cuit === product.cuit).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterType('same_brand')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        filterType === 'same_brand'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Misma marca ({availableProducts.filter(p => p.marca === product.marca).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterType('masters')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        filterType === 'masters'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Solo maestros ({availableProducts.filter(p => p.is_qr_master).length})
+                    </button>
+                  </div>
+
+                  {/* Products Dropdown Selector */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Seleccionar producto con QR:
+                    </label>
+                    <select
+                      value={selectedProductForSharing?.codificacion || ''}
+                      onChange={(e) => handleSelectProductForSharing(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      disabled={getFilteredProducts().length === 0}
+                    >
+                      <option value="">
+                        {getFilteredProducts().length === 0
+                          ? 'No hay productos con los filtros aplicados'
+                          : 'Seleccione un producto...'}
+                      </option>
+                      {getFilteredProducts().map((result) => {
+                        const qrDate = result.qr_generated_at
+                          ? new Date(result.qr_generated_at).toLocaleDateString('es-AR')
+                          : 'Sin fecha';
+                        const masterLabel = result.is_qr_master ? ' [Maestro]' : '';
+                        return (
+                          <option key={result.codificacion} value={result.codificacion}>
+                            [{result.codificacion}] {result.producto || 'Sin nombre'} - {result.marca || 'Sin marca'} (QR: {qrDate}){masterLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {getFilteredProducts().length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {getFilteredProducts().length} producto(s) disponible(s)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Selected Product Info Panel */}
+                  {selectedProductForSharing && (
+                    <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5" />
+                        Producto Seleccionado
+                      </h4>
+                      <div className="bg-white rounded-lg p-3 mb-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">Código:</p>
+                            <p className="font-mono font-bold text-gray-900">{selectedProductForSharing.codificacion}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">Producto:</p>
+                            <p className="text-sm text-gray-900">{selectedProductForSharing.producto || 'Sin nombre'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">Marca:</p>
+                            <p className="text-sm text-gray-900">{selectedProductForSharing.marca || 'Sin marca'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">Modelo:</p>
+                            <p className="text-sm text-gray-900">{selectedProductForSharing.modelo || 'Sin modelo'}</p>
+                          </div>
+                          {selectedProductForSharing.titular && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-0.5">Titular:</p>
+                              <p className="text-sm text-gray-900">{selectedProductForSharing.titular}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">QR Generado:</p>
+                            <p className="text-sm text-green-600 font-medium">
+                              {selectedProductForSharing.qr_generated_at
+                                ? new Date(selectedProductForSharing.qr_generated_at).toLocaleDateString('es-AR')
+                                : 'Sin fecha'}
+                            </p>
+                          </div>
+                          {selectedProductForSharing.is_qr_master && (
+                            <div className="flex items-center">
+                              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                QR Maestro
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Confirm Button */}
+                      <button
+                        onClick={handleConfirmLinkToSharedQR}
+                        disabled={isLinking}
+                        className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isLinking ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Vinculando QR...
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon className="w-5 h-5" />
+                            Confirmar y Reutilizar este QR
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
