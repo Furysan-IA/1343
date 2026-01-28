@@ -269,11 +269,10 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       console.log('🔍 Cargando TODOS los productos con QR...');
       console.log('📦 Producto actual:', product.codificacion);
 
-      // Cargar TODOS los productos que tienen QR generado (qr_link o qr_path)
+      // Cargar todos los productos excepto el actual
       const { data, error } = await supabase
         .from('products')
         .select('codificacion, producto, marca, modelo, cuit, titular, qr_link, qr_generated_at, qr_path, is_qr_master, shared_qr_from')
-        .or('qr_link.not.is.null,qr_path.not.is.null')
         .neq('codificacion', product.codificacion)
         .order('producto', { ascending: true });
 
@@ -282,15 +281,23 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         throw error;
       }
 
-      console.log('✅ Total productos con QR encontrados:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('📋 Ejemplos de productos:');
-        data.slice(0, 5).forEach(p => {
-          console.log(`  - ${p.codificacion}: ${p.producto} (${p.qr_link ? 'link✓' : 'solo path'})`);
+      console.log('📊 Total productos encontrados:', data?.length || 0);
+
+      // Filtrar solo los productos que tienen QR generado (qr_link O qr_path)
+      const productsWithQR = data?.filter(p => p.qr_link || p.qr_path) || [];
+
+      console.log('✅ Productos con QR (qr_link o qr_path):', productsWithQR.length);
+      if (productsWithQR.length > 0) {
+        console.log('📋 Primeros 5 productos con QR:');
+        productsWithQR.slice(0, 5).forEach(p => {
+          console.log(`  - ${p.codificacion}: ${p.producto}`);
+          console.log(`    qr_link: ${p.qr_link ? '✓' : '✗'}`);
+          console.log(`    qr_path: ${p.qr_path ? '✓' : '✗'}`);
+          console.log(`    shared_qr_from: ${p.shared_qr_from || 'ninguno'}`);
         });
       }
 
-      setAvailableProducts(data || []);
+      setAvailableProducts(productsWithQR);
     } catch (error) {
       console.error('Error loading available products:', error);
       toast.error('Error al cargar productos disponibles');
