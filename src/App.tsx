@@ -13,6 +13,7 @@ import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
 import { QRLanding } from './pages/QRLanding';
 import ProductPassport from './pages/ProductPassport';
+import { AuditHistory } from './pages/AuditHistory';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
@@ -56,6 +57,7 @@ function AppContent() {
         <Route path="/validation" element={<InformationValidation />} />
         <Route path="/data-upload" element={<DataUploadPage />} />
         <Route path="/data-update" element={<DataUpdate />} />
+        <Route path="/audit-history" element={<AuditHistory />} />
         <Route path="/djc" element={<DJCManagement />} />
         <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
