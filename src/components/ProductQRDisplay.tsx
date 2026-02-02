@@ -272,7 +272,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       // Cargar todos los productos excepto el actual
       const { data, error } = await supabase
         .from('products')
-        .select('codificacion, producto, marca, modelo, cuit, titular, qr_link, qr_generated_at, qr_path, is_qr_master, shared_qr_from')
+        .select('codificacion, producto, marca, modelo, cuit, titular, qr_link, qr_generated_at, qr_path, qr_status, is_qr_master, shared_qr_from')
         .neq('codificacion', product.codificacion)
         .order('producto', { ascending: true });
 
@@ -283,10 +283,23 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
       console.log('📊 Total productos encontrados:', data?.length || 0);
 
-      // Filtrar solo los productos que tienen QR generado (qr_link O qr_path)
-      const productsWithQR = data?.filter(p => p.qr_link || p.qr_path) || [];
+      // Mostrar estadísticas de QR
+      const conQRLink = data?.filter(p => p.qr_link).length || 0;
+      const conQRPath = data?.filter(p => p.qr_path).length || 0;
+      const conQRStatus = data?.filter(p => p.qr_status === 'generated').length || 0;
+      console.log('📊 Estadísticas QR:');
+      console.log(`  - Con qr_link: ${conQRLink}`);
+      console.log(`  - Con qr_path: ${conQRPath}`);
+      console.log(`  - Con qr_status='generated': ${conQRStatus}`);
 
-      console.log('✅ Productos con QR (qr_link o qr_path):', productsWithQR.length);
+      // Filtrar solo los productos que tienen QR generado (qr_link, qr_path o qr_status = 'generated')
+      const productsWithQR = data?.filter(p =>
+        p.qr_link ||
+        p.qr_path ||
+        p.qr_status === 'generated'
+      ) || [];
+
+      console.log('✅ Productos con QR (qr_link o qr_path o qr_status=generated):', productsWithQR.length);
       if (productsWithQR.length > 0) {
         console.log('📋 Primeros 5 productos con QR:');
         productsWithQR.slice(0, 5).forEach(p => {
