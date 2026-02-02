@@ -31,6 +31,7 @@ interface DJCPreviewData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 interface DJCPreviewModalProps {
@@ -54,7 +55,14 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Vista Previa DJC</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-gray-900">Vista Previa DJC</h2>
+            {djcData.isSimplified && (
+              <span className="px-3 py-1 bg-amber-100 text-amber-800 text-sm font-medium rounded-full">
+                Versión Simplificada
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -178,12 +186,14 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     </td>
                     <td className="p-2">{djcData.codigo_producto}</td>
                   </tr>
-                  <tr className="border-b border-gray-300">
-                    <td className="p-2 font-semibold bg-gray-50">
-                      Fabricante (Nombre y dirección de la planta de producción)
-                    </td>
-                    <td className="p-2">{djcData.fabricante}</td>
-                  </tr>
+                  {!djcData.isSimplified && (
+                    <tr className="border-b border-gray-300">
+                      <td className="p-2 font-semibold bg-gray-50">
+                        Fabricante (Nombre y dirección de la planta de producción)
+                      </td>
+                      <td className="p-2">{djcData.fabricante}</td>
+                    </tr>
+                  )}
                   <tr className="border-b border-gray-300">
                     <td className="p-2 font-semibold bg-gray-50">
                       Identificación del producto

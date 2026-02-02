@@ -84,6 +84,7 @@ interface DJCPreviewData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 const DJCGenerator: React.FC = () => {
@@ -111,6 +112,7 @@ const DJCGenerator: React.FC = () => {
   });
   const [useCustomLink, setUseCustomLink] = useState(false);
   const [customLink, setCustomLink] = useState('');
+  const [useSimplifiedVersion, setUseSimplifiedVersion] = useState(false);
 
   const resolutions = [
     { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
@@ -426,7 +428,8 @@ const DJCGenerator: React.FC = () => {
       laboratorio_ensayos: selectedProduct.laboratorio || '',
       informe_ensayos: selectedProduct.informe_ensayo_nro || '',
       enlace_declaracion: qrLink,
-      fecha_lugar: currentDate
+      fecha_lugar: currentDate,
+      isSimplified: useSimplifiedVersion
     };
 
     setPreviewData(data);
@@ -525,6 +528,7 @@ const DJCGenerator: React.FC = () => {
           djc_source: 'auto_generated',
           djc_version: existingDJC ? (existingDJC.djc_version + 1) : 1,
           is_active: true,
+          is_simplified: previewData.isSimplified || false,
           created_by: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -584,6 +588,7 @@ const DJCGenerator: React.FC = () => {
     setRepresentante({ nombre: '', domicilio: '', cuit: '' });
     setUseCustomLink(false);
     setCustomLink('');
+    setUseSimplifiedVersion(false);
     setDjcHistory([]);
     setShowHistory(false);
     setPreviewData(null);
@@ -1035,6 +1040,29 @@ const DJCGenerator: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Versión Simplificada */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="useSimplifiedVersion"
+                checked={useSimplifiedVersion}
+                onChange={(e) => setUseSimplifiedVersion(e.target.checked)}
+                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500 mt-0.5"
+              />
+              <div className="flex-1">
+                <label htmlFor="useSimplifiedVersion" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Generar versión simplificada de DJC
+                </label>
+                <p className="text-xs text-gray-600 mt-1">
+                  La versión simplificada omitirá el campo "Fabricante (Nombre y dirección de la planta de producción)" en la sección de Información del Producto.
+                </p>
+              </div>
             </div>
           </div>
         )}

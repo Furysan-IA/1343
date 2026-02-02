@@ -30,6 +30,7 @@ interface DJCData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 export class DJCPdfGenerator {
@@ -285,11 +286,19 @@ export class DJCPdfGenerator {
     this.checkPageBreak();
     this.addSectionHeader('(4) INFORMACIÓN DEL PRODUCTO');
     this.addTableRow('Código de identificación único del producto (Autodeterminado)', djcData.codigo_producto, true);
-    this.addTableRow('Fabricante (Nombre y dirección de la planta de producción)', djcData.fabricante);
-    this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
-    this.addTableRow('Marca/s', djcData.producto_marca);
-    this.addTableRow('Modelo/s', djcData.producto_modelo, true);
-    this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
+    if (!djcData.isSimplified) {
+      this.addTableRow('Fabricante (Nombre y dirección de la planta de producción)', djcData.fabricante);
+      this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
+      this.addTableRow('Marca/s', djcData.producto_marca);
+      this.addTableRow('Modelo/s', djcData.producto_modelo, true);
+      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
+    } else {
+      // En versión simplificada, ajustar el patrón de colores ya que omitimos fabricante
+      this.addTableRow('Identificación del producto', djcData.identificacion_producto);
+      this.addTableRow('Marca/s', djcData.producto_marca, true);
+      this.addTableRow('Modelo/s', djcData.producto_modelo);
+      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas, true);
+    }
     this.yPos += 3;
 
     // Sección 5: Normas y Evaluación

@@ -30,6 +30,7 @@ interface DJCData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 const formatFieldValue = (value: string | null | undefined): string => {
@@ -215,10 +216,12 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           <td class="label">Código de identificación único del producto (Autodeterminado)</td>
           <td class="value">${djcData.codigo_producto}</td>
         </tr>
+        ${!djcData.isSimplified ? `
         <tr>
           <td class="label">Fabricante (Nombre y dirección de la planta de producción)</td>
           <td class="value">${djcData.fabricante}</td>
         </tr>
+        ` : ''}
         <tr>
           <td class="label">Identificación del producto</td>
           <td class="value">${djcData.identificacion_producto}</td>
