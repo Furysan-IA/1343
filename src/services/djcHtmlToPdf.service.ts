@@ -15,6 +15,7 @@ interface DJCData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -221,7 +222,12 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           <td class="label">Fabricante (Nombre y dirección de la planta de producción)</td>
           <td class="value">${djcData.fabricante}</td>
         </tr>
-        ` : ''}
+        ` : `
+        <tr>
+          <td class="label">Fabricante</td>
+          <td class="value">${djcData.codigo_version_simplificada || djcData.fabricante}</td>
+        </tr>
+        `}
         <tr>
           <td class="label">Identificación del producto</td>
           <td class="value">${djcData.identificacion_producto}</td>

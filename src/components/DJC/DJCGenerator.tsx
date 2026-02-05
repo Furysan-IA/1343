@@ -33,6 +33,7 @@ interface Product {
   origen?: string;
   fabricante?: string;
   planta_fabricacion?: string;
+  codigo_version_simplificada?: string;
   normas_aplicacion?: string;
   informe_ensayo_nro?: string;
   fecha_emision?: string;
@@ -69,6 +70,7 @@ interface DJCPreviewData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -412,6 +414,7 @@ const DJCGenerator: React.FC = () => {
       representante_cuit: representante.cuit,
       codigo_producto: selectedProduct.codificacion,
       fabricante: selectedProduct.fabricante || '',
+      codigo_version_simplificada: selectedProduct.codigo_version_simplificada || '',
       identificacion_producto: selectedProduct.producto || '',
       producto_marca: selectedProduct.marca || '',
       producto_modelo: selectedProduct.modelo || '',

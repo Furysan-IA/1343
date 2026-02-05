@@ -20,6 +20,7 @@ interface Product {
   direccion_legal_empresa: string | null;
   fabricante: string | null;
   planta_fabricacion: string | null;
+  codigo_version_simplificada: string | null;
   origen: string | null;
   producto: string | null;
   marca: string | null;
@@ -447,6 +448,33 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                     !editedProduct.planta_fabricacion ? 'border-red-300' : 'border-gray-300'
                   } ${editMode ? 'focus:ring-2 focus:ring-purple-500' : 'bg-gray-50'}`}
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Código Versión Simplificada
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editedProduct.codigo_version_simplificada || ''}
+                    onChange={(e) => setEditedProduct(prev => ({ ...prev, codigo_version_simplificada: e.target.value }))}
+                    disabled={!editMode}
+                    placeholder="Ej: Si (Fabrica)"
+                    className={`w-full px-4 py-2 border rounded-lg ${
+                      editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                    }`}
+                  />
+                  {editedProduct.codigo_version_simplificada && (
+                    <div className="mt-1 flex items-center gap-1 text-xs text-blue-600">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Este producto tiene versión simplificada disponible</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Se usa en la versión simplificada de DJC para mostrar información del fabricante
+                </p>
               </div>
 
               <div className="md:col-span-2">

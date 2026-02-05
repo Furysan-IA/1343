@@ -16,6 +16,7 @@ interface DJCPreviewData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -186,12 +187,19 @@ export const DJCPreviewModal: React.FC<DJCPreviewModalProps> = ({
                     </td>
                     <td className="p-2">{djcData.codigo_producto}</td>
                   </tr>
-                  {!djcData.isSimplified && (
+                  {!djcData.isSimplified ? (
                     <tr className="border-b border-gray-300">
                       <td className="p-2 font-semibold bg-gray-50">
                         Fabricante (Nombre y dirección de la planta de producción)
                       </td>
                       <td className="p-2">{djcData.fabricante}</td>
+                    </tr>
+                  ) : (
+                    <tr className="border-b border-gray-300">
+                      <td className="p-2 font-semibold bg-gray-50">
+                        Fabricante
+                      </td>
+                      <td className="p-2">{djcData.codigo_version_simplificada || djcData.fabricante}</td>
                     </tr>
                   )}
                   <tr className="border-b border-gray-300">

@@ -15,6 +15,7 @@ interface DJCData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -293,11 +294,12 @@ export class DJCPdfGenerator {
       this.addTableRow('Modelo/s', djcData.producto_modelo, true);
       this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
     } else {
-      // En versión simplificada, ajustar el patrón de colores ya que omitimos fabricante
-      this.addTableRow('Identificación del producto', djcData.identificacion_producto);
-      this.addTableRow('Marca/s', djcData.producto_marca, true);
-      this.addTableRow('Modelo/s', djcData.producto_modelo);
-      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas, true);
+      // En versión simplificada, mostrar solo fabricante con codigo_version_simplificada
+      this.addTableRow('Fabricante', djcData.codigo_version_simplificada || djcData.fabricante);
+      this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
+      this.addTableRow('Marca/s', djcData.producto_marca);
+      this.addTableRow('Modelo/s', djcData.producto_modelo, true);
+      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
     }
     this.yPos += 3;
 

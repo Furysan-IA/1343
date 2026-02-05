@@ -11,7 +11,8 @@ export class DataMapper {
     contacto: ['contacto', 'persona contacto', 'nombre contacto'],
     codificacion: ['codificacion', 'codificación', 'codigo', 'código', 'cod', 'nro certificado', 'numero certificado'],
     tipo_certificacion: ['tipo_certificacion', 'tipo certificacion', 'tipo certificación', 'tipo'],
-    estado: ['estado', 'status', 'vigencia'],
+    estado: ['estado', 'status', 'vigencia', 'estado ensayos', 'estado_ensayos'],
+    codigo_version_simplificada: ['codigo_version_simplificada', 'código versión simplificada', 'version simplificada', 'versión simplificada', 'tiene version simplificada', 'tiene versión simplificada'],
     fabricante: ['fabricante', 'manufacturer', 'productor'],
     planta_fabricacion: ['planta_fabricacion', 'planta fabricacion', 'planta fabricación', 'planta'],
     origen: ['origen', 'pais origen', 'país origen', 'procedencia'],
@@ -175,7 +176,8 @@ export class DataMapper {
             motivo_cancelacion: mappedRow.motivo_cancelacion,
             dias_para_vencer: mappedRow.dias_para_vencer ? Number(mappedRow.dias_para_vencer) : undefined,
             organismo_certificacion: 'IACSA',
-            esquema_certificacion: esquema
+            esquema_certificacion: esquema,
+            codigo_version_simplificada: mappedRow.codigo_version_simplificada
           };
 
           productMap.set(codificacion, product);
