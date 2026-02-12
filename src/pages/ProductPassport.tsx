@@ -119,38 +119,38 @@ export default function ProductPassport() {
         return;
       }
 
-      // Check if there are products sharing this product's QR (revisions)
-      const { data: sharingProducts, error: sharingError } = await supabasePublic
-        .from('products')
-        .select('*')
-        .eq('shared_qr_from', productData.codificacion)
-        .order('codificacion', { ascending: false });
+      console.log('📦 Producto encontrado:', productData.codificacion);
+      console.log('  is_qr_master:', productData.is_qr_master);
+      console.log('  shared_qr_from:', productData.shared_qr_from);
+      console.log('  qr_link:', productData.qr_link ? 'presente' : 'ausente');
 
-      if (sharingError) {
-        console.error('Error fetching sharing products:', sharingError);
+      // Con el nuevo sistema de transferencia de QR, el producto encontrado
+      // YA ES el producto correcto a mostrar (siempre tiene el QR activo)
+      setProduct(productData);
+      setShowingRevision(false);
+
+      // Si este producto tiene shared_qr_from, significa que reutilizó el QR
+      // de otro producto, mostrar información del historial
+      if (productData.shared_qr_from) {
+        console.log('ℹ️ Este producto reutilizó el QR de:', productData.shared_qr_from);
+
+        // Buscar el producto original para mostrar en historial
+        const { data: originalProduct } = await supabasePublic
+          .from('products')
+          .select('*')
+          .eq('codificacion', productData.shared_qr_from)
+          .maybeSingle();
+
+        if (originalProduct) {
+          setRelatedProducts([originalProduct]);
+        }
       }
 
-      const relatedProductsList = sharingProducts || [];
-      setRelatedProducts(relatedProductsList);
-
-      // If there are products sharing this QR, show the most recent revision
-      if (relatedProductsList.length > 0) {
-        // Get the latest revision (highest R# number)
-        const latestRevision = relatedProductsList[0];
-        console.log('🔄 Found revision products, showing latest:', latestRevision.codificacion);
-        setProduct(latestRevision);
-        setShowingRevision(true);
-      } else {
-        setProduct(productData);
-        setShowingRevision(false);
-      }
-
-      // Buscar DJC asociada usando codificacion del producto final (original o revisión)
-      const finalProduct = relatedProductsList.length > 0 ? relatedProductsList[0] : productData;
+      // Buscar DJC asociada usando el producto actual
       const { data: djcData, error: djcError } = await supabasePublic
         .from('djc')
         .select('*')
-        .eq('codigo_producto', finalProduct.codificacion)
+        .eq('codigo_producto', productData.codificacion)
         .eq('is_active', true)
         .order('djc_version', { ascending: false })
         .order('created_at', { ascending: false })
