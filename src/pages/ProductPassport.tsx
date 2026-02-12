@@ -124,26 +124,52 @@ export default function ProductPassport() {
       console.log('  shared_qr_from:', productData.shared_qr_from);
       console.log('  qr_link:', productData.qr_link ? 'presente' : 'ausente');
 
-      // Con el nuevo sistema de transferencia de QR, el producto encontrado
-      // YA ES el producto correcto a mostrar (siempre tiene el QR activo)
-      setProduct(productData);
-      setShowingRevision(false);
+      // If this product is a QR master, check if there are newer products using its QR
+      if (productData.is_qr_master) {
+        console.log('🌟 Este producto es QR master, buscando productos que usan su QR...');
 
-      // Si este producto tiene shared_qr_from, significa que reutilizó el QR
-      // de otro producto, mostrar información del historial
-      if (productData.shared_qr_from) {
-        console.log('ℹ️ Este producto reutilizó el QR de:', productData.shared_qr_from);
+        const { data: productsUsingThisQR } = await supabasePublic
+          .from('products')
+          .select('*')
+          .eq('shared_qr_from', productData.codificacion)
+          .order('updated_at', { ascending: false });
 
-        // Buscar el producto original para mostrar en historial
-        const { data: originalProduct } = await supabasePublic
+        if (productsUsingThisQR && productsUsingThisQR.length > 0) {
+          // Show the most recent product that's using this QR
+          console.log(`✨ Se encontraron ${productsUsingThisQR.length} producto(s) usando este QR`);
+          console.log('📌 Mostrando producto más reciente:', productsUsingThisQR[0].codificacion);
+
+          setProduct(productsUsingThisQR[0]);
+          setShowingRevision(true);
+          setRelatedProducts([productData, ...productsUsingThisQR.slice(1)]);
+        } else {
+          // No products are using this QR, show the master itself
+          console.log('ℹ️ No hay productos usando este QR, mostrando el master');
+          setProduct(productData);
+          setShowingRevision(false);
+        }
+      } else if (productData.shared_qr_from) {
+        // This product is using a shared QR from another product
+        console.log('🔗 Este producto usa QR compartido de:', productData.shared_qr_from);
+
+        setProduct(productData);
+        setShowingRevision(true);
+
+        // Load the master product for reference
+        const { data: masterProduct } = await supabasePublic
           .from('products')
           .select('*')
           .eq('codificacion', productData.shared_qr_from)
           .maybeSingle();
 
-        if (originalProduct) {
-          setRelatedProducts([originalProduct]);
+        if (masterProduct) {
+          setRelatedProducts([masterProduct]);
         }
+      } else {
+        // Regular product, not involved in QR sharing
+        console.log('📄 Producto regular sin compartir QR');
+        setProduct(productData);
+        setShowingRevision(false);
       }
 
       // Buscar DJC asociada usando el producto actual

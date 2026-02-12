@@ -524,10 +524,10 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
                   QR Compartido
                 </p>
                 <p className="text-sm text-blue-700">
-                  Este producto está usando el código QR de: <span className="font-mono font-bold">{product.shared_qr_from}</span>
+                  Este producto está reutilizando el código QR de: <span className="font-mono font-bold">{product.shared_qr_from}</span>
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
-                  Los clientes que escaneen el QR físico del producto original verán este producto actualizado.
+                  El mismo código QR físico puede usarse para mostrar la información de este producto. Perfecto para revisiones y actualizaciones.
                 </p>
               </div>
             </div>

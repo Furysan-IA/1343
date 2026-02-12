@@ -198,9 +198,9 @@ class SharedQRService {
   }
 
   /**
-   * Transfers QR from one product to another (for revisions/updates)
-   * The destination product receives the QR, and the source product loses it
-   * History is maintained via shared_qr_from field
+   * Links a product to use the QR from another product (for revisions/updates)
+   * The destination product uses the source's QR without removing it from source
+   * This allows multiple products to share the same QR code
    */
   async linkProductToSharedQR(
     productCode: string,
@@ -224,55 +224,33 @@ class SharedQRService {
         return { success: false, error: 'No se pudo obtener el producto origen' };
       }
 
-      console.log(`🔄 Transfiriendo QR de ${sharedFromCode} a ${productCode}`);
+      console.log(`🔄 Vinculando ${productCode} para usar QR de ${sharedFromCode}`);
       console.log(`  QR Link: ${sourceProduct.qr_link}`);
       console.log(`  QR Path: ${sourceProduct.qr_path}`);
 
-      // Step 1: Transfer QR to destination product
-      const { error: updateDestError } = await supabase
+      // Update destination product to reference the source's QR
+      // The trigger will automatically mark the source as is_qr_master
+      const { error: updateError } = await supabase
         .from('products')
         .update({
-          qr_path: sourceProduct.qr_path,
-          qr_link: sourceProduct.qr_link,
-          qr_generated_at: sourceProduct.qr_generated_at,
-          qr_status: sourceProduct.qr_status,
-          qr_config: sourceProduct.qr_config,
-          is_qr_master: true,
+          shared_qr_from: sharedFromCode,
           updated_at: new Date().toISOString(),
         })
         .eq('codificacion', productCode);
 
-      if (updateDestError) {
-        console.error('❌ Error transferring QR to destination:', updateDestError);
-        return { success: false, error: 'Error al transferir el QR al producto destino' };
+      if (updateError) {
+        console.error('❌ Error linking to shared QR:', updateError);
+        return { success: false, error: `Error al vincular el QR: ${updateError.message}` };
       }
 
-      // Step 2: Clear QR from source product and set history reference
-      const { error: updateSourceError } = await supabase
-        .from('products')
-        .update({
-          qr_path: null,
-          qr_link: null,
-          qr_status: 'transferred',
-          is_qr_master: false,
-          shared_qr_from: productCode,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('codificacion', sharedFromCode);
-
-      if (updateSourceError) {
-        console.error('❌ Error updating source product:', updateSourceError);
-        return { success: false, error: 'Error al actualizar el producto origen' };
-      }
-
-      console.log(`✅ QR transferido exitosamente`);
-      console.log(`  ${productCode} ahora es el master (is_qr_master=true)`);
-      console.log(`  ${sharedFromCode} tiene historial → ${productCode}`);
+      console.log(`✅ QR compartido exitosamente`);
+      console.log(`  ${productCode} ahora usa el QR de ${sharedFromCode}`);
+      console.log(`  El trigger actualizará is_qr_master automáticamente`);
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in linkProductToSharedQR:', error);
-      return { success: false, error: 'Error inesperado al vincular el QR' };
+      return { success: false, error: error.message || 'Error inesperado al vincular el QR' };
     }
   }
 
@@ -326,7 +304,8 @@ class SharedQRService {
         };
       }
 
-      // Get the source product's QR
+      // Product is sharing QR from another product
+      // Get the source product's QR data
       const { data: sourceProduct, error } = await supabase
         .from('products')
         .select('qr_path, qr_link, qr_status, codificacion')
@@ -334,7 +313,7 @@ class SharedQRService {
         .maybeSingle();
 
       if (error || !sourceProduct) {
-        console.warn(`Source product ${product.shared_qr_from} not found`);
+        console.warn(`Source product ${product.shared_qr_from} not found, falling back to own QR`);
         return {
           qr_path: product.qr_path,
           qr_link: product.qr_link,
@@ -343,6 +322,7 @@ class SharedQRService {
         };
       }
 
+      // Return the source product's QR data
       return {
         qr_path: sourceProduct.qr_path,
         qr_link: sourceProduct.qr_link,
