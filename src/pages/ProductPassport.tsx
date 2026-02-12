@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabasePublic } from '../lib/supabase';
-import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home } from 'lucide-react';
+import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home, RefreshCw } from 'lucide-react';
 import { formatDateWithoutTimezone } from '../utils/formatters';
 
 interface Product {
@@ -176,10 +176,70 @@ export default function ProductPassport() {
   };
 
   const getProductStatus = () => {
+    // 1. PRIORIDAD: Usar el campo oficial "estado" de la base de datos
+    if (product?.estado) {
+      const estadoUpper = product.estado.toUpperCase().trim();
+
+      // Mapear estados oficiales a visualización
+      const estadoMap: Record<string, { status: string; color: string; bgColor: string; icon: any; warning?: string }> = {
+        'VIGENTE': {
+          status: 'Vigente',
+          color: 'text-green-600',
+          bgColor: 'bg-green-100',
+          icon: CheckCircle
+        },
+        'VENCIDO': {
+          status: 'Vencido',
+          color: 'text-red-600',
+          bgColor: 'bg-red-100',
+          icon: AlertCircle
+        },
+        'CANCELADO': {
+          status: 'Cancelado',
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-100',
+          icon: AlertCircle
+        },
+        'SUSPENDIDO': {
+          status: 'Suspendido',
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-100',
+          icon: AlertTriangle
+        },
+        'EN PROCESO DE RENOVACIÓN': {
+          status: 'En Renovación',
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-100',
+          icon: Clock
+        }
+      };
+
+      const estadoInfo = estadoMap[estadoUpper] || {
+        status: product.estado,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-100',
+        icon: Clock
+      };
+
+      // Detectar inconsistencias entre estado oficial y fecha
+      if (product.vencimiento && estadoUpper === 'VIGENTE') {
+        const now = new Date();
+        const vencimiento = new Date(product.vencimiento);
+
+        if (vencimiento < now) {
+          // El estado dice VIGENTE pero la fecha ya pasó - mostrar advertencia
+          estadoInfo.warning = 'Fecha vencida pero estado oficial vigente';
+        }
+      }
+
+      return estadoInfo;
+    }
+
+    // 2. RESPALDO: Calcular estado basándose en fechas si no hay estado oficial
     if (!product?.vencimiento) {
-      return { 
-        status: 'Sin fecha de vencimiento', 
-        color: 'text-gray-600', 
+      return {
+        status: 'Sin fecha de vencimiento',
+        color: 'text-gray-600',
         bgColor: 'bg-gray-100',
         icon: Clock
       };
@@ -187,30 +247,30 @@ export default function ProductPassport() {
 
     const now = new Date();
     const vencimiento = new Date(product.vencimiento);
-    
+
     if (vencimiento < now) {
-      return { 
-        status: 'Vencido', 
-        color: 'text-red-600', 
+      return {
+        status: 'Vencido (por fecha)',
+        color: 'text-red-600',
         bgColor: 'bg-red-100',
         icon: AlertCircle
       };
     }
 
     const diasParaVencer = Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diasParaVencer <= 30) {
-      return { 
-        status: `Vence en ${diasParaVencer} días`, 
-        color: 'text-orange-600', 
+      return {
+        status: `Vence en ${diasParaVencer} días`,
+        color: 'text-orange-600',
         bgColor: 'bg-orange-100',
         icon: AlertTriangle
       };
     }
 
-    return { 
-      status: 'Vigente', 
-      color: 'text-green-600', 
+    return {
+      status: 'Vigente (por fecha)',
+      color: 'text-green-600',
       bgColor: 'bg-green-100',
       icon: CheckCircle
     };
@@ -291,6 +351,28 @@ export default function ProductPassport() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Warning Banner for Inconsistencies */}
+        {status.warning && (
+          <div className="mb-6 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-3 rounded-lg">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">Advertencia de Inconsistencia</h3>
+                <p className="text-amber-100 mb-3">
+                  El estado oficial del certificado es <span className="font-bold">VIGENTE</span>,
+                  pero la fecha de vencimiento ({product?.vencimiento ? formatDate(product.vencimiento) : 'N/A'}) ya ha pasado.
+                </p>
+                <p className="text-sm text-amber-200">
+                  El estado mostrado es el oficial del sistema de certificación.
+                  Si tiene dudas, por favor contacte al organismo emisor del certificado.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Revision Banner */}
         {showingRevision && product.shared_qr_from && (
           <div className="mb-6 bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
@@ -402,8 +484,21 @@ export default function ProductPassport() {
                   <p className="text-gray-900 font-medium">{product.tipo_certificacion || 'No especificado'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Estado</label>
-                  <p className="text-gray-900 font-medium">{product.estado || 'No especificado'}</p>
+                  <label className="text-sm font-medium text-gray-500">Estado Oficial</label>
+                  <div className="flex items-center gap-2">
+                    <p className="text-gray-900 font-medium">{product.estado || 'No especificado'}</p>
+                    {product.estado && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                        Certificado
+                      </span>
+                    )}
+                  </div>
+                  {status.warning && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Ver advertencia arriba
+                    </p>
+                  )}
                 </div>
                 {product.caracteristicas_tecnicas && (
                   <div className="md:col-span-2">
