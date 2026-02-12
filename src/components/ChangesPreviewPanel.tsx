@@ -9,7 +9,9 @@ import {
   Filter,
   FileText,
   Package,
-  Users
+  Users,
+  PlusCircle,
+  RefreshCw
 } from 'lucide-react';
 import {
   ProductComparison,
@@ -82,23 +84,37 @@ const ChangeRow: React.FC<{ change: FieldChange }> = ({ change }) => {
   );
 };
 
+const StatCard: React.FC<{ title: string; count: number; icon: React.ReactNode; color: string }> = ({ title, count, icon, color }) => {
+  return (
+    <div className={`${color} rounded-lg p-4 flex items-center justify-between`}>
+      <div>
+        <div className="text-sm font-medium opacity-90 mb-1">{title}</div>
+        <div className="text-3xl font-bold">{count}</div>
+      </div>
+      <div className="opacity-80">
+        {icon}
+      </div>
+    </div>
+  );
+};
+
 const ProductCard: React.FC<{ product: ProductComparison }> = ({ product }) => {
   const [expanded, setExpanded] = useState(false);
 
   const getChangeTypeColor = () => {
-    if (product.changeType === 'new') return 'border-green-300 bg-green-50';
-    if (product.hasConflicts) return 'border-red-300 bg-red-50';
-    return 'border-yellow-300 bg-yellow-50';
+    if (product.changeType === 'new') return 'border-green-400 bg-green-50';
+    if (product.hasConflicts) return 'border-red-400 bg-red-50';
+    return 'border-amber-400 bg-amber-50';
   };
 
   const getChangeTypeIcon = () => {
-    if (product.changeType === 'new') return <CheckCircle className="w-5 h-5 text-green-600" />;
-    if (product.hasConflicts) return <AlertTriangle className="w-5 h-5 text-red-600" />;
-    return <FileText className="w-5 h-5 text-yellow-600" />;
+    if (product.changeType === 'new') return <PlusCircle className="w-5 h-5 text-green-700" />;
+    if (product.hasConflicts) return <AlertTriangle className="w-5 h-5 text-red-700" />;
+    return <RefreshCw className="w-5 h-5 text-amber-700" />;
   };
 
   return (
-    <div className={`border-2 ${getChangeTypeColor()} rounded-lg mb-3 overflow-hidden`}>
+    <div className={`border-2 ${getChangeTypeColor()} rounded-lg mb-3 overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
       <div
         className="p-4 cursor-pointer hover:bg-white/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -107,7 +123,7 @@ const ProductCard: React.FC<{ product: ProductComparison }> = ({ product }) => {
           <div className="flex items-center gap-3 flex-1">
             {getChangeTypeIcon()}
             <div>
-              <div className="font-semibold text-slate-800">
+              <div className="font-bold text-slate-900 text-base">
                 {product.codificacion}
               </div>
               <div className="text-sm text-slate-600">
@@ -117,10 +133,12 @@ const ProductCard: React.FC<{ product: ProductComparison }> = ({ product }) => {
           </div>
           <div className="flex items-center gap-3">
             {product.changeType === 'new' ? (
-              <span className="text-sm font-medium text-green-700">NUEVO</span>
+              <span className="px-3 py-1 rounded-full text-sm font-bold text-white bg-green-600 shadow-sm">
+                NUEVO
+              </span>
             ) : (
               <>
-                <span className="text-sm text-slate-600">
+                <span className="px-3 py-1 rounded-full text-sm font-semibold text-slate-700 bg-white border-2 border-slate-300">
                   {product.changes.length} cambios
                 </span>
                 <SeverityBadge severity={product.impactLevel} />
@@ -162,17 +180,17 @@ const ClientCard: React.FC<{ client: ClientComparison }> = ({ client }) => {
   const [expanded, setExpanded] = useState(false);
 
   const getChangeTypeColor = () => {
-    if (client.changeType === 'new') return 'border-green-300 bg-green-50';
-    return 'border-yellow-300 bg-yellow-50';
+    if (client.changeType === 'new') return 'border-green-400 bg-green-50';
+    return 'border-amber-400 bg-amber-50';
   };
 
   const getChangeTypeIcon = () => {
-    if (client.changeType === 'new') return <CheckCircle className="w-5 h-5 text-green-600" />;
-    return <FileText className="w-5 h-5 text-yellow-600" />;
+    if (client.changeType === 'new') return <PlusCircle className="w-5 h-5 text-green-700" />;
+    return <RefreshCw className="w-5 h-5 text-amber-700" />;
   };
 
   return (
-    <div className={`border-2 ${getChangeTypeColor()} rounded-lg mb-3 overflow-hidden`}>
+    <div className={`border-2 ${getChangeTypeColor()} rounded-lg mb-3 overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
       <div
         className="p-4 cursor-pointer hover:bg-white/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -181,7 +199,7 @@ const ClientCard: React.FC<{ client: ClientComparison }> = ({ client }) => {
           <div className="flex items-center gap-3 flex-1">
             {getChangeTypeIcon()}
             <div>
-              <div className="font-semibold text-slate-800">
+              <div className="font-bold text-slate-900 text-base">
                 CUIT: {client.cuit}
               </div>
               <div className="text-sm text-slate-600">
@@ -191,10 +209,12 @@ const ClientCard: React.FC<{ client: ClientComparison }> = ({ client }) => {
           </div>
           <div className="flex items-center gap-3">
             {client.changeType === 'new' ? (
-              <span className="text-sm font-medium text-green-700">NUEVO</span>
+              <span className="px-3 py-1 rounded-full text-sm font-bold text-white bg-green-600 shadow-sm">
+                NUEVO
+              </span>
             ) : (
               <>
-                <span className="text-sm text-slate-600">
+                <span className="px-3 py-1 rounded-full text-sm font-semibold text-slate-700 bg-white border-2 border-slate-300">
                   {client.changes.length} cambios
                 </span>
                 <SeverityBadge severity={client.impactLevel} />
@@ -280,10 +300,23 @@ export const ChangesPreviewPanel: React.FC<ChangesPreviewPanelProps> = ({ analys
   const filteredProducts = filterProducts();
   const filteredClients = filterClients();
 
+  const productStats = {
+    new: analysis.products.new.length,
+    updates: analysis.products.updates.length,
+    total: analysis.products.new.length + analysis.products.updates.length,
+    warnings: [...analysis.products.new, ...analysis.products.updates].filter(p => p.hasConflicts).length
+  };
+
+  const clientStats = {
+    new: analysis.clients.new.length,
+    updates: analysis.clients.updates.length,
+    total: analysis.clients.new.length + analysis.clients.updates.length
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-800">
+        <h2 className="text-2xl font-bold text-slate-800">
           Pre-visualización de Cambios
         </h2>
         <div className="flex gap-2">
@@ -291,7 +324,7 @@ export const ChangesPreviewPanel: React.FC<ChangesPreviewPanelProps> = ({ analys
             onClick={() => setViewType('products')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               viewType === 'products'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -302,7 +335,7 @@ export const ChangesPreviewPanel: React.FC<ChangesPreviewPanelProps> = ({ analys
             onClick={() => setViewType('clients')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               viewType === 'clients'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white shadow-md'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -310,6 +343,67 @@ export const ChangesPreviewPanel: React.FC<ChangesPreviewPanelProps> = ({ analys
             Clientes
           </button>
         </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {viewType === 'products' ? (
+          <>
+            <StatCard
+              title="Total"
+              count={productStats.total}
+              icon={<Package className="w-10 h-10" />}
+              color="bg-slate-100 text-slate-800"
+            />
+            <StatCard
+              title="Productos Nuevos"
+              count={productStats.new}
+              icon={<PlusCircle className="w-10 h-10" />}
+              color="bg-green-100 text-green-800"
+            />
+            <StatCard
+              title="Actualizaciones"
+              count={productStats.updates}
+              icon={<RefreshCw className="w-10 h-10" />}
+              color="bg-amber-100 text-amber-800"
+            />
+            <StatCard
+              title="Advertencias"
+              count={productStats.warnings}
+              icon={<AlertTriangle className="w-10 h-10" />}
+              color="bg-red-100 text-red-800"
+            />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Total"
+              count={clientStats.total}
+              icon={<Users className="w-10 h-10" />}
+              color="bg-slate-100 text-slate-800"
+            />
+            <StatCard
+              title="Clientes Nuevos"
+              count={clientStats.new}
+              icon={<PlusCircle className="w-10 h-10" />}
+              color="bg-green-100 text-green-800"
+            />
+            <StatCard
+              title="Actualizaciones"
+              count={clientStats.updates}
+              icon={<RefreshCw className="w-10 h-10" />}
+              color="bg-amber-100 text-amber-800"
+            />
+            <div className="bg-blue-100 text-blue-800 rounded-lg p-4 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-sm font-medium opacity-90 mb-1">Cambios Totales</div>
+                <div className="text-3xl font-bold">
+                  {[...analysis.clients.new, ...analysis.clients.updates].reduce((sum, c) => sum + c.changes.length, 0)}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex gap-3 mb-6">
@@ -320,51 +414,73 @@ export const ChangesPreviewPanel: React.FC<ChangesPreviewPanelProps> = ({ analys
             placeholder="Buscar por código, nombre o CUIT..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
           />
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setFilterType('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-5 py-3 rounded-lg font-bold transition-all shadow-sm hover:shadow-md ${
               filterType === 'all'
-                ? 'bg-slate-800 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-slate-800 text-white scale-105'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             Todos
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+              filterType === 'all' ? 'bg-white text-slate-800' : 'bg-slate-300 text-slate-700'
+            }`}>
+              {viewType === 'products' ? productStats.total : clientStats.total}
+            </span>
           </button>
           <button
             onClick={() => setFilterType('new')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-5 py-3 rounded-lg font-bold transition-all shadow-sm hover:shadow-md ${
               filterType === 'new'
-                ? 'bg-green-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-green-600 text-white scale-105'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
+            <PlusCircle className="w-4 h-4 inline mr-1 mb-0.5" />
             Nuevos
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+              filterType === 'new' ? 'bg-white text-green-700' : 'bg-green-200 text-green-800'
+            }`}>
+              {viewType === 'products' ? productStats.new : clientStats.new}
+            </span>
           </button>
           <button
             onClick={() => setFilterType('updates')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-5 py-3 rounded-lg font-bold transition-all shadow-sm hover:shadow-md ${
               filterType === 'updates'
-                ? 'bg-yellow-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-amber-600 text-white scale-105'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
+            <RefreshCw className="w-4 h-4 inline mr-1 mb-0.5" />
             Actualizaciones
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+              filterType === 'updates' ? 'bg-white text-amber-700' : 'bg-amber-200 text-amber-800'
+            }`}>
+              {viewType === 'products' ? productStats.updates : clientStats.updates}
+            </span>
           </button>
           {viewType === 'products' && (
             <button
               onClick={() => setFilterType('warnings')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-5 py-3 rounded-lg font-bold transition-all shadow-sm hover:shadow-md ${
                 filterType === 'warnings'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-red-600 text-white scale-105'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              <AlertTriangle className="w-4 h-4 inline mr-1" />
+              <AlertTriangle className="w-4 h-4 inline mr-1 mb-0.5" />
               Advertencias
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                filterType === 'warnings' ? 'bg-white text-red-700' : 'bg-red-200 text-red-800'
+              }`}>
+                {productStats.warnings}
+              </span>
             </button>
           )}
         </div>
