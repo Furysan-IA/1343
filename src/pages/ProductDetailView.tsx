@@ -681,6 +681,42 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado Oficial
+                </label>
+                <select
+                  value={editedProduct.estado || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, estado: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
+                >
+                  <option value="">Seleccionar estado...</option>
+                  <option value="VIGENTE">Vigente</option>
+                  <option value="VENCIDO">Vencido</option>
+                  <option value="CANCELADO">Cancelado</option>
+                  <option value="SUSPENDIDO">Suspendido</option>
+                  <option value="EN PROCESO DE RENOVACIÓN">En Proceso de Renovación</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Certificación
+                </label>
+                <input
+                  type="text"
+                  value={editedProduct.tipo_certificacion || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, tipo_certificacion: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
+                />
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
