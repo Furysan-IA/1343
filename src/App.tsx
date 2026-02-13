@@ -1,24 +1,38 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { DeploymentBanner } from './components/DeploymentBanner';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { ProductManagement } from './pages/ProductManagement';
 import { ClientManagement } from './pages/ClientManagement';
 import { InformationValidation } from './pages/InformationValidation';
+import DataUploadPage from './pages/DataUpload';
+import DataUpdate from './pages/DataUpdate';
 import { DJCManagement } from './pages/DJCManagement';
 import { DJCGenerator } from './components/DJC';
 import { QRLanding } from './pages/QRLanding';
 import ProductPassport from './pages/ProductPassport';
+import { AuditHistory } from './pages/AuditHistory';
 import { LoginForm } from './components/Auth/LoginForm';
 import { useAuth } from './contexts/AuthContext';
 import { LoadingSpinner } from './components/Common/LoadingSpinner';
 import { QRModTool } from './components/QRModTool';
 
+function RouteLogger() {
+  const location = useLocation();
+
+  useEffect(() => {
+    console.log('🛣️ ROUTE CHANGED TO:', location.pathname);
+  }, [location]);
+
+  return null;
+}
+
 function AppContent() {
   const { user, loading } = useAuth();
+
+  console.log('🏢 AppContent render, user:', !!user, 'loading:', loading);
 
   if (loading) {
     return (
@@ -34,12 +48,16 @@ function AppContent() {
 
   return (
     <Layout>
+      <RouteLogger />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/products" element={<ProductManagement />} />
         <Route path="/clients" element={<ClientManagement />} />
         <Route path="/validation" element={<InformationValidation />} />
+        <Route path="/data-upload" element={<DataUploadPage />} />
+        <Route path="/data-update" element={<DataUpdate />} />
+        <Route path="/audit-history" element={<AuditHistory />} />
         <Route path="/djc" element={<DJCManagement />} />
         <Route path="/djc-generator" element={<DJCGenerator />} />
       </Routes>
@@ -52,7 +70,6 @@ function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <DeploymentBanner />
         <Router>
           <Routes>
             {/* Rutas públicas (sin autenticación) */}
