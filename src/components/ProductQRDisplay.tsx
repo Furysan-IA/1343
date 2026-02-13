@@ -39,6 +39,20 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [qrLink, setQrLink] = useState<string>('');
   const [shouldRegenerateQR, setShouldRegenerateQR] = useState(false);
 
+  // Effective QR state - holds the actual QR to display (own or shared)
+  const [effectiveQR, setEffectiveQR] = useState<{
+    qr_path: string | null;
+    qr_link: string | null;
+    qr_status: string | null;
+    is_shared: boolean;
+    shared_from?: string;
+  }>({
+    qr_path: null,
+    qr_link: null,
+    qr_status: null,
+    is_shared: false,
+  });
+
   // QR Sharing states
   const [showQRSharingSection, setShowQRSharingSection] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,7 +65,43 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [selectedProductForSharing, setSelectedProductForSharing] = useState<SharedProduct | null>(null);
 
+  // Load the effective QR (own or shared)
+  const loadEffectiveQR = async () => {
+    try {
+      console.log('🔍 Loading effective QR for product:', product.codificacion);
+      const effectiveQRData = await sharedQRService.getEffectiveQR(product);
+      console.log('✅ Effective QR loaded:', effectiveQRData);
+
+      setEffectiveQR(effectiveQRData);
+
+      // Update qrLink state if available
+      if (effectiveQRData.qr_link) {
+        setQrLink(effectiveQRData.qr_link);
+      }
+
+      // Update qrDataUrl if available
+      if (effectiveQRData.qr_path) {
+        setQrDataUrl(effectiveQRData.qr_path);
+      }
+
+      // Show info if QR is shared
+      if (effectiveQRData.is_shared) {
+        console.log(`ℹ️ This product is using shared QR from: ${effectiveQRData.shared_from}`);
+      }
+    } catch (error) {
+      console.error('❌ Error loading effective QR:', error);
+      // Fallback to product's own QR
+      setEffectiveQR({
+        qr_path: product.qr_path,
+        qr_link: product.qr_link,
+        qr_status: product.qr_status,
+        is_shared: false,
+      });
+    }
+  };
+
   useEffect(() => {
+    loadEffectiveQR();
     checkIfQRNeedsRegeneration();
     checkForRevisionAndSuggest();
     loadProductsUsingThisQR();
@@ -70,13 +120,17 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         (payload) => {
           console.log('🔄 QR Realtime update for product:', payload);
 
-          // Verificar si cambió información relevante del QR
+          // Verificar si cambió información relevante del QR o la vinculación
           if (
             payload.new.qr_link !== payload.old?.qr_link ||
             payload.new.qr_status !== payload.old?.qr_status ||
-            payload.new.qr_path !== payload.old?.qr_path
+            payload.new.qr_path !== payload.old?.qr_path ||
+            payload.new.shared_qr_from !== payload.old?.shared_qr_from
           ) {
             console.log('✅ QR data changed, triggering update');
+
+            // Recargar el QR efectivo
+            loadEffectiveQR();
 
             // Actualizar el link del QR si cambió
             if (payload.new.qr_link && payload.new.qr_link !== product.qr_link) {
@@ -199,6 +253,9 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       
       console.log('✅ Producto actualizado en Supabase exitosamente');
 
+      // Reload effective QR after generation
+      await loadEffectiveQR();
+
       toast.success('Código QR generado exitosamente');
       setShouldRegenerateQR(false);
       onUpdate();
@@ -216,11 +273,12 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
   const getQRStatus = () => {
     console.log('📊 Getting QR Status...');
-    console.log('📦 Product QR Path:', product.qr_path);
-    console.log('📦 Product QR Status:', product.qr_status);
+    console.log('📦 Effective QR Path:', effectiveQR.qr_path);
+    console.log('📦 Effective QR Status:', effectiveQR.qr_status);
+    console.log('📦 Is Shared:', effectiveQR.is_shared);
     console.log('🔄 Should Regenerate QR:', shouldRegenerateQR);
-    
-    if (!product.qr_path) {
+
+    if (!effectiveQR.qr_path) {
       console.log('🔴 Status: No generado');
       return {
         status: 'No generado',
@@ -230,7 +288,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       };
     }
 
-    if (product.qr_status === 'Pendiente regeneración' || shouldRegenerateQR) {
+    if (effectiveQR.qr_status === 'Pendiente regeneración' || shouldRegenerateQR) {
       console.log('🟡 Status: Pendiente regeneración');
       return {
         status: 'Pendiente regeneración',
@@ -242,10 +300,10 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
     console.log('🟢 Status: Generado');
     return {
-      status: 'Generado',
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-      icon: CheckCircle
+      status: effectiveQR.is_shared ? 'Compartido' : 'Generado',
+      color: effectiveQR.is_shared ? 'text-blue-600' : 'text-green-600',
+      bgColor: effectiveQR.is_shared ? 'bg-blue-100' : 'bg-green-100',
+      icon: effectiveQR.is_shared ? LinkIcon : CheckCircle
     };
   };
 
@@ -376,6 +434,10 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
       if (result.success) {
         toast.success(`QR compartido desde ${sourceProduct.codificacion}`);
+
+        // Reload effective QR after linking
+        await loadEffectiveQR();
+
         setShowQRSharingSection(false);
         setSuggestedBaseProduct(null);
         setSelectedProductForSharing(null);
@@ -403,6 +465,10 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
       if (result.success) {
         toast.success('QR desvinculado correctamente');
+
+        // Reload effective QR after unlinking
+        await loadEffectiveQR();
+
         onUpdate();
       } else {
         toast.error(result.error || 'Error al desvincular QR');
@@ -434,26 +500,26 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
 
         {/* QR Information */}
         <div className="space-y-3">
-          {product.qr_link && (
+          {effectiveQR.qr_link && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                URL del QR
+                URL del QR {effectiveQR.is_shared && <span className="text-blue-600">(Compartido desde {effectiveQR.shared_from})</span>}
               </label>
               <div className="flex items-center gap-2 p-2 bg-white rounded border">
                 <input
                   type="text"
-                  value={product.qr_link}
+                  value={effectiveQR.qr_link}
                   readOnly
                   className="flex-1 text-sm text-gray-600 bg-transparent outline-none"
                 />
                 <button
-                  onClick={() => navigator.clipboard.writeText(product.qr_link!)}
+                  onClick={() => navigator.clipboard.writeText(effectiveQR.qr_link!)}
                   className="text-blue-600 hover:text-blue-700 text-sm"
                 >
                   Copiar
                 </button>
                 <a
-                  href={product.qr_link}
+                  href={effectiveQR.qr_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-700"
@@ -472,6 +538,22 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
               <p className="text-sm text-gray-600">
                 {new Date(product.qr_generated_at).toLocaleString('es-AR')}
               </p>
+            </div>
+          )}
+
+          {/* Show QR preview if available */}
+          {effectiveQR.qr_path && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Vista previa del QR
+              </label>
+              <div className="inline-block p-2 bg-white rounded border">
+                <img
+                  src={effectiveQR.qr_path}
+                  alt="QR Code Preview"
+                  className="w-32 h-32 object-contain"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -817,12 +899,13 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
       <div className="flex flex-col sm:flex-row gap-4">
         <button
           onClick={handleGenerateQR}
-          disabled={!canGenerateQR() || isGenerating}
+          disabled={!canGenerateQR() || isGenerating || product.shared_qr_from !== null}
           className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-            canGenerateQR() && !isGenerating
+            canGenerateQR() && !isGenerating && !product.shared_qr_from
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
           }`}
+          title={product.shared_qr_from ? 'Este producto usa QR compartido. Desvincula primero para generar uno nuevo.' : ''}
         >
           {isGenerating ? (
             <>
@@ -837,13 +920,13 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
           )}
         </button>
 
-        {product.qr_path && (
+        {effectiveQR.qr_path && (
           <button
             onClick={() => setShowQRCodeModal(true)}
             className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Eye className="w-5 h-5" />
-            Ver y Descargar QR
+            Ver y Descargar QR {effectiveQR.is_shared && '(Compartido)'}
           </button>
         )}
       </div>
@@ -863,15 +946,20 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
               <span className="font-medium">URL del producto:</span> {qrConfigService.generateProductUrl(product.uuid)}
             </p>
           )}
+          {effectiveQR.is_shared && effectiveQR.shared_from && (
+            <p className="mt-2 pt-2 border-t border-blue-300">
+              <span className="font-medium">Estado:</span> Este producto usa el QR compartido de <span className="font-mono font-bold">{effectiveQR.shared_from}</span>
+            </p>
+          )}
         </div>
       </div>
 
       {/* QR Code Modal */}
-      {showQRCodeModal && product.qr_link && (
+      {showQRCodeModal && effectiveQR.qr_link && (
         <QRCodeModal
           isOpen={showQRCodeModal}
           onClose={() => setShowQRCodeModal(false)}
-          qrLink={product.qr_link}
+          qrLink={effectiveQR.qr_link}
           productName={product.producto || 'Producto'}
         />
       )}
