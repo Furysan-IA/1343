@@ -1,7 +1,7 @@
 // ProductDetailView.tsx - Versión actualizada con esquema de base de datos
 import { useState, useEffect } from 'react';
 import { supabase, Database } from '../lib/supabase';
-import { QRGenerator } from './QRGenerator';
+import { ProductQRDisplay } from './ProductQRDisplay';
 import { qrConfigService } from '../services/qrConfig.service';
 import { 
   X, Edit2, Save, Upload, FileText, QrCode, Award, 
@@ -20,6 +20,7 @@ interface Product {
   direccion_legal_empresa: string | null;
   fabricante: string | null;
   planta_fabricacion: string | null;
+  codigo_version_simplificada: string | null;
   origen: string | null;
   producto: string | null;
   marca: string | null;
@@ -181,24 +182,65 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
   };
 
   const getProductStatus = () => {
+    // 1. PRIORIDAD: Usar el campo oficial "estado" de la base de datos
+    if (editedProduct.estado) {
+      const estadoUpper = editedProduct.estado.toUpperCase().trim();
+
+      // Mapear estados oficiales a visualización
+      const estadoMap: Record<string, { status: string; color: string; bgColor: string }> = {
+        'VIGENTE': {
+          status: 'Vigente',
+          color: 'text-green-600',
+          bgColor: 'bg-green-50'
+        },
+        'VENCIDO': {
+          status: 'Vencido',
+          color: 'text-red-600',
+          bgColor: 'bg-red-50'
+        },
+        'CANCELADO': {
+          status: 'Cancelado',
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-50'
+        },
+        'SUSPENDIDO': {
+          status: 'Suspendido',
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-50'
+        },
+        'EN PROCESO DE RENOVACIÓN': {
+          status: 'En Renovación',
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-50'
+        }
+      };
+
+      return estadoMap[estadoUpper] || {
+        status: editedProduct.estado,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50'
+      };
+    }
+
+    // 2. RESPALDO: Calcular estado basándose en fechas si no hay estado oficial
     if (!editedProduct.vencimiento) {
       return { status: 'Sin vencimiento', color: 'text-yellow-600', bgColor: 'bg-yellow-50' };
     }
 
     const now = new Date();
     const vencimiento = new Date(editedProduct.vencimiento);
-    
+
     if (vencimiento < now) {
-      return { status: 'Vencido', color: 'text-red-600', bgColor: 'bg-red-50' };
+      return { status: 'Vencido (por fecha)', color: 'text-red-600', bgColor: 'bg-red-50' };
     }
 
     const diasParaVencer = Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diasParaVencer <= 30) {
       return { status: `Vence en ${diasParaVencer} días`, color: 'text-orange-600', bgColor: 'bg-orange-50' };
     }
 
-    return { status: 'Vigente', color: 'text-green-600', bgColor: 'bg-green-50' };
+    return { status: 'Vigente (por fecha)', color: 'text-green-600', bgColor: 'bg-green-50' };
   };
 
   const getMissingFields = (tabId: string): string[] => {
@@ -451,6 +493,33 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Código Versión Simplificada
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editedProduct.codigo_version_simplificada || ''}
+                    onChange={(e) => setEditedProduct(prev => ({ ...prev, codigo_version_simplificada: e.target.value }))}
+                    disabled={!editMode}
+                    placeholder="Ej: Si (Fabrica)"
+                    className={`w-full px-4 py-2 border rounded-lg ${
+                      editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                    }`}
+                  />
+                  {editedProduct.codigo_version_simplificada && (
+                    <div className="mt-1 flex items-center gap-1 text-xs text-blue-600">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Este producto tiene versión simplificada disponible</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Se usa en la versión simplificada de DJC para mostrar información del fabricante
+                </p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Dirección Legal de la Empresa *
                 </label>
                 <input
@@ -525,6 +594,42 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                   className={`w-full px-4 py-2 border rounded-lg ${
                     !editedProduct.vencimiento ? 'border-red-300' : 'border-gray-300'
                   } ${editMode ? 'focus:ring-2 focus:ring-purple-500' : 'bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado Oficial
+                </label>
+                <select
+                  value={editedProduct.estado || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, estado: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
+                >
+                  <option value="">Seleccionar estado...</option>
+                  <option value="VIGENTE">Vigente</option>
+                  <option value="VENCIDO">Vencido</option>
+                  <option value="CANCELADO">Cancelado</option>
+                  <option value="SUSPENDIDO">Suspendido</option>
+                  <option value="EN PROCESO DE RENOVACIÓN">En Proceso de Renovación</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Certificación
+                </label>
+                <input
+                  type="text"
+                  value={editedProduct.tipo_certificacion || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, tipo_certificacion: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
                 />
               </div>
 
@@ -659,19 +764,9 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
 
           {activeTab === 'qr' && (
             <div>
-              <QRGenerator 
+              <ProductQRDisplay 
                 product={editedProduct}
-                onQRGenerated={(url) => {
-                  // Actualizar el producto con la nueva URL del QR
-                  setEditedProduct(prev => ({
-                    ...prev,
-                    qr_link: url,
-                    qr_status: 'Generado'
-                  }));
-                  setShouldRegenerateQR(false);
-                  onUpdate();
-                }}
-                showRegenerateAlert={shouldRegenerateQR}
+                onUpdate={onUpdate}
               />
             </div>
           )}

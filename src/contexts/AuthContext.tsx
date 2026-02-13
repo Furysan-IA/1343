@@ -28,9 +28,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  console.log('🔐 AuthProvider render, user:', !!user, 'loading:', loading);
+
   useEffect(() => {
+    console.log('🔐 AuthProvider useEffect running - getting initial session');
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔐 Initial session retrieved:', !!session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
@@ -38,12 +42,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔐 AUTH STATE CHANGED!', { event, hasSession: !!session });
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('🔐 AuthProvider unmounting, unsubscribing');
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

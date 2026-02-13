@@ -25,7 +25,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   };
 
   return (
-    <div className="bg-white shadow-sm border-b border-gray-200">
+    <div className="bg-white shadow-sm border-b border-gray-200 relative z-[1000]">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -66,7 +66,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
               </button>
 
               {userMenuOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-[9999]">
                   <div className="py-1">
                     <div className="px-4 py-2 text-sm text-gray-700 border-b">
                       {user?.email}

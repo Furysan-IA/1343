@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { X, Home, Users, Package, FileText, Settings } from 'lucide-react';
+import { X, Chrome as Home, Users, Package, FileText, FileCheck, Database, RefreshCw } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface MobileSidebarProps {
@@ -13,10 +13,12 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Clientes', href: '/clients', icon: Users },
     { name: 'Productos', href: '/products', icon: Package },
+    { name: 'Clientes', href: '/clients', icon: Users },
+    { name: 'Carga de Datos', href: '/data-upload', icon: Database },
+    { name: 'Actualizar Datos', href: '/data-update', icon: RefreshCw },
     { name: 'DJC', href: '/djc', icon: FileText },
-    { name: 'Configuración', href: '/settings', icon: Settings },
+    { name: 'Generar DJC', href: '/djc-generator', icon: FileCheck },
   ];
 
   return (

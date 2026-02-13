@@ -1,658 +1,1121 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, Database } from '../../lib/supabase';
-import { qrConfigService } from '../../services/qrConfig.service';
-import { formatCuit } from '../../utils/formatters';
-import { jsPDF } from 'jspdf';
-import { 
-  FileText, Search, Download, Eye, X, AlertCircle, 
-  CheckCircle, Package, Filter, RefreshCw, Plus
-} from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+import { formatCuit, formatDateWithoutTimezone } from '../../utils/formatters';
+import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DJCPreviewModal } from './DJCPreview';
+import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
 
 interface Client {
-  cuit: number;
+  id: string;
   razon_social: string;
-  direccion: string;
-  email: string;
-  created_at: string;
-  updated_at: string;
-  telefono: string | null;
-  contacto: string | null;
+  cuit: string;
+  direccion?: string;
+  direccion_planta?: string;
+  ciudad?: string;
+  provincia?: string;
+  telefono?: string;
+  email?: string;
 }
 
 interface Product {
+  id: string;
   codificacion: string;
-  cuit: number;
-  titular: string | null;
-  tipo_certificacion: string | null;
-  estado: string | null;
-  en_proceso_renovacion: string | null;
-  direccion_legal_empresa: string | null;
-  fabricante: string | null;
-  planta_fabricacion: string | null;
-  origen: string | null;
-  producto: string | null;
-  marca: string | null;
-  modelo: string | null;
-  caracteristicas_tecnicas: string | null;
-  normas_aplicacion: string | null;
-  informe_ensayo_nro: string | null;
-  laboratorio: string | null;
-  ocp_extranjero: string | null;
-  n_certificado_extranjero: string | null;
-  fecha_emision_certificado_extranjero: string | null;
-  disposicion_convenio: string | null;
-  cod_rubro: number | null;
-  cod_subrubro: number | null;
-  nombre_subrubro: string | null;
-  fecha_emision: string | null;
-  vencimiento: string | null;
-  fecha_cancelacion: string | null;
-  motivo_cancelacion: string | null;
-  dias_para_vencer: number | null;
-  djc_status: string;
-  certificado_status: string;
-  enviado_cliente: string;
-  certificado_path: string | null;
-  djc_path: string | null;
-  qr_path: string | null;
-  qr_link: string | null;
-  created_at: string;
-  updated_at: string;
+  producto: string;
+  marca?: string;
+  modelo?: string;
+  cuit: string;
+  djc_status?: string;
+  djc_path?: string;
+  certificado_status?: string;
+  titular?: string;
+  origen?: string;
+  fabricante?: string;
+  planta_fabricacion?: string;
+  codigo_version_simplificada?: string;
+  normas_aplicacion?: string;
+  informe_ensayo_nro?: string;
+  fecha_emision?: string;
+  vencimiento?: string;
+  caracteristicas_tecnicas?: string;
+  laboratorio?: string;
+  direccion_legal_empresa?: string;
+  organismo_certificacion?: string;
+  esquema_certificacion?: string;
+  fecha_proxima_vigilancia?: string;
 }
 
-interface DJCData {
-  resolucion: string;
+interface DJCHistory {
+  id: string;
+  created_at: string;
   numero_djc: string;
+  resolucion: string;
+  status: string;
+  conformity_status: string;
+}
+
+interface DJCPreviewData {
+  numero_djc: string;
+  resolucion: string;
   razon_social: string;
   cuit: string;
+  marca: string;
   domicilio_legal: string;
+  domicilio_planta: string;
   telefono: string;
   email: string;
-  nombre_comercial: string;
-  codigo_identificacion: string;
-  fabricante_completo: string;
+  representante_nombre: string;
+  representante_domicilio: string;
+  representante_cuit: string;
+  codigo_producto: string;
+  fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
+  producto_marca: string;
+  producto_modelo: string;
+  caracteristicas_tecnicas: string;
+  reglamento_alcanzado: string;
   normas_tecnicas: string;
-  documento_evaluacion: string;
+  numero_certificado: string;
+  organismo_certificacion: string;
+  esquema_certificacion: string;
+  fecha_emision_certificado: string;
+  fecha_proxima_vigilancia: string;
+  laboratorio_ensayos: string;
+  informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
-// Las resoluciones disponibles
-const RESOLUCIONES = [
-  { value: 'res-236-24', label: 'Res. SIYC N° 236/24 - Materiales para instalaciones eléctricas' },
-  { value: 'res-17-2025', label: 'Res. SIYC N° 17/2025' },
-  { value: 'res-16-2025', label: 'Res. SIYC N° 16/2025' }
-];
-
-export default function DJCGenerator() {
+const DJCGenerator: React.FC = () => {
+  const location = useLocation();
+  const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedResolucion, setSelectedResolucion] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  const [djcData, setDjcData] = useState<DJCData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchClient, setSearchClient] = useState('');
-  const [searchProduct, setSearchProduct] = useState('');
+  const [selectedResolution, setSelectedResolution] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [showProductsWithoutDJC, setShowProductsWithoutDJC] = useState(false);
-  const [productsWithoutDJC, setProductsWithoutDJC] = useState<Product[]>([]);
+  const [djcHistory, setDjcHistory] = useState<DJCHistory[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<DJCPreviewData | null>(null);
+  const [representante, setRepresentante] = useState({
+    nombre: '',
+    domicilio: '',
+    cuit: ''
+  });
+  const [useCustomLink, setUseCustomLink] = useState(false);
+  const [customLink, setCustomLink] = useState('');
+  const [useSimplifiedVersion, setUseSimplifiedVersion] = useState(false);
+
+  const resolutions = [
+    { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
+    { value: 'Res. SICyC N° 17/2025', label: 'Res. SICyC N° 17/2025' },
+    { value: 'Res. SICyC N° 16/2025', label: 'Res. SICyC N° 16/2025' }
+  ];
 
   useEffect(() => {
-    fetchData();
+    fetchClients();
+    fetchProducts();
+
+    // Suscribirse a cambios en tiempo real de la tabla products
+    const subscription = supabase
+      .channel('djc-generator-products')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          console.log('🔄 Producto actualizado en tiempo real:', payload.new);
+
+          // Actualizar en la lista de productos
+          setProducts(prevProducts => {
+            return prevProducts.map(p =>
+              p.codificacion === payload.new.codificacion
+                ? { ...p, ...payload.new as Product }
+                : p
+            );
+          });
+
+          // Si es el producto seleccionado, actualizarlo también
+          setSelectedProduct(prevSelected => {
+            if (prevSelected && prevSelected.codificacion === payload.new.codificacion) {
+              console.log('✨ Actualizando producto seleccionado con nuevo qr_link:', payload.new.qr_link);
+              return { ...prevSelected, ...payload.new as Product };
+            }
+            return prevSelected;
+          });
+        }
+      )
+      .subscribe();
+
+    // Cleanup: desuscribirse al desmontar
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    filterProducts();
-  }, [allProducts, searchProduct, showProductsWithoutDJC, selectedClient]);
+    const stateProduct = location.state?.selectedProduct;
+    if (stateProduct && products.length > 0 && clients.length > 0) {
+      const product = products.find(p => p.codificacion === stateProduct.codificacion);
+      if (product) {
+        setSelectedProduct(product);
+        const client = clients.find(c => c.cuit?.toString() === product.cuit?.toString());
+        if (client) {
+          setSelectedClient(client);
+        }
+        toast.success(`Producto ${product.codificacion} seleccionado`);
+      }
+    }
+  }, [location.state, products, clients]);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (selectedClient && products.length > 0) {
+      const filtered = products.filter(p => {
+        const productCuit = p.cuit?.toString();
+        const clientCuit = selectedClient.cuit?.toString();
+        
+        const matchesClient = productCuit === clientCuit;
+        const matchesDJCFilter = !showProductsWithoutDJC || 
+          p.djc_status === 'No Generada' || 
+          !p.djc_status;
+        
+        return matchesClient && matchesDJCFilter;
+      });
+      
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
+    }
+  }, [selectedClient, products, showProductsWithoutDJC]);
+
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchDJCHistory(selectedProduct.codificacion);
+    }
+  }, [selectedProduct]);
+
+  const fetchClients = async () => {
     try {
-      const { data: clientsData, error: clientsError } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('*')
         .order('razon_social');
+      
+      if (error) throw error;
+      setClients(data || []);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      toast.error('Error al cargar los clientes');
+    }
+  };
 
-      if (clientsError) throw clientsError;
-      setClients(clientsData || []);
-
-      // Cargar TODOS los productos
+  const fetchProducts = async () => {
+    try {
+      // Primero obtener el conteo total
       const { count } = await supabase
         .from('products')
         .select('*', { count: 'exact', head: true });
 
-      if (!count) {
-        setAllProducts([]);
-        setProductsWithoutDJC([]);
-        return;
-      }
+      console.log('Total de productos en DB:', count);
 
-      // Cargar productos en lotes para evitar problemas de memoria
+      // Cargar TODOS los productos en lotes
+      const allProducts: Product[] = [];
       const batchSize = 1000;
-      let allProductsData: Product[] = [];
+      const totalBatches = Math.ceil((count || 0) / batchSize);
 
-      for (let i = 0; i < count; i += batchSize) {
-        const start = i;
-        const end = Math.min(i + batchSize - 1, count - 1);
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = from + batchSize - 1;
 
         const { data, error } = await supabase
           .from('products')
           .select('*')
           .order('producto')
-          .range(start, end);
+          .range(from, to);
 
         if (error) throw error;
-        if (data) allProductsData = [...allProductsData, ...data];
+
+        if (data) {
+          allProducts.push(...data);
+        }
       }
 
-      setAllProducts(allProductsData);
-
-      // Filtrar productos sin DJC
-      const withoutDJC = allProductsData.filter(p => !p.djc_path);
-      setProductsWithoutDJC(withoutDJC);
-
-    } catch (error: any) {
-      console.error('Error loading data:', error);
-      toast.error('Error al cargar los datos');
-    } finally {
-      setLoading(false);
+      console.log('Total de productos cargados en DJCGenerator:', allProducts.length);
+      setProducts(allProducts);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('Error al cargar los productos');
     }
   };
 
-  const filterProducts = () => {
-    let filtered = [...allProducts];
+  const fetchDJCHistory = async (productCode: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('djc')
+        .select('id, created_at, numero_djc, resolucion, pdf_url')
+        .eq('codigo_producto', productCode)
+        .order('created_at', { ascending: false });
 
-    // Filtrar por cliente seleccionado usando CUIT
-    if (selectedClient && selectedClient.cuit) {
-      filtered = filtered.filter(product => 
-        product.cuit === selectedClient.cuit
-      );
+      if (error) throw error;
+
+      const mappedData = (data || []).map(djc => ({
+        id: djc.id,
+        created_at: djc.created_at,
+        numero_djc: djc.numero_djc,
+        resolucion: djc.resolucion,
+        status: djc.pdf_url ? 'Generada' : 'Pendiente',
+        conformity_status: 'Conforme'
+      }));
+
+      setDjcHistory(mappedData);
+    } catch (error) {
+      console.error('Error fetching DJC history:', error);
+      setDjcHistory([]);
     }
-
-    // Filtrar por búsqueda
-    if (searchProduct) {
-      filtered = filtered.filter(product => 
-        product.produto?.toLowerCase().includes(searchProduct.toLowerCase()) ||
-        product.marca?.toLowerCase().includes(searchProduct.toLowerCase()) ||
-        product.codificacion?.toLowerCase().includes(searchProduct.toLowerCase())
-      );
-    }
-
-    // Mostrar solo productos sin DJC si está activado
-    if (showProductsWithoutDJC) {
-      filtered = filtered.filter(p => !p.djc_path);
-    }
-
-    setFilteredProducts(filtered);
-    setProducts(filtered);
   };
 
-  const generateDJC = () => {
-    if (!selectedClient || !selectedProduct) {
-      toast.error('Debe seleccionar un cliente y un producto');
+  const refreshSelectedProduct = async () => {
+    if (!selectedProduct) {
+      toast.error('No hay producto seleccionado');
       return;
     }
 
-    if (!selectedResolucion) {
-      toast.error('Debe seleccionar una resolución aplicable');
-      return;
-    }
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('codificacion', selectedProduct.codificacion)
+        .single();
 
-    // Obtener el QR link del producto o generarlo si no existe
-    let qrLink = selectedProduct.qr_link;
+      if (error) throw error;
+
+      if (data) {
+        console.log('🔄 Producto refrescado manualmente:', data);
+        setSelectedProduct(data);
+
+        // También actualizar en la lista
+        setProducts(prevProducts => {
+          return prevProducts.map(p =>
+            p.codificacion === data.codificacion ? data : p
+          );
+        });
+
+        toast.success('Datos del producto actualizados');
+      }
+    } catch (error) {
+      console.error('Error refreshing product:', error);
+      toast.error('Error al actualizar el producto');
+    }
+  };
+
+  const handleProductSearch = (searchTerm: string) => {
+    setProductSearch(searchTerm);
     
-    if (!qrLink) {
-      // Si no tiene QR link, generarlo usando el servicio
-      qrLink = qrConfigService.generateProductUrl(selectedProduct.codificacion);
+    if (searchMode === 'product' && searchTerm) {
+      const foundProduct = products.find(p => 
+        p.producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.codificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.marca?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      if (foundProduct) {
+        setSelectedProduct(foundProduct);
+        
+        const productClient = clients.find(c => 
+          c.cuit?.toString() === foundProduct.cuit?.toString()
+        );
+        
+        if (productClient) {
+          setSelectedClient(productClient);
+          toast.success(`Cliente "${productClient.razon_social}" seleccionado automáticamente`);
+        }
+      }
+    }
+  };
+
+  const generateDJCNumber = (certificateNumber: string): string => {
+    return `DJC-${certificateNumber}`;
+  };
+
+  const preparePreview = () => {
+    if (!selectedClient || !selectedProduct || !selectedResolution) {
+      toast.error('Por favor complete todos los campos requeridos');
+      return;
     }
 
-    const djc = {
-      resolucion: RESOLUCIONES.find(r => r.value === selectedResolucion)?.label || '',
-      numero_djc: `DJC-2025-${Date.now().toString().slice(-6)}`,
-      razon_social: selectedClient.razon_social || 'CAMPO NO ENCONTRADO',
-      cuit: formatCuit(selectedClient.cuit),
-      domicilio_legal: selectedClient.direccion || 'CAMPO NO ENCONTRADO',
+    const djcNumber = generateDJCNumber(selectedProduct.codificacion);
+    const currentDate = new Date().toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
+
+    // Lógica para domicilio de planta:
+    // 1. Si el cliente tiene direccion_planta Y es diferente al domicilio legal → usar direccion_planta
+    // 2. En cualquier otro caso → usar el domicilio legal (no planta_fabricacion del producto)
+    let domicilioPlanta = domicilio;
+
+    if (selectedClient.direccion_planta &&
+        selectedClient.direccion_planta.trim() !== '' &&
+        selectedClient.direccion_planta.trim() !== domicilio.trim()) {
+      domicilioPlanta = selectedClient.direccion_planta;
+    }
+
+    // Usar link personalizado o el qr_link de la base de datos (actualizado en tiempo real)
+    const qrLink = useCustomLink
+      ? (customLink || '')
+      : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
+
+    console.log('DJC Link Configuration:', {
+      useCustomLink,
+      customLink,
+      generatedLink: qrLink,
+      productCode: selectedProduct.codificacion,
+      qr_link_from_db: selectedProduct.qr_link
+    });
+
+    // Formatear fecha de emisión del certificado (sin conversión de zona horaria)
+    const fechaEmisionCertificado = formatDateWithoutTimezone(selectedProduct.fecha_emision, 'short');
+
+    // Formatear fecha de próxima vigilancia - usar vencimiento si no está disponible
+    const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
+      ? formatDateWithoutTimezone(selectedProduct.fecha_proxima_vigilancia, 'short')
+      : selectedProduct.vencimiento
+      ? formatDateWithoutTimezone(selectedProduct.vencimiento, 'short')
+      : '-';
+
+    const data: DJCPreviewData = {
+      numero_djc: djcNumber,
+      resolucion: selectedResolution,
+      razon_social: selectedClient.razon_social,
+      cuit: formatCuit(selectedClient.cuit || ''),
+      marca: selectedProduct.marca || selectedProduct.titular || '',
+      domicilio_legal: domicilio,
+      domicilio_planta: domicilioPlanta,
       telefono: selectedClient.telefono || '',
-      email: selectedClient.email || 'CAMPO NO ENCONTRADO',
-      nombre_comercial: selectedProduct.marca || 'CAMPO NO ENCONTRADO',
-      codigo_identificacion: selectedProduct.codificacion || 'CAMPO NO ENCONTRADO',
-      fabricante_completo: selectedProduct.fabricante && selectedProduct.planta_fabricacion 
-        ? `${selectedProduct.fabricante} - ${selectedProduct.planta_fabricacion}`
-        : selectedProduct.fabricante || 'CAMPO NO ENCONTRADO',
-      identificacion_producto: [
-        selectedProduct.marca,
-        selectedProduct.produto,
-        selectedProduct.caracteristicas_tecnicas
-      ].filter(Boolean).join(' - ') || 'CAMPO NO ENCONTRADO',
-      normas_tecnicas: selectedProduct.normas_aplicacion || 'CAMPO NO ENCONTRADO',
-      documento_evaluacion: selectedProduct.informe_ensayo_nro || selectedProduct.codificacion || 'CAMPO NO ENCONTRADO',
-      enlace_declaracion: qrLink || 'CAMPO NO ENCONTRADO',
-      fecha_lugar: `Morón, ${new Date().toLocaleDateString('es-AR', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
-      })}`
+      email: selectedClient.email || '',
+      representante_nombre: representante.nombre,
+      representante_domicilio: representante.domicilio,
+      representante_cuit: representante.cuit,
+      codigo_producto: selectedProduct.codificacion,
+      fabricante: selectedProduct.fabricante || '',
+      codigo_version_simplificada: selectedProduct.codigo_version_simplificada || '',
+      identificacion_producto: selectedProduct.producto || '',
+      producto_marca: selectedProduct.marca || '',
+      producto_modelo: selectedProduct.modelo || '',
+      caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
+      reglamento_alcanzado: selectedResolution,
+      normas_tecnicas: selectedProduct.normas_aplicacion || '',
+      numero_certificado: selectedProduct.codificacion,
+      organismo_certificacion: selectedProduct.organismo_certificacion === 'IACSA'
+        ? 'Intertek Argentina Certificaciones SA'
+        : (selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones SA'),
+      esquema_certificacion: selectedProduct.esquema_certificacion || '',
+      fecha_emision_certificado: fechaEmisionCertificado,
+      fecha_proxima_vigilancia: fechaProximaVigilancia,
+      laboratorio_ensayos: selectedProduct.laboratorio || '',
+      informe_ensayos: selectedProduct.informe_ensayo_nro || '',
+      enlace_declaracion: qrLink,
+      fecha_lugar: currentDate,
+      isSimplified: useSimplifiedVersion
     };
 
-    setDjcData(djc);
+    setPreviewData(data);
     setShowPreview(true);
   };
 
-  const saveDJC = async () => {
-    if (!djcData || !selectedProduct) return;
+  const generatePDF = async () => {
+    if (!previewData || !selectedClient || !selectedProduct) return;
+
+    setGenerating(true);
 
     try {
-      // Generar PDF
-      const doc = new jsPDF();
-      
-      // Configurar fuente y estilo
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('DECLARACIÓN JURADA DE CONFORMIDAD', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      
-      let y = 40;
-      const lineHeight = 8;
-      const margin = 20;
-      const pageWidth = doc.internal.pageSize.width;
-      const contentWidth = pageWidth - 2 * margin;
+      // Obtener el usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
 
-      // Función auxiliar para agregar texto con salto de línea automático
-      const addText = (label: string, value: string, bold = false) => {
-        doc.setFont('helvetica', bold ? 'bold' : 'normal');
-        const text = `${label}${value}`;
-        const lines = doc.splitTextToSize(text, contentWidth);
-        lines.forEach((line: string) => {
-          if (y > 270) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(line, margin, y);
-          y += lineHeight;
+      if (!user) {
+        toast.error('Debe estar autenticado para generar DJCs');
+        setGenerating(false);
+        setShowPreview(false);
+        return;
+      }
+
+      // Verificar el enlace antes de generar
+      console.log('Generating DJC PDF with link:', previewData.enlace_declaracion);
+
+      // Generar el PDF usando jsPDF directamente
+      const pdfGenerator = new DJCPdfGenerator();
+      const pdf = pdfGenerator.generate(previewData);
+      const pdfBlob = pdf.output('blob');
+      const fileName = `DJC_${previewData.numero_djc}.pdf`;
+
+      // Guardar en bucket 'djcs'
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('djcs')
+        .upload(fileName, pdfBlob, {
+          contentType: 'application/pdf',
+          upsert: true
         });
-      };
 
-      // Contenido del DJC
-      addText('Número: ', djcData.numero_djc, true);
-      addText('Resolución Aplicable: ', djcData.resolucion);
-      y += 5;
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        throw uploadError;
+      }
 
-      addText('Razón Social: ', djcData.razon_social);
-      addText('CUIT: ', djcData.cuit);
-      addText('Domicilio Legal: ', djcData.domicilio_legal);
-      addText('Teléfono: ', djcData.telefono);
-      addText('Email: ', djcData.email);
-      y += 5;
-
-      addText('Nombre Comercial: ', djcData.nombre_comercial);
-      addText('Código de Identificación: ', djcData.codigo_identificacion);
-      addText('Fabricante: ', djcData.fabricante_completo);
-      addText('Identificación del Producto: ', djcData.identificacion_producto);
-      addText('Normas Técnicas: ', djcData.normas_tecnicas);
-      addText('Documento de Evaluación: ', djcData.documento_evaluacion);
-      y += 5;
-
-      addText('Enlace QR: ', djcData.enlace_declaracion);
-      y += 10;
-
-      addText('', djcData.fecha_lugar);
-
-      // Guardar el PDF
-      const pdfBlob = doc.output('blob');
-      const fileName = `DJC_${selectedProduct.codificacion}_${Date.now()}.pdf`;
-      
-      // Subir a Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, pdfBlob);
-
-      if (uploadError) throw uploadError;
-
-      // Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
+      // Obtener URL pública del bucket djcs
+      const { data: urlData } = supabase.storage
+        .from('djcs')
         .getPublicUrl(fileName);
 
-      // Actualizar el producto con la ruta del DJC
+      // Check if there's an existing active DJC to deactivate
+      const { data: existingDJC } = await supabase
+        .from('djc')
+        .select('id, djc_version')
+        .eq('codigo_producto', previewData.codigo_producto)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      // If there's an existing active DJC, deactivate it
+      if (existingDJC) {
+        await supabase
+          .from('djc')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDJC.id);
+      }
+
+      // Guardar registro en tabla djc con created_by
+      console.log('Saving DJC to database with link:', previewData.enlace_declaracion);
+
+      const { error: djcError } = await supabase
+        .from('djc')
+        .insert({
+          numero_djc: previewData.numero_djc,
+          resolucion: previewData.resolucion,
+          razon_social: previewData.razon_social,
+          cuit: selectedClient.cuit,
+          marca: previewData.marca,
+          domicilio_legal: previewData.domicilio_legal,
+          domicilio_planta: previewData.domicilio_planta,
+          telefono: previewData.telefono,
+          email: previewData.email,
+          representante_nombre: previewData.representante_nombre || null,
+          representante_domicilio: previewData.representante_domicilio || null,
+          representante_cuit: previewData.representante_cuit || null,
+          codigo_producto: previewData.codigo_producto,
+          fabricante: previewData.fabricante,
+          identificacion_producto: previewData.identificacion_producto,
+          reglamentos: previewData.resolucion,
+          normas_tecnicas: previewData.normas_tecnicas,
+          documento_evaluacion: previewData.informe_ensayos,
+          enlace_declaracion: previewData.enlace_declaracion || '',
+          fecha_lugar: previewData.fecha_lugar,
+          pdf_url: urlData.publicUrl,
+          djc_source: 'auto_generated',
+          djc_version: existingDJC ? (existingDJC.djc_version + 1) : 1,
+          is_active: true,
+          is_simplified: previewData.isSimplified || false,
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (djcError) {
+        console.error('Error saving DJC:', djcError);
+
+        if (djcError.code === '42501') {
+          toast.error('Error de permisos. Verifique las políticas RLS en Supabase');
+          throw new Error('Row Level Security error - check database policies');
+        }
+        throw djcError;
+      }
+
+      // Actualizar estado del producto
       const { error: updateError } = await supabase
         .from('products')
-        .update({ 
-          djc_path: publicUrl,
+        .update({
           djc_status: 'Generada Pendiente de Firma',
-          updated_at: new Date().toISOString()
+          djc_path: urlData.publicUrl
         })
         .eq('codificacion', selectedProduct.codificacion);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating product:', updateError);
+        throw updateError;
+      }
 
-      toast.success('DJC generado y guardado exitosamente');
-      
       // Descargar el PDF
-      doc.save(fileName);
-      
-      // Resetear el formulario
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+
+      toast.success('DJC generada y guardada exitosamente');
+
+      // Limpiar formulario y cerrar preview
       setShowPreview(false);
-      setDjcData(null);
-      setSelectedClient(null);
-      setSelectedProduct(null);
-      setSelectedResolucion('');
-      
-      // Recargar datos
-      fetchData();
-    } catch (error: any) {
-      console.error('Error saving DJC:', error);
-      toast.error('Error al guardar el DJC');
+      handleClear();
+
+    } catch (error) {
+      console.error('Error generating DJC:', error);
+      toast.error('Error al generar la DJC. Verifique los permisos en la base de datos.');
+    } finally {
+      setGenerating(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
+  const handleClear = () => {
+    setSelectedClient(null);
+    setSelectedProduct(null);
+    setSelectedResolution('');
+    setClientSearch('');
+    setProductSearch('');
+    setRepresentante({ nombre: '', domicilio: '', cuit: '' });
+    setUseCustomLink(false);
+    setCustomLink('');
+    setUseSimplifiedVersion(false);
+    setDjcHistory([]);
+    setShowHistory(false);
+    setPreviewData(null);
+  };
+
+  const getMissingFields = () => {
+    const missing = [];
+    if (!selectedClient) missing.push('Cliente');
+    if (!selectedProduct) missing.push('Producto');
+    if (!selectedResolution) missing.push('Resolución');
+    if (selectedClient && !selectedClient.telefono) missing.push('Teléfono del cliente');
+    if (selectedProduct && !selectedProduct.normas_aplicacion) missing.push('Normas técnicas');
+    if (selectedProduct && !selectedProduct.informe_ensayo_nro) missing.push('Informe de ensayo');
+    return missing;
+  };
+
+  const missingFields = getMissingFields();
+  const canGenerate = selectedClient && selectedProduct && selectedResolution;
 
   return (
-    <div className="space-y-6">
-      {/* Header con estadísticas */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold mb-2">Gestión de DJC</h2>
-            <p className="opacity-90">Genera Declaraciones Juradas de Conformidad</p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold">{productsWithoutDJC.length}</p>
-            <p className="text-sm opacity-90">Productos sin DJC</p>
+    <div className="max-w-7xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FileText className="h-6 w-6" />
+            Generador de DJC
+          </h2>
+          <button
+            onClick={handleClear}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            Limpiar
+          </button>
+        </div>
+
+        {/* Información del Sistema */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Sistema de Gestión de DJC:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Vista previa antes de generar el PDF final</li>
+                <li>Cada DJC es individual por producto</li>
+                <li>Las DJC se guardan en el bucket "djcs"</li>
+                <li>Puede agregar un representante autorizado si corresponde</li>
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Filtro de productos sin DJC */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showProductsWithoutDJC}
-            onChange={(e) => setShowProductsWithoutDJC(e.target.checked)}
-            className="w-4 h-4 text-purple-600 rounded"
-          />
-          <span className="text-sm font-medium">
-            Mostrar solo productos sin DJC ({productsWithoutDJC.length})
-          </span>
-        </label>
-      </div>
-
-      {/* Formulario de generación */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Generar Nueva DJC</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Selección de Cliente */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cliente
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Buscar cliente..."
-                value={searchClient}
-                onChange={(e) => setSearchClient(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-            <select
-              value={selectedClient?.cuit.toString() || ''}
-              onChange={(e) => {
-                const client = clients.find(c => c.cuit.toString() === e.target.value);
-                setSelectedClient(client || null);
-              }}
-              className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+        {/* Modo de búsqueda */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Modo de búsqueda:
+          </label>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setSearchMode('client')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                searchMode === 'client'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
             >
-              <option value="">Seleccione un cliente</option>
-              {clients
-                .filter(client => 
-                  !searchClient || 
-                  client.razon_social.toLowerCase().includes(searchClient.toLowerCase())
-                )
-                .map(client => (
-                  <option key={client.cuit} value={client.cuit.toString()}>
-                    {client.razon_social} - {formatCuit(client.cuit)}
+              <User className="h-4 w-4" />
+              Por Cliente
+            </button>
+            <button
+              onClick={() => setSearchMode('product')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                searchMode === 'product'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <Package className="h-4 w-4" />
+              Por Producto
+            </button>
+          </div>
+        </div>
+
+        {/* Selección según modo */}
+        {searchMode === 'client' ? (
+          <>
+            {/* Selección de Cliente */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paso 1: Seleccionar Cliente
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  placeholder="Buscar por razón social..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <select
+                value={selectedClient?.cuit || ''}
+                onChange={(e) => {
+                  const client = clients.find(c => c.cuit?.toString() === e.target.value);
+                  setSelectedClient(client || null);
+                  setSelectedProduct(null);
+                  setProductSearch('');
+                }}
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seleccione un cliente...</option>
+                {clients
+                  .filter(client => 
+                    !clientSearch || 
+                    client.razon_social.toLowerCase().includes(clientSearch.toLowerCase())
+                  )
+                  .map(client => (
+                    <option key={client.cuit} value={client.cuit}>
+                      {client.razon_social} - CUIT: {formatCuit(client.cuit)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Selección de Producto */}
+            {selectedClient && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Paso 2: Seleccionar Producto del Cliente
+                </label>
+                
+                <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                  <p className="text-sm text-gray-600">
+                    Cliente <span className="font-semibold">{selectedClient.razon_social}</span> tiene{' '}
+                    <span className="font-semibold">{filteredProducts.length}</span> producto(s)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="showWithoutDJC"
+                    checked={showProductsWithoutDJC}
+                    onChange={(e) => setShowProductsWithoutDJC(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                  <label htmlFor="showWithoutDJC" className="text-sm text-gray-600">
+                    Mostrar solo productos sin DJC
+                  </label>
+                </div>
+                
+                <select
+                  value={selectedProduct?.codificacion || ''}
+                  onChange={(e) => {
+                    const product = filteredProducts.find(p => p.codificacion === e.target.value);
+                    setSelectedProduct(product || null);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  disabled={filteredProducts.length === 0}
+                >
+                  <option value="">
+                    {filteredProducts.length === 0 
+                      ? 'No hay productos para este cliente' 
+                      : 'Seleccione un producto...'}
                   </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Selección de Producto */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Producto
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Buscar producto..."
-                value={searchProduct}
-                onChange={(e) => setSearchProduct(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              />
+                  {filteredProducts.map(product => (
+                    <option key={product.codificacion} value={product.codificacion}>
+                      {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'} ({product.codificacion})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Búsqueda directa por producto */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paso 1: Buscar Producto
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => handleProductSearch(e.target.value)}
+                  placeholder="Buscar por producto, marca, código o N° certificado..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <select
+                value={selectedProduct?.codificacion || ''}
+                onChange={(e) => {
+                  const product = products.find(p => p.codificacion === e.target.value);
+                  if (product) {
+                    setSelectedProduct(product);
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
+                    if (client) {
+                      setSelectedClient(client);
+                      toast.success(`Cliente "${client.razon_social}" seleccionado automáticamente`);
+                    }
+                  }
+                }}
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seleccione un producto...</option>
+                {products
+                  .filter(product =>
+                    !productSearch ||
+                    product.producto?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.marca?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.codificacion?.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    product.nro_certificado?.toLowerCase().includes(productSearch.toLowerCase())
+                  )
+                  .map(product => {
+                    const client = clients.find(c => 
+                      c.cuit?.toString() === product.cuit?.toString()
+                    );
+                    return (
+                      <option key={product.codificacion} value={product.codificacion}>
+                        [{product.codificacion}] {product.producto || 'Sin nombre'} - {product.marca || 'Sin marca'}
+                        {product.nro_certificado && ` [Cert: ${product.nro_certificado}]`}
+                        {client && ` (${client.razon_social})`}
+                      </option>
+                    );
+                  })}
+              </select>
             </div>
-            <select
-              value={selectedProduct?.codificacion || ''}
-              onChange={(e) => {
-                const product = filteredProducts.find(p => p.codificacion === e.target.value);
-                setSelectedProduct(product || null);
-              }}
-              className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">Seleccione un producto</option>
-              {filteredProducts.map(product => (
-                <option key={product.codificacion} value={product.codificacion}>
-                  {product.produto} - {product.marca} ({product.codificacion})
-                  {!product.djc_path && ' ⚠️ Sin DJC'}
-                </option>
-              ))}
-            </select>
-          </div>
+          </>
+        )}
 
-          {/* Selección de Resolución */}
-          <div>
+        {/* Información seleccionada */}
+        {selectedClient && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-gray-700 mb-2">Cliente Seleccionado:</h3>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Razón Social:</span> {selectedClient.razon_social}
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">CUIT:</span> {formatCuit(selectedClient.cuit)}
+            </p>
+            {!selectedClient.telefono && (
+              <p className="text-sm text-red-600 mt-1">
+                <AlertTriangle className="inline h-4 w-4 mr-1" />
+                Falta teléfono del cliente
+              </p>
+            )}
+          </div>
+        )}
+
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-700">Producto Seleccionado:</h3>
+              <button
+                onClick={refreshSelectedProduct}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                title="Refrescar datos del producto"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Actualizar
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Producto:</span> {selectedProduct.producto || 'Sin nombre'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Código:</span> {selectedProduct.codificacion}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Marca:</span> {selectedProduct.marca || 'Sin marca'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Estado DJC:</span>{' '}
+                  <span className={`font-medium ${
+                    selectedProduct.djc_status === 'Firmada' ? 'text-green-600' :
+                    selectedProduct.djc_status === 'Generada Pendiente de Firma' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {selectedProduct.djc_status || 'No Generada'}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Mostrar QR Link actual */}
+            {selectedProduct.qr_link && (
+              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs text-blue-700">
+                  <span className="font-semibold">QR Link actual:</span>{' '}
+                  <span className="text-blue-600 break-all">{selectedProduct.qr_link}</span>
+                </p>
+              </div>
+            )}
+            
+            {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
+              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                <p className="text-sm text-red-700 flex items-center gap-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  Faltan datos técnicos del producto
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Historial de DJCs */}
+        {selectedProduct && djcHistory.length > 0 && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-2"
+            >
+              <History className="h-4 w-4" />
+              {showHistory ? 'Ocultar' : 'Mostrar'} historial de DJCs ({djcHistory.length})
+            </button>
+            {showHistory && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-blue-800 mb-2">
+                  Historial de DJCs para este producto:
+                </p>
+                {djcHistory.map((djc, index) => (
+                  <div key={djc.id} className="text-sm text-blue-700 mb-2 pb-2 border-b border-blue-200 last:border-0">
+                    <p className="font-medium">DJC #{index + 1}: {djc.numero_djc}</p>
+                    <p className="text-xs">• Fecha: {new Date(djc.created_at).toLocaleDateString('es-AR')}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Selección de Resolución */}
+        {selectedProduct && (
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Resolución Aplicable
+              Paso 3: Seleccionar Resolución Aplicable
             </label>
             <select
-              value={selectedResolucion}
-              onChange={(e) => setSelectedResolucion(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              value={selectedResolution}
+              onChange={(e) => setSelectedResolution(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Seleccione una resolución</option>
-              {RESOLUCIONES.map(res => (
+              <option value="">Seleccione una resolución...</option>
+              {resolutions.map(res => (
                 <option key={res.value} value={res.value}>
                   {res.label}
                 </option>
               ))}
             </select>
           </div>
-        </div>
+        )}
 
-        {/* Información del cliente seleccionado */}
-        {selectedClient && (
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-2">Cliente Seleccionado</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-              <p><span className="font-medium">Razón Social:</span> {selectedClient.razon_social}</p>
-              <p><span className="font-medium">CUIT:</span> {formatCuit(selectedClient.cuit)}</p>
-              <p><span className="font-medium">Productos asociados:</span> {products.length}</p>
+        {/* Representante Autorizado */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-gray-700 mb-3">
+              Representante Autorizado (Opcional)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="text"
+                placeholder="Nombre y Apellido / Razón Social"
+                value={representante.nombre}
+                onChange={(e) => setRepresentante({...representante, nombre: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <input
+                type="text"
+                placeholder="Domicilio Legal"
+                value={representante.domicilio}
+                onChange={(e) => setRepresentante({...representante, domicilio: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <input
+                type="text"
+                placeholder="CUIT"
+                value={representante.cuit}
+                onChange={(e) => setRepresentante({...representante, cuit: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
             </div>
           </div>
         )}
 
-        {/* Información del producto seleccionado */}
+        {/* Enlace de Declaración */}
         {selectedProduct && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-2">Información del Producto</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-              <p><span className="font-medium">Código:</span> {selectedProduct.codificacion}</p>
-              <p><span className="font-medium">Marca:</span> {selectedProduct.marca}</p>
-              <p><span className="font-medium">Origen:</span> {selectedProduct.origen}</p>
-              <p className="md:col-span-3">
-                <span className="font-medium">Normas:</span> {selectedProduct.normas_aplicacion}
-              </p>
-              {selectedProduct.djc_path && (
-                <p className="md:col-span-3 text-orange-600">
-                  <AlertCircle className="inline w-4 h-4 mr-1" />
-                  Este producto ya tiene una DJC generada
-                </p>
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-gray-700 mb-3">
+              Enlace de la Declaración
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="useCustomLink"
+                  checked={useCustomLink}
+                  onChange={(e) => {
+                    setUseCustomLink(e.target.checked);
+                    if (!e.target.checked) {
+                      setCustomLink('');
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="useCustomLink" className="text-sm text-gray-700">
+                  El cliente genera su propio enlace (dejar en blanco o usar enlace personalizado)
+                </label>
+              </div>
+
+              {!useCustomLink && (
+                <div className="p-3 bg-white rounded border border-gray-300">
+                  <p className="text-sm text-gray-600 mb-1 font-medium">Enlace automático:</p>
+                  <p className="text-sm text-blue-600 break-all">
+                    {selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`}
+                  </p>
+                  {!selectedProduct.qr_link && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Este producto no tiene QR generado. El enlace se generará cuando se cree el QR.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {useCustomLink && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">
+                    Enlace personalizado (opcional - dejar vacío para que el cliente lo complete después):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={customLink}
+                    onChange={(e) => setCustomLink(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {!customLink && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Si se deja vacío, el campo quedará en blanco para que el cliente lo complete después
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-4">
+        {/* Versión Simplificada */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="useSimplifiedVersion"
+                checked={useSimplifiedVersion}
+                onChange={(e) => setUseSimplifiedVersion(e.target.checked)}
+                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500 mt-0.5"
+              />
+              <div className="flex-1">
+                <label htmlFor="useSimplifiedVersion" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Generar versión simplificada de DJC
+                </label>
+                <p className="text-xs text-gray-600 mt-1">
+                  La versión simplificada omitirá el campo "Fabricante (Nombre y dirección de la planta de producción)" en la sección de Información del Producto.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Resumen de campos faltantes */}
+        {missingFields.length > 0 && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <p className="font-semibold text-yellow-800 mb-1">
+                  Campos faltantes:
+                </p>
+                <ul className="list-disc list-inside text-sm text-yellow-700">
+                  {missingFields.map((field, index) => (
+                    <li key={index}>{field}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Botón de vista previa */}
+        <div className="flex justify-end gap-4">
           <button
-            onClick={() => {
-              setSelectedClient(null);
-              setSelectedProduct(null);
-              setSelectedResolucion('');
-            }}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            onClick={preparePreview}
+            disabled={!canGenerate}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors ${
+              canGenerate
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
           >
-            Limpiar
-          </button>
-          <button
-            onClick={generateDJC}
-            disabled={!selectedClient || !selectedProduct || !selectedResolucion}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <Eye className="w-4 h-4" />
+            <Eye className="h-5 w-5" />
             Vista Previa DJC
           </button>
         </div>
       </div>
 
-      {/* Modal de Vista Previa */}
-      {showPreview && djcData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h3 className="text-xl font-bold">Vista Previa de DJC</h3>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Encabezado DJC */}
-              <div className="text-center">
-                <h1 className="text-2xl font-bold mb-2">DECLARACIÓN JURADA DE CONFORMIDAD</h1>
-                <p className="text-gray-600">Número: {djcData.numero_djc}</p>
-              </div>
-
-              {/* Resolución Aplicable */}
-              <section>
-                <h3 className="font-bold text-lg mb-2">Resolución Aplicable:</h3>
-                <p className="pl-4">{djcData.resolucion}</p>
-              </section>
-
-              {/* Datos del Declarante */}
-              <section>
-                <h3 className="font-bold text-lg mb-3">Datos del Declarante:</h3>
-                <div className="pl-4 space-y-2">
-                  <p>● <strong>Razón Social:</strong> {djcData.razon_social}</p>
-                  <p>● <strong>CUIT:</strong> {djcData.cuit}</p>
-                  <p>● <strong>Domicilio Legal:</strong> {djcData.domicilio_legal}</p>
-                  <p>● <strong>Teléfono:</strong> {djcData.telefono}</p>
-                  <p>● <strong>Email:</strong> {djcData.email}</p>
-                </div>
-              </section>
-
-              {/* Datos del Producto */}
-              <section>
-                <h3 className="font-bold text-lg mb-3">Datos del Producto:</h3>
-                <div className="pl-4 space-y-2">
-                  <p>● <strong>Nombre Comercial:</strong> {djcData.nombre_comercial}</p>
-                  <p>● <strong>Código de Identificación:</strong> {djcData.codigo_identificacion}</p>
-                  <p>● <strong>Fabricante y Planta:</strong> {djcData.fabricante_completo}</p>
-                  <p>● <strong>Identificación del Producto:</strong> {djcData.identificacion_producto}</p>
-                  <p>● <strong>Normas Técnicas:</strong> {djcData.normas_tecnicas}</p>
-                  <p>● <strong>Documento de Evaluación:</strong> {djcData.documento_evaluacion}</p>
-                </div>
-              </section>
-
-              {/* Otros Datos */}
-              <section>
-                <h3 className="font-bold text-lg mb-3">Otros Datos:</h3>
-                <div className="pl-4">
-                  <p>● <strong>Enlace a la copia de la Declaración de la Conformidad en Internet:</strong>{' '}
-                    <span className={djcData.enlace_declaracion === 'CAMPO NO ENCONTRADO' ? 'text-red-600 font-bold' : 'text-blue-600'}>
-                      {djcData.enlace_declaracion}
-                    </span>
-                  </p>
-                  <p className="text-sm italic text-gray-600 ml-4">
-                    (Si está disponible, incluir el enlace al documento en línea)
-                  </p>
-                  {djcData.enlace_declaracion !== 'CAMPO NO ENCONTRADO' && (
-                    <p className="text-xs text-gray-500 ml-4 mt-1">
-                      Este enlace corresponde al código QR del producto
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              {/* Fecha y Lugar */}
-              <section>
-                <p className="text-right mt-8">
-                  <strong>{djcData.fecha_lugar}</strong>
-                </p>
-              </section>
-
-              {/* Campos faltantes */}
-              {Object.entries(djcData).some(([_, value]) => value === 'CAMPO NO ENCONTRADO') && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-800 font-medium flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    Atención: Hay campos sin completar
-                  </p>
-                  <p className="text-red-600 text-sm mt-1">
-                    Revise los campos marcados en rojo antes de generar el documento final.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Acciones */}
-            <div className="p-6 border-t bg-gray-50 flex justify-end gap-4">
-              <button
-                onClick={() => setShowPreview(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={saveDJC}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Generar y Descargar DJC
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de Preview */}
+      <DJCPreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        djcData={previewData}
+        onConfirm={generatePDF}
+        isGenerating={generating}
+      />
     </div>
   );
-}
+};
+
+export default DJCGenerator;

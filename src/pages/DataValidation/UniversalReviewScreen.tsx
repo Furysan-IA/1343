@@ -1,0 +1,616 @@
+import React, { useState, useEffect } from 'react';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Users, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ParsedData,
+  detectDuplicates,
+  insertClientsAndProducts,
+  updateBatchStatus,
+  UniversalRecord,
+  ClientMatch,
+  ProductMatch
+} from '../../services/universalDataValidation.service';
+import toast from 'react-hot-toast';
+import { LoadingSpinner } from '../../components/Common/LoadingSpinner';
+
+interface UniversalReviewScreenProps {
+  parsedData: ParsedData;
+  batchId: string;
+  onComplete: () => void;
+}
+
+export const UniversalReviewScreen: React.FC<UniversalReviewScreenProps> = ({
+  parsedData,
+  batchId,
+  onComplete
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+
+  const [clientMatches, setClientMatches] = useState<ClientMatch[]>([]);
+  const [productMatches, setProductMatches] = useState<ProductMatch[]>([]);
+  const [newClients, setNewClients] = useState<UniversalRecord[]>([]);
+  const [newProducts, setNewProducts] = useState<UniversalRecord[]>([]);
+  const [incompleteClients, setIncompleteClients] = useState<UniversalRecord[]>([]);
+  const [incompleteProducts, setIncompleteProducts] = useState<UniversalRecord[]>([]);
+  const [includeIncomplete, setIncludeIncomplete] = useState(false);
+
+  const [expandedClientChanges, setExpandedClientChanges] = useState(false);
+  const [expandedProductChanges, setExpandedProductChanges] = useState(false);
+  const [expandedIncompleteClients, setExpandedIncompleteClients] = useState(false);
+  const [expandedIncompleteProducts, setExpandedIncompleteProducts] = useState(false);
+
+  useEffect(() => {
+    analyzeData();
+  }, []);
+
+  const analyzeData = async () => {
+    try {
+      console.log('Analyzing data for duplicates...');
+
+      const result = await detectDuplicates(parsedData.rows);
+
+      console.log('Analysis complete:', {
+        clientMatches: result.clientMatches.length,
+        productMatches: result.productMatches.length,
+        newClients: result.newClients.length,
+        newProducts: result.newProducts.length,
+        incompleteClients: result.incompleteClients.length,
+        incompleteProducts: result.incompleteProducts.length
+      });
+
+      setClientMatches(result.clientMatches);
+      setProductMatches(result.productMatches);
+      setNewClients(result.newClients);
+      setNewProducts(result.newProducts);
+      setIncompleteClients(result.incompleteClients);
+      setIncompleteProducts(result.incompleteProducts);
+      setLoading(false);
+    } catch (error: any) {
+      console.error('Error analyzing data:', error);
+      toast.error('Error al analizar datos: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const fillMissingFieldsWithDefault = () => {
+    const updatedClients = incompleteClients.map(client => {
+      const updated = { ...client };
+      if (client._missing_fields) {
+        (client._missing_fields as string[]).forEach(field => {
+          if (!updated[field] || updated[field] === '') {
+            updated[field] = 'No encontrado';
+          }
+        });
+      }
+      delete updated._validation_warning;
+      delete updated._missing_fields;
+      delete updated._invalid_fields;
+      return updated;
+    });
+
+    const updatedProducts = incompleteProducts.map(product => {
+      const updated = { ...product };
+      if (product._missing_fields) {
+        (product._missing_fields as string[]).forEach(field => {
+          if (!updated[field] || updated[field] === '') {
+            updated[field] = 'No encontrado';
+          }
+        });
+      }
+      delete updated._validation_warning;
+      delete updated._missing_fields;
+      delete updated._invalid_fields;
+      return updated;
+    });
+
+    setNewClients([...newClients, ...updatedClients]);
+    setNewProducts([...newProducts, ...updatedProducts]);
+    setIncompleteClients([]);
+    setIncompleteProducts([]);
+    setIncludeIncomplete(false);
+
+    toast.success(`Completados ${updatedClients.length + updatedProducts.length} registros con valores por defecto`);
+  };
+
+  const handleProcess = async () => {
+    setProcessing(true);
+
+    try {
+      // Combine normal clients with incomplete ones if user opted in
+      const allClientsToProcess = includeIncomplete
+        ? [...newClients, ...incompleteClients]
+        : newClients;
+
+      const allProductsToProcess = includeIncomplete
+        ? [...newProducts, ...incompleteProducts]
+        : newProducts;
+
+      console.log('Processing data...', {
+        newClients: allClientsToProcess.length,
+        newProducts: allProductsToProcess.length,
+        clientsWithChanges: clientMatches.filter(m => m.hasChanges).length,
+        includingIncomplete: includeIncomplete
+      });
+
+      const result = await insertClientsAndProducts(
+        allClientsToProcess,
+        allProductsToProcess,
+        batchId,
+        true
+      );
+
+      console.log('Processing result:', result);
+
+      await updateBatchStatus(batchId, {
+        status: result.success ? 'completed' : 'failed',
+        processed_records: result.clientsInserted + result.clientsUpdated + result.productsInserted,
+        new_records: result.clientsInserted + result.productsInserted,
+        updated_records: result.clientsUpdated,
+        error_count: result.errors.length
+      });
+
+      if (result.success) {
+        const messages = [];
+        if (result.clientsInserted > 0) messages.push(`${result.clientsInserted} clientes nuevos`);
+        if (result.clientsUpdated > 0) messages.push(`${result.clientsUpdated} clientes actualizados`);
+        if (result.productsInserted > 0) messages.push(`${result.productsInserted} productos nuevos`);
+
+        toast.success(`✅ Procesado: ${messages.join(', ')}`, { duration: 4000 });
+
+        setTimeout(() => {
+          onComplete();
+        }, 1500);
+      } else {
+        toast.error(`Procesamiento completado con ${result.errors.length} errores`);
+        console.error('Processing errors:', result.errors);
+      }
+    } catch (error: any) {
+      console.error('Error processing records:', error);
+      toast.error('Error al procesar: ' + error.message);
+
+      await updateBatchStatus(batchId, {
+        status: 'failed',
+        error_count: 1
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-center bg-white rounded-xl shadow-lg p-8">
+          <LoadingSpinner />
+          <h2 className="mt-4 text-2xl font-bold text-slate-800">🔍 Validando Archivo</h2>
+          <p className="mt-2 text-slate-600">Analizando datos sin modificar la base de datos...</p>
+          <p className="mt-2 text-sm text-slate-500">Detectando clientes y productos nuevos/existentes</p>
+        </div>
+      </div>
+    );
+  }
+
+  const clientsWithChanges = clientMatches.filter(m => m.hasChanges);
+  const productsWithChanges = productMatches.filter(m => m.hasChanges);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8 relative">
+      {processing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
+            <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">💾 Actualizando Base de Datos</h2>
+            <p className="text-slate-600 mb-2">Guardando cambios en el sistema...</p>
+            <p className="text-sm text-slate-500">Esto puede tomar unos segundos</p>
+            <div className="mt-4 w-full bg-slate-200 rounded-full h-2">
+              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">
+            📋 Resumen de Validación
+          </h1>
+          <p className="text-slate-600 mb-4">
+            Revisa qué se encontró en tu archivo antes de actualizar la base de datos
+          </p>
+          <p className="text-slate-600 mb-6">
+            {parsedData.metadata.filename} - {parsedData.rows.length} registros analizados
+          </p>
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+            <p className="text-yellow-900 font-medium">
+              ⚠️ <strong>Importante:</strong> Los datos AÚN NO se han guardado en la base de datos.
+              Revisa el resumen abajo y presiona "Confirmar\" cuando estés listo para actualizar.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Clientes Nuevos</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-900">{newClients.length}</div>
+            </div>
+
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Package className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Productos Nuevos</span>
+              </div>
+              <div className="text-2xl font-bold text-green-900">{newProducts.length}</div>
+            </div>
+
+            <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-700">Clientes Existentes</span>
+              </div>
+              <div className="text-2xl font-bold text-yellow-900">{clientMatches.length}</div>
+              {clientsWithChanges.length > 0 && (
+                <p className="text-xs text-yellow-600 mt-1">{clientsWithChanges.length} con cambios</p>
+              )}
+            </div>
+
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Package className="w-5 h-5 text-orange-600" />
+                <span className="text-sm font-medium text-orange-700">Productos Existentes</span>
+              </div>
+              <div className="text-2xl font-bold text-orange-900">{productMatches.length}</div>
+              <p className="text-xs text-orange-600 mt-1">Se omitirán</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-lg p-6 border-2 border-slate-200 mb-6">
+            <h3 className="font-semibold text-slate-800 mb-4 text-lg flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-blue-600" />
+              Qué se procesará automáticamente
+            </h3>
+            <div className="space-y-3">
+              {newClients.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <div className="flex items-start gap-2">
+                    <Users className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {newClients.length} Cliente{newClients.length !== 1 ? 's' : ''} Nuevo{newClients.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se crearán con los datos del archivo. Los campos faltantes quedarán vacíos para completar después en Gestión de Clientes.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {clientMatches.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-yellow-200">
+                  <div className="flex items-start gap-2">
+                    <RefreshCw className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {clientMatches.length} Cliente{clientMatches.length !== 1 ? 's' : ''} Existente{clientMatches.length !== 1 ? 's' : ''}
+                        {clientsWithChanges.length > 0 && (
+                          <span className="text-yellow-600"> ({clientsWithChanges.length} con cambios detectados)</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se actualizarán con los nuevos datos del archivo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {newProducts.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <div className="flex items-start gap-2">
+                    <Package className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {newProducts.length} Producto{newProducts.length !== 1 ? 's' : ''} Nuevo{newProducts.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Se crearán y se les asignará un código QR automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {productMatches.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-orange-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-slate-800">
+                        {productMatches.length} Producto{productMatches.length !== 1 ? 's' : ''} Existente{productMatches.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        NO se modificarán para preservar sus códigos QR y enlaces generados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {clientsWithChanges.length > 0 && (
+            <div className="mb-6">
+              <button
+                onClick={() => setExpandedClientChanges(!expandedClientChanges)}
+                className="w-full flex items-center justify-between p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg hover:bg-yellow-100"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-yellow-900">
+                      {clientsWithChanges.length} Clientes con Cambios Detectados
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      Click para ver detalles
+                    </p>
+                  </div>
+                </div>
+                {expandedClientChanges ? (
+                  <ChevronUp className="w-5 h-5 text-yellow-600" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-yellow-600" />
+                )}
+              </button>
+
+              {expandedClientChanges && (
+                <div className="mt-2 bg-yellow-50 rounded-lg p-4 space-y-4 max-h-96 overflow-y-auto">
+                  {clientsWithChanges.map((match, idx) => (
+                    <div key={idx} className="bg-white rounded-lg p-4">
+                      <div className="font-medium text-slate-800 mb-3">
+                        CUIT: {match.cuit} - {match.existing.razon_social}
+                      </div>
+                      <div className="space-y-2">
+                        {match.changes.map((change, cIdx) => (
+                          <div key={cIdx} className="text-sm">
+                            <span className="font-medium text-slate-600">{change.field}:</span>
+                            <div className="line-through text-red-600">
+                              {String(change.oldValue || '(vacío)')}
+                            </div>
+                            <div className="text-green-600 font-medium">
+                              → {String(change.newValue)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {productsWithChanges.length > 0 && (
+            <div className="mb-6">
+              <button
+                onClick={() => setExpandedProductChanges(!expandedProductChanges)}
+                className="w-full flex items-center justify-between p-4 bg-orange-50 border-2 border-orange-300 rounded-lg hover:bg-orange-100"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-orange-900">
+                      {productsWithChanges.length} Productos con Diferencias
+                    </h3>
+                    <p className="text-sm text-orange-700">
+                      NO se actualizarán
+                    </p>
+                  </div>
+                </div>
+                {expandedProductChanges ? (
+                  <ChevronUp className="w-5 h-5 text-orange-600" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-orange-600" />
+                )}
+              </button>
+
+              {expandedProductChanges && (
+                <div className="mt-2 bg-orange-50 rounded-lg p-4 space-y-4 max-h-96 overflow-y-auto">
+                  {productsWithChanges.slice(0, 10).map((match, idx) => (
+                    <div key={idx} className="bg-white rounded-lg p-4">
+                      <div className="font-medium text-slate-800 mb-3">
+                        {match.codificacion} - {match.existing.producto}
+                      </div>
+                      <div className="space-y-2">
+                        {match.changes.map((change, cIdx) => (
+                          <div key={cIdx} className="text-sm">
+                            <span className="font-medium text-slate-600">{change.field}:</span>
+                            <div className="text-slate-600">
+                              BD: {String(change.oldValue || '(vacío)')}
+                            </div>
+                            <div className="text-slate-500">
+                              Archivo: {String(change.newValue)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(incompleteClients.length > 0 || incompleteProducts.length > 0) && (
+            <div className="mb-6">
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-red-900 text-lg mb-2">
+                      ⚠️ Registros con Datos Incompletos o Inválidos
+                    </h3>
+                    <p className="text-red-800 mb-3">
+                      Se encontraron <strong>{incompleteClients.length + incompleteProducts.length}</strong> registros con campos inválidos, incompletos o columnas que no existen en la base de datos.
+                    </p>
+                    <div className="space-y-2 mb-4">
+                      {incompleteClients.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-red-700">
+                          <Users className="w-4 h-4" />
+                          <span><strong>{incompleteClients.length}</strong> cliente{incompleteClients.length !== 1 ? 's' : ''} con CUIT inválido</span>
+                        </div>
+                      )}
+                      {incompleteProducts.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-red-700">
+                          <Package className="w-4 h-4" />
+                          <span><strong>{incompleteProducts.length}</strong> producto{incompleteProducts.length !== 1 ? 's' : ''} con codificación inválida</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <button
+                          onClick={fillMissingFieldsWithDefault}
+                          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                          Completar campos faltantes con "No encontrado"
+                        </button>
+                        <p className="text-sm text-slate-600 mt-2 text-center">
+                          Los campos inválidos se eliminarán y los campos faltantes se completarán automáticamente
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={includeIncomplete}
+                            onChange={(e) => setIncludeIncomplete(e.target.checked)}
+                            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="font-medium text-slate-800 block mb-1">
+                              O incluir estos registros tal como están
+                            </span>
+                            <span className="text-sm text-slate-600">
+                              Los campos incompletos quedarán vacíos, los campos inválidos se omitirán, y podrás completarlos manualmente después.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {incompleteClients.length > 0 && (
+                      <button
+                        onClick={() => setExpandedIncompleteClients(!expandedIncompleteClients)}
+                        className="w-full flex items-center justify-between p-3 bg-white border border-red-300 rounded-lg hover:bg-red-50 mb-2"
+                      >
+                        <span className="text-sm font-medium text-red-900">
+                          Ver clientes con datos incompletos ({incompleteClients.length})
+                        </span>
+                        {expandedIncompleteClients ? (
+                          <ChevronUp className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    )}
+
+                    {expandedIncompleteClients && (
+                      <div className="mt-2 bg-white rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto border border-red-200 mb-2">
+                        {incompleteClients.slice(0, 20).map((client, idx) => (
+                          <div key={idx} className="text-sm border-b border-red-100 pb-2 last:border-0">
+                            <div className="font-medium text-slate-800">
+                              CUIT: <span className="text-red-600">{client.cuit || '(vacío)'}</span>
+                            </div>
+                            <div className="text-slate-600">
+                              Razón Social: {client.razon_social || '(vacío)'}
+                            </div>
+                            <div className="text-xs text-red-600 mt-1">
+                              {client._validation_warning}
+                            </div>
+                          </div>
+                        ))}
+                        {incompleteClients.length > 20 && (
+                          <p className="text-sm text-slate-500 text-center pt-2">
+                            ... y {incompleteClients.length - 20} cliente{incompleteClients.length - 20 !== 1 ? 's' : ''} más
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {incompleteProducts.length > 0 && (
+                      <button
+                        onClick={() => setExpandedIncompleteProducts(!expandedIncompleteProducts)}
+                        className="w-full flex items-center justify-between p-3 bg-white border border-red-300 rounded-lg hover:bg-red-50"
+                      >
+                        <span className="text-sm font-medium text-red-900">
+                          Ver productos con datos incompletos ({incompleteProducts.length})
+                        </span>
+                        {expandedIncompleteProducts ? (
+                          <ChevronUp className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    )}
+
+                    {expandedIncompleteProducts && (
+                      <div className="mt-2 bg-white rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto border border-red-200">
+                        {incompleteProducts.slice(0, 20).map((product, idx) => (
+                          <div key={idx} className="text-sm border-b border-red-100 pb-2 last:border-0">
+                            <div className="font-medium text-slate-800">
+                              Codificación: <span className="text-red-600">{product.codificacion || '(vacío)'}</span>
+                            </div>
+                            <div className="text-slate-600">
+                              Producto: {product.producto || '(vacío)'}
+                            </div>
+                            <div className="text-xs text-red-600 mt-1">
+                              {product._validation_warning}
+                            </div>
+                          </div>
+                        ))}
+                        {incompleteProducts.length > 20 && (
+                          <p className="text-sm text-slate-500 text-center pt-2">
+                            ... y {incompleteProducts.length - 20} producto{incompleteProducts.length - 20 !== 1 ? 's' : ''} más
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end gap-4">
+            <button
+              onClick={() => window.location.reload()}
+              disabled={processing}
+              className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-medium disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleProcess}
+              disabled={processing}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              {processing ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  Actualizando Base de Datos...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  ✅ Confirmar y Actualizar Base de Datos
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
