@@ -1,4 +1,4 @@
-# Guía Rápida: Aplicar Migración de Columnas QR
+## Guía Rápida: Aplicar Migración de Columnas QR
 
 ## Problema
 La aplicación está intentando acceder a columnas que no existen en la tabla `products`:
