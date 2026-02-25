@@ -155,67 +155,33 @@ export default function ProductPassport() {
         setShowingRevision(false);
       }
 
-      // Build list of codificaciones to search (displayed product first, then original)
-      const codificacionesToSearch = [displayedCodificacion];
-      if (displayedCodificacion !== productData.codificacion) {
-        codificacionesToSearch.push(productData.codificacion);
-      }
+      // The product's djc_path field is the SIGNED DJC uploaded by the client.
+      // This is the source of truth - it always takes priority.
+      const signedDjcUrl = productData.djc_path;
 
-      let foundDjc: DJC | null = null;
+      // Load DJC metadata from the djc table
+      const { data: djcRecord } = await supabasePublic
+        .from('djc')
+        .select('*')
+        .eq('codigo_producto', displayedCodificacion)
+        .eq('is_active', true)
+        .order('djc_version', { ascending: false })
+        .maybeSingle();
 
-      for (const codificacion of codificacionesToSearch) {
-        // First, try to find a manually uploaded (signed) DJC
-        const { data: signedDjc, error: signedError } = await supabasePublic
-          .from('djc')
-          .select('*')
-          .eq('codigo_producto', codificacion)
-          .eq('is_active', true)
-          .eq('djc_source', 'manually_uploaded')
-          .order('djc_version', { ascending: false })
-          .order('created_at', { ascending: false })
-          .maybeSingle();
+      // If no DJC for displayed product, try the original product
+      const finalDjcRecord = djcRecord || (displayedCodificacion !== productData.codificacion
+        ? (await supabasePublic.from('djc').select('*').eq('codigo_producto', productData.codificacion).eq('is_active', true).order('djc_version', { ascending: false }).maybeSingle()).data
+        : null);
 
-        if (!signedError && signedDjc) {
-          foundDjc = signedDjc;
-          break;
+      if (finalDjcRecord) {
+        // Always override pdf_url with the signed file from products.djc_path if it exists
+        if (signedDjcUrl) {
+          finalDjcRecord.pdf_url = signedDjcUrl;
+          finalDjcRecord.djc_source = 'manually_uploaded';
         }
-
-        // If no signed DJC, get any active DJC
-        const { data: anyDjc, error: anyError } = await supabasePublic
-          .from('djc')
-          .select('*')
-          .eq('codigo_producto', codificacion)
-          .eq('is_active', true)
-          .order('djc_version', { ascending: false })
-          .order('created_at', { ascending: false })
-          .maybeSingle();
-
-        if (!anyError && anyDjc) {
-          foundDjc = anyDjc;
-          break;
-        }
-      }
-
-      // Determine the displayed product for djc_path check
-      const displayedProduct = displayedCodificacion !== productData.codificacion
-        ? (await supabasePublic.from('products').select('djc_path,djc_status').eq('codificacion', displayedCodificacion).maybeSingle()).data
-        : productData;
-
-      const signedDjcPath = displayedProduct?.djc_path || productData.djc_path;
-
-      if (foundDjc) {
-        // If the product has a signed DJC file uploaded directly (products.djc_path),
-        // use that URL instead of the djc table's pdf_url (which may be auto-generated)
-        if (signedDjcPath && foundDjc.djc_source !== 'manually_uploaded') {
-          foundDjc = {
-            ...foundDjc,
-            pdf_url: signedDjcPath,
-            djc_source: 'manually_uploaded'
-          };
-        }
-        setDjc(foundDjc);
-      } else if (signedDjcPath) {
-        // No DJC record in table, but product has a signed file uploaded
+        setDjc(finalDjcRecord);
+      } else if (signedDjcUrl) {
+        // No DJC record in table at all, but the product has a signed file
         setDjc({
           id: '',
           resolucion: '',
@@ -238,7 +204,7 @@ export default function ProductPassport() {
           enlace_declaracion: null,
           fecha_lugar: '',
           firma_url: null,
-          pdf_url: signedDjcPath,
+          pdf_url: signedDjcUrl,
           created_at: '',
           numero_djc: `DJC-${displayedCodificacion}`,
           updated_at: '',
