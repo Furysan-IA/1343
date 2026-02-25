@@ -119,15 +119,9 @@ export default function ProductPassport() {
         return;
       }
 
-      console.log('📦 Producto encontrado:', productData.codificacion);
-      console.log('  is_qr_master:', productData.is_qr_master);
-      console.log('  shared_qr_from:', productData.shared_qr_from);
-      console.log('  qr_link:', productData.qr_link ? 'presente' : 'ausente');
+      let displayedCodificacion = productData.codificacion;
 
-      // If this product is a QR master, check if there are newer products using its QR
       if (productData.is_qr_master) {
-        console.log('🌟 Este producto es QR master, buscando productos que usan su QR...');
-
         const { data: productsUsingThisQR } = await supabasePublic
           .from('products')
           .select('*')
@@ -135,27 +129,18 @@ export default function ProductPassport() {
           .order('updated_at', { ascending: false });
 
         if (productsUsingThisQR && productsUsingThisQR.length > 0) {
-          // Show the most recent product that's using this QR
-          console.log(`✨ Se encontraron ${productsUsingThisQR.length} producto(s) usando este QR`);
-          console.log('📌 Mostrando producto más reciente:', productsUsingThisQR[0].codificacion);
-
+          displayedCodificacion = productsUsingThisQR[0].codificacion;
           setProduct(productsUsingThisQR[0]);
           setShowingRevision(true);
           setRelatedProducts([productData, ...productsUsingThisQR.slice(1)]);
         } else {
-          // No products are using this QR, show the master itself
-          console.log('ℹ️ No hay productos usando este QR, mostrando el master');
           setProduct(productData);
           setShowingRevision(false);
         }
       } else if (productData.shared_qr_from) {
-        // This product is using a shared QR from another product
-        console.log('🔗 Este producto usa QR compartido de:', productData.shared_qr_from);
-
         setProduct(productData);
         setShowingRevision(true);
 
-        // Load the master product for reference
         const { data: masterProduct } = await supabasePublic
           .from('products')
           .select('*')
@@ -166,31 +151,59 @@ export default function ProductPassport() {
           setRelatedProducts([masterProduct]);
         }
       } else {
-        // Regular product, not involved in QR sharing
-        console.log('📄 Producto regular sin compartir QR');
         setProduct(productData);
         setShowingRevision(false);
       }
 
-      // Buscar DJC asociada usando el producto actual
-      const { data: djcData, error: djcError } = await supabasePublic
-        .from('djc')
-        .select('*')
-        .eq('codigo_producto', productData.codificacion)
-        .eq('is_active', true)
-        .order('djc_version', { ascending: false })
-        .order('created_at', { ascending: false })
-        .maybeSingle();
+      // Build list of codificaciones to search (displayed product first, then original)
+      const codificacionesToSearch = [displayedCodificacion];
+      if (displayedCodificacion !== productData.codificacion) {
+        codificacionesToSearch.push(productData.codificacion);
+      }
 
-      if (djcError && djcError.code !== 'PGRST116') {
-        console.warn('Error loading DJC:', djcError);
-      } else if (djcData) {
-        console.log('✅ Active DJC loaded:', {
-          source: djcData.djc_source,
-          version: djcData.djc_version,
-          numero_djc: djcData.numero_djc
+      let foundDjc: DJC | null = null;
+
+      for (const codificacion of codificacionesToSearch) {
+        // First, try to find a manually uploaded (signed) DJC
+        const { data: signedDjc, error: signedError } = await supabasePublic
+          .from('djc')
+          .select('*')
+          .eq('codigo_producto', codificacion)
+          .eq('is_active', true)
+          .eq('djc_source', 'manually_uploaded')
+          .order('djc_version', { ascending: false })
+          .order('created_at', { ascending: false })
+          .maybeSingle();
+
+        if (!signedError && signedDjc) {
+          foundDjc = signedDjc;
+          break;
+        }
+
+        // If no signed DJC, get any active DJC
+        const { data: anyDjc, error: anyError } = await supabasePublic
+          .from('djc')
+          .select('*')
+          .eq('codigo_producto', codificacion)
+          .eq('is_active', true)
+          .order('djc_version', { ascending: false })
+          .order('created_at', { ascending: false })
+          .maybeSingle();
+
+        if (!anyError && anyDjc) {
+          foundDjc = anyDjc;
+          break;
+        }
+      }
+
+      if (foundDjc) {
+        console.log('DJC loaded:', {
+          source: foundDjc.djc_source,
+          version: foundDjc.djc_version,
+          numero_djc: foundDjc.numero_djc,
+          codigo_producto: foundDjc.codigo_producto
         });
-        setDjc(djcData);
+        setDjc(foundDjc);
       }
 
     } catch (error: any) {
@@ -580,17 +593,24 @@ export default function ProductPassport() {
                     <FileText className="w-6 h-6 text-indigo-600" />
                     Declaración Jurada de Conformidad
                   </h2>
-                  {djc.djc_source === 'manually_uploaded' && (
-                    <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full flex items-center gap-1">
-                      <CheckCircle className="w-4 h-4" />
-                      Firmada
-                    </span>
-                  )}
-                  {djc.djc_version && djc.djc_version > 1 && (
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
-                      Versión {djc.djc_version}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {djc.djc_source === 'manually_uploaded' ? (
+                      <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full flex items-center gap-1">
+                        <CheckCircle className="w-4 h-4" />
+                        Firmada por Cliente
+                      </span>
+                    ) : djc.djc_source === 'auto_generated' ? (
+                      <span className="px-3 py-1 bg-amber-100 text-amber-700 text-sm font-medium rounded-full flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        Pendiente de Firma
+                      </span>
+                    ) : null}
+                    {djc.djc_version && djc.djc_version > 1 && (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                        V{djc.djc_version}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -614,7 +634,17 @@ export default function ProductPassport() {
                       <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                         <p className="text-sm text-green-800">
                           <CheckCircle className="w-4 h-4 inline mr-1" />
-                          Esta es una DJC firmada y subida manualmente por el titular
+                          DJC firmada por el cliente
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {djc.djc_source === 'auto_generated' && (
+                    <div className="md:col-span-2">
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800">
+                          <AlertCircle className="w-4 h-4 inline mr-1" />
+                          DJC generada automaticamente - Pendiente de firma del cliente
                         </p>
                       </div>
                     </div>
