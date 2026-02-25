@@ -196,14 +196,56 @@ export default function ProductPassport() {
         }
       }
 
+      // Determine the displayed product for djc_path check
+      const displayedProduct = displayedCodificacion !== productData.codificacion
+        ? (await supabasePublic.from('products').select('djc_path,djc_status').eq('codificacion', displayedCodificacion).maybeSingle()).data
+        : productData;
+
+      const signedDjcPath = displayedProduct?.djc_path || productData.djc_path;
+
       if (foundDjc) {
-        console.log('DJC loaded:', {
-          source: foundDjc.djc_source,
-          version: foundDjc.djc_version,
-          numero_djc: foundDjc.numero_djc,
-          codigo_producto: foundDjc.codigo_producto
-        });
+        // If the product has a signed DJC file uploaded directly (products.djc_path),
+        // use that URL instead of the djc table's pdf_url (which may be auto-generated)
+        if (signedDjcPath && foundDjc.djc_source !== 'manually_uploaded') {
+          foundDjc = {
+            ...foundDjc,
+            pdf_url: signedDjcPath,
+            djc_source: 'manually_uploaded'
+          };
+        }
         setDjc(foundDjc);
+      } else if (signedDjcPath) {
+        // No DJC record in table, but product has a signed file uploaded
+        setDjc({
+          id: '',
+          resolucion: '',
+          razon_social: productData.titular || '',
+          cuit: productData.cuit,
+          marca: '',
+          domicilio_legal: '',
+          domicilio_planta: '',
+          telefono: null,
+          email: '',
+          representante_nombre: null,
+          representante_domicilio: null,
+          representante_cuit: null,
+          codigo_producto: displayedCodificacion,
+          fabricante: '',
+          identificacion_producto: '',
+          reglamentos: null,
+          normas_tecnicas: null,
+          documento_evaluacion: null,
+          enlace_declaracion: null,
+          fecha_lugar: '',
+          firma_url: null,
+          pdf_url: signedDjcPath,
+          created_at: '',
+          numero_djc: `DJC-${displayedCodificacion}`,
+          updated_at: '',
+          djc_source: 'manually_uploaded',
+          djc_version: 1,
+          is_active: true
+        });
       }
 
     } catch (error: any) {

@@ -132,7 +132,7 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
       try {
         const fileExt = file.name.split('.').pop();
         const bucketName = field === 'djc_path' ? 'djcs' : 'documents';
-        const fileName = `${field}_${product.codificacion}_${Date.now()}.${fileExt}`;
+        const fileName = `signed_${product.codificacion}_${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from(bucketName)
@@ -181,7 +181,6 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
         throw new Error('Usuario no autenticado');
       }
 
-      // Check if there's an existing active DJC for this product
       const { data: existingDJC, error: fetchError } = await supabase
         .from('djc')
         .select('*')
@@ -194,68 +193,19 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
       }
 
       if (existingDJC) {
-        // Deactivate the existing DJC
-        const { error: deactivateError } = await supabase
+        // Update the existing DJC record directly with the signed PDF
+        const { error: updateError } = await supabase
           .from('djc')
           .update({
-            is_active: false,
+            pdf_url: pdfUrl,
+            djc_source: 'manually_uploaded',
+            djc_version: (existingDJC.djc_version || 1) + 1,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingDJC.id);
 
-        if (deactivateError) throw deactivateError;
-
-        // Create new DJC record as manually uploaded version
-        const { error: insertError } = await supabase
-          .from('djc')
-          .insert({
-            resolucion: existingDJC.resolucion || 'Res. SICyC N° 236/24',
-            razon_social: existingDJC.razon_social,
-            cuit: existingDJC.cuit,
-            marca: existingDJC.marca,
-            domicilio_legal: existingDJC.domicilio_legal,
-            domicilio_planta: existingDJC.domicilio_planta,
-            telefono: existingDJC.telefono,
-            email: existingDJC.email,
-            representante_nombre: existingDJC.representante_nombre,
-            representante_domicilio: existingDJC.representante_domicilio,
-            representante_cuit: existingDJC.representante_cuit,
-            codigo_producto: product.codificacion,
-            fabricante: existingDJC.fabricante,
-            identificacion_producto: existingDJC.identificacion_producto,
-            reglamentos: existingDJC.reglamentos,
-            normas_tecnicas: existingDJC.normas_tecnicas,
-            documento_evaluacion: existingDJC.documento_evaluacion,
-            enlace_declaracion: existingDJC.enlace_declaracion,
-            fecha_lugar: existingDJC.fecha_lugar,
-            numero_djc: existingDJC.numero_djc,
-            pdf_url: pdfUrl,
-            djc_source: 'manually_uploaded',
-            djc_version: (existingDJC.djc_version || 1) + 1,
-            is_active: true,
-            created_by: user.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-
-        if (insertError) throw insertError;
-
-        // Update the old record to point to the new one
-        const { data: newDJC } = await supabase
-          .from('djc')
-          .select('id')
-          .eq('codigo_producto', product.codificacion)
-          .eq('is_active', true)
-          .single();
-
-        if (newDJC) {
-          await supabase
-            .from('djc')
-            .update({ replaced_by: newDJC.id })
-            .eq('id', existingDJC.id);
-        }
+        if (updateError) throw updateError;
       } else {
-        // No existing DJC, create a minimal record for the manually uploaded file
         const { error: insertError } = await supabase
           .from('djc')
           .insert({
@@ -287,11 +237,8 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
 
         if (insertError) throw insertError;
       }
-
-      console.log('✅ DJC table synced with manually uploaded file');
     } catch (error) {
       console.error('Error syncing DJC table:', error);
-      throw error;
     }
   };
 
