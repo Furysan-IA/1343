@@ -89,18 +89,34 @@ export function Dashboard() {
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-      // Consulta para productos con estadísticas
+      // Consulta para productos con estadísticas - Cargar todos en lotes
       console.log('📥 Solicitando productos...');
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select('codificacion, producto, marca, vencimiento, qr_path, djc_path, created_at')
-        .order('created_at', { ascending: false });
 
-      if (productsError) {
-        console.error('❌ Error al obtener productos:', productsError);
-        throw productsError;
+      const allProducts: any[] = [];
+      const loadBatchSize = 1000;
+      const totalBatches = Math.ceil((totalProducts || 0) / loadBatchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * loadBatchSize;
+        const to = from + loadBatchSize - 1;
+
+        const { data: batchData, error: productsError } = await supabase
+          .from('products')
+          .select('codificacion, producto, marca, vencimiento, qr_path, djc_path, created_at')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (productsError) {
+          console.error('❌ Error al obtener productos:', productsError);
+          throw productsError;
+        }
+
+        if (batchData) {
+          allProducts.push(...batchData);
+        }
       }
 
+      const products = allProducts;
       console.log('✅ Productos cargados:', products?.length);
 
       // Inicializar estadísticas

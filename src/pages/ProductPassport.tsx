@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabasePublic } from '../lib/supabase';
-import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home } from 'lucide-react';
+import { Package, Shield, Factory, Calendar, MapPin, User, FileText, Award, Globe, Phone, Mail, Building2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock, ArrowLeft, ExternalLink, QrCode, Download, Eye, Loader as Loader2, TriangleAlert as AlertTriangle, Chrome as Home, RefreshCw } from 'lucide-react';
+import { formatDateWithoutTimezone } from '../utils/formatters';
 
 interface Product {
   codificacion: string;
@@ -73,6 +74,9 @@ interface DJC {
   created_at: string;
   numero_djc: string | null;
   updated_at: string;
+  djc_source?: string;
+  djc_version?: number;
+  is_active?: boolean;
 }
 
 export default function ProductPassport() {
@@ -82,6 +86,8 @@ export default function ProductPassport() {
   const [djc, setDjc] = useState<DJC | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [showingRevision, setShowingRevision] = useState<boolean>(false);
 
   useEffect(() => {
     if (uuid) {
@@ -113,18 +119,77 @@ export default function ProductPassport() {
         return;
       }
 
-      setProduct(productData);
+      console.log('📦 Producto encontrado:', productData.codificacion);
+      console.log('  is_qr_master:', productData.is_qr_master);
+      console.log('  shared_qr_from:', productData.shared_qr_from);
+      console.log('  qr_link:', productData.qr_link ? 'presente' : 'ausente');
 
-      // Buscar DJC asociada usando codificacion
+      // If this product is a QR master, check if there are newer products using its QR
+      if (productData.is_qr_master) {
+        console.log('🌟 Este producto es QR master, buscando productos que usan su QR...');
+
+        const { data: productsUsingThisQR } = await supabasePublic
+          .from('products')
+          .select('*')
+          .eq('shared_qr_from', productData.codificacion)
+          .order('updated_at', { ascending: false });
+
+        if (productsUsingThisQR && productsUsingThisQR.length > 0) {
+          // Show the most recent product that's using this QR
+          console.log(`✨ Se encontraron ${productsUsingThisQR.length} producto(s) usando este QR`);
+          console.log('📌 Mostrando producto más reciente:', productsUsingThisQR[0].codificacion);
+
+          setProduct(productsUsingThisQR[0]);
+          setShowingRevision(true);
+          setRelatedProducts([productData, ...productsUsingThisQR.slice(1)]);
+        } else {
+          // No products are using this QR, show the master itself
+          console.log('ℹ️ No hay productos usando este QR, mostrando el master');
+          setProduct(productData);
+          setShowingRevision(false);
+        }
+      } else if (productData.shared_qr_from) {
+        // This product is using a shared QR from another product
+        console.log('🔗 Este producto usa QR compartido de:', productData.shared_qr_from);
+
+        setProduct(productData);
+        setShowingRevision(true);
+
+        // Load the master product for reference
+        const { data: masterProduct } = await supabasePublic
+          .from('products')
+          .select('*')
+          .eq('codificacion', productData.shared_qr_from)
+          .maybeSingle();
+
+        if (masterProduct) {
+          setRelatedProducts([masterProduct]);
+        }
+      } else {
+        // Regular product, not involved in QR sharing
+        console.log('📄 Producto regular sin compartir QR');
+        setProduct(productData);
+        setShowingRevision(false);
+      }
+
+      // Buscar DJC asociada usando el producto actual
       const { data: djcData, error: djcError } = await supabasePublic
         .from('djc')
         .select('*')
         .eq('codigo_producto', productData.codificacion)
+        .eq('is_active', true)
+        .order('djc_version', { ascending: false })
+        .order('created_at', { ascending: false })
         .maybeSingle();
 
       if (djcError && djcError.code !== 'PGRST116') {
         console.warn('Error loading DJC:', djcError);
       } else if (djcData) {
+        console.log('✅ Active DJC loaded:', {
+          source: djcData.djc_source,
+          version: djcData.djc_version,
+          numero_djc: djcData.numero_djc
+        });
         setDjc(djcData);
       }
 
@@ -137,10 +202,70 @@ export default function ProductPassport() {
   };
 
   const getProductStatus = () => {
+    // 1. PRIORIDAD: Usar el campo oficial "estado" de la base de datos
+    if (product?.estado) {
+      const estadoUpper = product.estado.toUpperCase().trim();
+
+      // Mapear estados oficiales a visualización
+      const estadoMap: Record<string, { status: string; color: string; bgColor: string; icon: any; warning?: string }> = {
+        'VIGENTE': {
+          status: 'Vigente',
+          color: 'text-green-600',
+          bgColor: 'bg-green-100',
+          icon: CheckCircle
+        },
+        'VENCIDO': {
+          status: 'Vencido',
+          color: 'text-red-600',
+          bgColor: 'bg-red-100',
+          icon: AlertCircle
+        },
+        'CANCELADO': {
+          status: 'Cancelado',
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-100',
+          icon: AlertCircle
+        },
+        'SUSPENDIDO': {
+          status: 'Suspendido',
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-100',
+          icon: AlertTriangle
+        },
+        'EN PROCESO DE RENOVACIÓN': {
+          status: 'En Renovación',
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-100',
+          icon: Clock
+        }
+      };
+
+      const estadoInfo = estadoMap[estadoUpper] || {
+        status: product.estado,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-100',
+        icon: Clock
+      };
+
+      // Detectar inconsistencias entre estado oficial y fecha
+      if (product.vencimiento && estadoUpper === 'VIGENTE') {
+        const now = new Date();
+        const vencimiento = new Date(product.vencimiento);
+
+        if (vencimiento < now) {
+          // El estado dice VIGENTE pero la fecha ya pasó - mostrar advertencia
+          estadoInfo.warning = 'Fecha vencida pero estado oficial vigente';
+        }
+      }
+
+      return estadoInfo;
+    }
+
+    // 2. RESPALDO: Calcular estado basándose en fechas si no hay estado oficial
     if (!product?.vencimiento) {
-      return { 
-        status: 'Sin fecha de vencimiento', 
-        color: 'text-gray-600', 
+      return {
+        status: 'Sin fecha de vencimiento',
+        color: 'text-gray-600',
         bgColor: 'bg-gray-100',
         icon: Clock
       };
@@ -148,30 +273,30 @@ export default function ProductPassport() {
 
     const now = new Date();
     const vencimiento = new Date(product.vencimiento);
-    
+
     if (vencimiento < now) {
-      return { 
-        status: 'Vencido', 
-        color: 'text-red-600', 
+      return {
+        status: 'Vencido (por fecha)',
+        color: 'text-red-600',
         bgColor: 'bg-red-100',
         icon: AlertCircle
       };
     }
 
     const diasParaVencer = Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diasParaVencer <= 30) {
-      return { 
-        status: `Vence en ${diasParaVencer} días`, 
-        color: 'text-orange-600', 
+      return {
+        status: `Vence en ${diasParaVencer} días`,
+        color: 'text-orange-600',
         bgColor: 'bg-orange-100',
         icon: AlertTriangle
       };
     }
 
-    return { 
-      status: 'Vigente', 
-      color: 'text-green-600', 
+    return {
+      status: 'Vigente (por fecha)',
+      color: 'text-green-600',
       bgColor: 'bg-green-100',
       icon: CheckCircle
     };
@@ -184,11 +309,7 @@ export default function ProductPassport() {
   };
 
   const formatDate = (date: string): string => {
-    return new Date(date).toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    return formatDateWithoutTimezone(date, 'short');
   };
 
   if (loading) {
@@ -256,6 +377,74 @@ export default function ProductPassport() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Warning Banner for Inconsistencies */}
+        {status.warning && (
+          <div className="mb-6 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-3 rounded-lg">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">Advertencia de Inconsistencia</h3>
+                <p className="text-amber-100 mb-3">
+                  El estado oficial del certificado es <span className="font-bold">VIGENTE</span>,
+                  pero la fecha de vencimiento ({product?.vencimiento ? formatDate(product.vencimiento) : 'N/A'}) ya ha pasado.
+                </p>
+                <p className="text-sm text-amber-200">
+                  El estado mostrado es el oficial del sistema de certificación.
+                  Si tiene dudas, por favor contacte al organismo emisor del certificado.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Revision Banner */}
+        {showingRevision && product.shared_qr_from && (
+          <div className="mb-6 bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-3 rounded-lg">
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">Información Actualizada</h3>
+                <p className="text-purple-100 mb-3">
+                  El código QR que escaneaste pertenece al producto base <span className="font-mono font-bold">{product.shared_qr_from}</span>.
+                  Se está mostrando la revisión más reciente: <span className="font-mono font-bold">{product.codificacion}</span>
+                </p>
+                <div className="flex items-center gap-4 text-sm text-purple-200">
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Certificado actualizado</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    <span>Última revisión</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {relatedProducts.length > 1 && (
+              <div className="mt-4 pt-4 border-t border-white/20">
+                <p className="text-sm text-purple-200 mb-2">Otras revisiones disponibles:</p>
+                <div className="flex flex-wrap gap-2">
+                  {relatedProducts.slice(1).map((rp) => (
+                    <span
+                      key={rp.codificacion}
+                      className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono"
+                    >
+                      {rp.codificacion}
+                    </span>
+                  ))}
+                  <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono">
+                    {product.shared_qr_from} (original)
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Hero Section */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-12 text-white">
@@ -321,8 +510,21 @@ export default function ProductPassport() {
                   <p className="text-gray-900 font-medium">{product.tipo_certificacion || 'No especificado'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Estado</label>
-                  <p className="text-gray-900 font-medium">{product.estado || 'No especificado'}</p>
+                  <label className="text-sm font-medium text-gray-500">Estado Oficial</label>
+                  <div className="flex items-center gap-2">
+                    <p className="text-gray-900 font-medium">{product.estado || 'No especificado'}</p>
+                    {product.estado && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                        Certificado
+                      </span>
+                    )}
+                  </div>
+                  {status.warning && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Ver advertencia arriba
+                    </p>
+                  )}
                 </div>
                 {product.caracteristicas_tecnicas && (
                   <div className="md:col-span-2">
@@ -373,10 +575,23 @@ export default function ProductPassport() {
             {/* DJC Information */}
             {djc && (
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-indigo-600" />
-                  Declaración Jurada de Conformidad
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FileText className="w-6 h-6 text-indigo-600" />
+                    Declaración Jurada de Conformidad
+                  </h2>
+                  {djc.djc_source === 'manually_uploaded' && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Firmada
+                    </span>
+                  )}
+                  {djc.djc_version && djc.djc_version > 1 && (
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                      Versión {djc.djc_version}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Número DJC</label>
@@ -394,6 +609,16 @@ export default function ProductPassport() {
                     <label className="text-sm font-medium text-gray-500">Creado</label>
                     <p className="text-gray-900">{formatDate(djc.created_at)}</p>
                   </div>
+                  {djc.djc_source === 'manually_uploaded' && (
+                    <div className="md:col-span-2">
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-800">
+                          <CheckCircle className="w-4 h-4 inline mr-1" />
+                          Esta es una DJC firmada y subida manualmente por el titular
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {djc.pdf_url && (
                     <div className="md:col-span-2">
                       <a
@@ -403,7 +628,7 @@ export default function ProductPassport() {
                         className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                       >
                         <Download className="w-4 h-4" />
-                        Descargar DJC
+                        Descargar DJC {djc.djc_source === 'manually_uploaded' ? 'Firmada' : ''}
                       </a>
                     </div>
                   )}
@@ -490,12 +715,32 @@ export default function ProductPassport() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">DJC</span>
-                  {product.djc_path ? (
+                  {/* Priorizar DJC activa de la tabla djc */}
+                  {djc?.pdf_url ? (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={djc.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        title={djc.djc_source === 'manually_uploaded' ? 'DJC firmada y subida manualmente' : 'DJC generada automáticamente'}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Ver
+                      </a>
+                      {djc.djc_source === 'manually_uploaded' && (
+                        <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                          Firmada
+                        </span>
+                      )}
+                    </div>
+                  ) : product.djc_path ? (
                     <a
                       href={product.djc_path}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                      title="DJC generada automáticamente"
                     >
                       <Eye className="w-4 h-4" />
                       Ver

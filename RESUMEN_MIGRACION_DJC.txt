@@ -1,0 +1,100 @@
+================================================================================
+  RESUMEN: MIGRACIÓN DE COLUMNAS DJC - SISTEMA DE TRACKING Y VERSIONADO
+================================================================================
+
+PROBLEMA IDENTIFICADO:
+----------------------
+La tabla 'djc' en Supabase existe PERO le faltan 4 columnas críticas que el
+código ya está intentando usar:
+
+  ❌ djc_source      (text)     - Origen: auto-generada vs. manual
+  ❌ djc_version     (integer)  - Número de versión
+  ❌ is_active       (boolean)  - Marca versión activa
+  ❌ replaced_by     (uuid)     - Link a versión más nueva
+
+ARCHIVOS AFECTADOS:
+-------------------
+El código en estos 3 archivos ya usa estas columnas:
+
+  1. src/pages/ProductPassport.tsx
+     - Filtra por: is_active = true
+     - Ordena por: djc_version DESC
+     - Muestra badges según djc_source
+
+  2. src/pages/ProductDetailView.tsx
+     - Establece djc_source = 'manually_uploaded'
+     - Incrementa djc_version al subir DJC
+     - Marca is_active = true
+
+  3. src/components/DJC/DJCGenerator.tsx
+     - Establece djc_source = 'auto_generated'
+     - Gestiona versionado automático
+     - Desactiva versiones antiguas
+
+SOLUCIÓN:
+---------
+Ejecutar la migración SQL que agrega estas columnas.
+
+ARCHIVO A EJECUTAR:
+-------------------
+📄 apply-djc-columns-migration.sql
+
+INSTRUCCIONES RÁPIDAS:
+----------------------
+1. Abrir: https://supabase.com/dashboard → Tu Proyecto → SQL Editor
+2. Copiar TODO el contenido de: apply-djc-columns-migration.sql
+3. Pegar en el editor SQL
+4. Click en "Run" o Ctrl+Enter
+5. Verificar mensajes de éxito
+
+TIEMPO ESTIMADO: 30 segundos
+RIESGO: NINGUNO (migración segura, puede ejecutarse múltiples veces)
+
+QUÉ HACE LA MIGRACIÓN:
+-----------------------
+✅ Agrega 4 columnas nuevas a la tabla djc
+✅ Establece valores por defecto para registros existentes:
+   - djc_source = 'auto_generated'
+   - djc_version = 1
+   - is_active = true
+   - replaced_by = null
+✅ Crea 4 índices para mejor rendimiento
+✅ Agrega constraint CHECK para djc_source (solo valores válidos)
+✅ Agrega documentación en columnas
+
+DESPUÉS DE APLICAR:
+-------------------
+✅ Product Passport mostrará DJCs correctamente
+✅ Sistema de versionado funcionará
+✅ Badges de "Firmada" aparecerán en DJCs manuales
+✅ Tracking de reemplazos funcionará
+✅ Queries de DJCs activas funcionarán
+
+VERIFICACIÓN:
+-------------
+Ejecuta en SQL Editor:
+
+  SELECT djc_source, djc_version, is_active, replaced_by
+  FROM djc
+  LIMIT 5;
+
+Deberías ver valores en las nuevas columnas.
+
+DOCUMENTACIÓN COMPLETA:
+-----------------------
+📖 Ver: APLICAR_MIGRACION_DJC.md (guía detallada paso a paso)
+
+BUILD STATUS:
+-------------
+✅ npm run build - EXITOSO
+✅ Proyecto compila sin errores
+✅ Todas las dependencias funcionan
+
+NOTAS TÉCNICAS:
+---------------
+- Migración usa bloques DO $$ ... END $$ con IF NOT EXISTS
+- Índice parcial en codigo_producto WHERE is_active = true (performance)
+- Foreign key en replaced_by → djc(id) con ON DELETE SET NULL
+- Constraint CHECK asegura djc_source IN ('auto_generated', 'manually_uploaded')
+
+================================================================================

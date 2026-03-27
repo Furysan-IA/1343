@@ -397,9 +397,49 @@ export function ProductManagement() {
       syncWithSupabase();
     }, 5 * 60 * 1000);
 
+    // Configurar suscripción Realtime para actualizaciones en vivo
+    const channel = supabase
+      .channel('products-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          console.log('🔄 Realtime update detected:', payload);
+
+          // Actualizar el producto específico en el estado
+          setProducts(prevProducts => {
+            const updatedProducts = prevProducts.map(product =>
+              product.codificacion === payload.new.codificacion
+                ? { ...product, ...payload.new }
+                : product
+            );
+            return updatedProducts;
+          });
+
+          // Mostrar notificación solo para cambios en QR
+          if (
+            payload.new.qr_link !== payload.old?.qr_link ||
+            payload.new.qr_status !== payload.old?.qr_status
+          ) {
+            toast.success('QR actualizado en tiempo real', {
+              icon: '🔄',
+              duration: 3000
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+      });
+
     return () => {
       unsubscribe();
       clearInterval(syncInterval);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -611,6 +651,47 @@ export function ProductManagement() {
   };
 
   const getProductStatus = (product: Product) => {
+    // 1. PRIORIDAD: Usar el campo oficial "estado" de la base de datos
+    if (product.estado) {
+      const estadoUpper = product.estado.toUpperCase().trim();
+
+      // Mapear estados oficiales a visualización
+      const estadoMap: Record<string, { status: string; color: string; bgColor: string }> = {
+        'VIGENTE': {
+          status: 'Vigente',
+          color: 'text-green-600',
+          bgColor: 'bg-green-50'
+        },
+        'VENCIDO': {
+          status: 'Vencido',
+          color: 'text-red-600',
+          bgColor: 'bg-red-50'
+        },
+        'CANCELADO': {
+          status: 'Cancelado',
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-50'
+        },
+        'SUSPENDIDO': {
+          status: 'Suspendido',
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-50'
+        },
+        'EN PROCESO DE RENOVACIÓN': {
+          status: 'En Renovación',
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-50'
+        }
+      };
+
+      return estadoMap[estadoUpper] || {
+        status: product.estado,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50'
+      };
+    }
+
+    // 2. RESPALDO: Calcular estado basándose en fechas si no hay estado oficial
     if (!product.vencimiento) {
       return { status: 'Pendiente', color: 'text-yellow-600', bgColor: 'bg-yellow-50' };
     }
@@ -619,7 +700,7 @@ export function ProductManagement() {
     const vencimiento = new Date(product.vencimiento);
 
     if (vencimiento < now) {
-      return { status: 'Vencido', color: 'text-red-600', bgColor: 'bg-red-50' };
+      return { status: 'Vencido (por fecha)', color: 'text-red-600', bgColor: 'bg-red-50' };
     }
 
     const diasParaVencer = Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -628,7 +709,7 @@ export function ProductManagement() {
       return { status: `Vence en ${diasParaVencer} días`, color: 'text-orange-600', bgColor: 'bg-orange-50' };
     }
 
-    return { status: 'Vigente', color: 'text-green-600', bgColor: 'bg-green-50' };
+    return { status: 'Vigente (por fecha)', color: 'text-green-600', bgColor: 'bg-green-50' };
   };
 
   const getQRStatus = (product: Product) => {

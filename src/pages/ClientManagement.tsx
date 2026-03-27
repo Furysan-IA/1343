@@ -1,38 +1,12 @@
 // ClientManagement.tsx - Versión con personalización de columnas
 import { useState, useEffect, Fragment } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase, Database } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
 import { Dialog, Transition } from '@headlessui/react';
-import { 
-  RefreshCw, 
-  Search, 
-  Users,
-  AlertCircle,
-  Edit2,
-  Save,
-  X,
-  Package,
-  Phone,
-  Mail,
-  MapPin,
-  Building2,
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  Eye,
-  Filter,
-  Calendar,
-  FileText,
-  Clock,
-  ExternalLink,
-  Plus,
-  Trash2,
-  CheckCircle,
-  GripVertical,
-  RotateCcw
-} from 'lucide-react';
+import { RefreshCw, Search, Users, CircleAlert as AlertCircle, CreditCard as Edit2, Save, X, Package, Phone, Mail, MapPin, Building2, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Info, Eye, ListFilter as Filter, Calendar, FileText, Clock, ExternalLink, Plus, Trash2, CircleCheck as CheckCircle, GripVertical, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCuit } from '../utils/formatters';
 
@@ -40,6 +14,7 @@ interface Client {
   cuit: number;
   razon_social: string;
   direccion: string;
+  direccion_planta?: string | null;
   email: string;
   created_at: string;
   updated_at: string;
@@ -64,6 +39,7 @@ interface ColumnConfig {
 
 export function ClientManagement() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +48,9 @@ export function ClientManagement() {
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [expandedClient, setExpandedClient] = useState<number | null>(null);
+  const [clientProducts, setClientProducts] = useState<{[key: number]: any[]}>({});
+  const [loadingProducts, setLoadingProducts] = useState<{[key: number]: boolean}>({});
   
   // Estados para personalización de columnas
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
@@ -82,6 +61,8 @@ export function ClientManagement() {
     razon_social: '',
     cuit: '',
     direccion: '',
+    direccion_planta: '',
+    usarDireccionLegal: true,
     telefono: '',
     email: '',
     contacto: ''
@@ -254,17 +235,28 @@ export function ClientManagement() {
       isVisible: true,
       align: 'center',
       isDraggable: true,
-      width: 'w-24',
+      width: 'w-28',
       render: (client) => (
-        <div className="flex items-center justify-center gap-2">
-          <Package className="w-4 h-4 text-gray-400" />
-          <span 
-            className="text-sm font-medium text-gray-900"
-            title={`${client.product_count || 0} productos asociados`}
-          >
+        <button
+          onClick={() => toggleClientProducts(client.cuit)}
+          disabled={!client.product_count || client.product_count === 0}
+          className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+            client.product_count > 0
+              ? 'hover:bg-blue-50 text-blue-700 cursor-pointer'
+              : 'text-gray-400 cursor-not-allowed'
+          }`}
+          title={`${client.product_count || 0} productos - Click para ver`}
+        >
+          <Package className="w-4 h-4" />
+          <span className="text-sm font-medium">
             {client.product_count || 0}
           </span>
-        </div>
+          {client.product_count > 0 && (
+            expandedClient === client.cuit
+              ? <ChevronUp className="w-4 h-4" />
+              : <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
       )
     },
     {
@@ -458,12 +450,30 @@ export function ClientManagement() {
 
       if (error) throw error;
       
-      // Cargar productos para contar por cliente
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select('cuit');
+      // Cargar productos para contar por cliente - en lotes
+      const allProducts: any[] = [];
+      const batchSize = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      if (productsError) throw productsError;
+      while (hasMore) {
+        const { data: batchData, error: productsError } = await supabase
+          .from('products')
+          .select('cuit')
+          .range(from, from + batchSize - 1);
+
+        if (productsError) throw productsError;
+
+        if (batchData && batchData.length > 0) {
+          allProducts.push(...batchData);
+          hasMore = batchData.length === batchSize;
+          from += batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const products = allProducts;
 
       // Contar productos por CUIT
       const productCounts: Record<number, number> = {};
@@ -498,6 +508,41 @@ export function ClientManagement() {
       toast.error('Error al sincronizar');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const loadClientProducts = async (cuit: number) => {
+    if (clientProducts[cuit]) {
+      return;
+    }
+
+    setLoadingProducts(prev => ({ ...prev, [cuit]: true }));
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('codificacion, producto, marca, modelo')
+        .eq('cuit', cuit)
+        .order('codificacion')
+        .limit(50);
+
+      if (error) throw error;
+
+      setClientProducts(prev => ({ ...prev, [cuit]: data || [] }));
+    } catch (error) {
+      console.error('Error loading client products:', error);
+      toast.error('Error al cargar productos del cliente');
+    } finally {
+      setLoadingProducts(prev => ({ ...prev, [cuit]: false }));
+    }
+  };
+
+  const toggleClientProducts = async (cuit: number) => {
+    if (expandedClient === cuit) {
+      setExpandedClient(null);
+    } else {
+      setExpandedClient(cuit);
+      await loadClientProducts(cuit);
     }
   };
 
@@ -561,6 +606,7 @@ export function ClientManagement() {
             razon_social: formData.razon_social,
             cuit: Number(formData.cuit),
             direccion: formData.direccion,
+            direccion_planta: formData.usarDireccionLegal ? null : (formData.direccion_planta || null),
             telefono: formData.telefono || null,
             email: formData.email,
             contacto: formData.contacto || null,
@@ -578,6 +624,7 @@ export function ClientManagement() {
             razon_social: formData.razon_social,
             cuit: Number(formData.cuit),
             direccion: formData.direccion,
+            direccion_planta: formData.usarDireccionLegal ? null : (formData.direccion_planta || null),
             telefono: formData.telefono || null,
             email: formData.email,
             contacto: formData.contacto || null,
@@ -596,6 +643,8 @@ export function ClientManagement() {
         razon_social: '',
         cuit: '',
         direccion: '',
+        direccion_planta: '',
+        usarDireccionLegal: true,
         telefono: '',
         email: '',
         contacto: ''
@@ -613,6 +662,8 @@ export function ClientManagement() {
       razon_social: client.razon_social,
       cuit: String(client.cuit),
       direccion: client.direccion,
+      direccion_planta: client.direccion_planta || '',
+      usarDireccionLegal: !client.direccion_planta,
       telefono: client.telefono || '',
       email: client.email,
       contacto: client.contacto || ''
@@ -794,23 +845,88 @@ export function ClientManagement() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredClients.map((client) => (
-                <tr 
-                  key={client.cuit} 
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => handleEdit(client)}
-                >
-                  {visibleColumns.map((column) => (
-                    <td
-                      key={`${client.cuit}-${column.id}`}
-                      className={`px-4 py-4 text-sm ${
-                        column.align === 'center' ? 'text-center' :
-                        column.align === 'right' ? 'text-right' : 'text-left'
-                      } ${column.width || 'w-auto'} max-w-xs`}
-                    >
-                      {column.render(client)}
-                    </td>
-                  ))}
-                </tr>
+                <Fragment key={client.cuit}>
+                  <tr
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      if (!(e.target as HTMLElement).closest('button')) {
+                        handleEdit(client);
+                      }
+                    }}
+                  >
+                    {visibleColumns.map((column) => (
+                      <td
+                        key={`${client.cuit}-${column.id}`}
+                        className={`px-4 py-4 text-sm ${
+                          column.align === 'center' ? 'text-center' :
+                          column.align === 'right' ? 'text-right' : 'text-left'
+                        } ${column.width || 'w-auto'} max-w-xs`}
+                      >
+                        {column.render(client)}
+                      </td>
+                    ))}
+                  </tr>
+                  {expandedClient === client.cuit && (
+                    <tr>
+                      <td colSpan={visibleColumns.length} className="px-4 py-4 bg-blue-50 border-t border-blue-100">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                              <Package className="w-4 h-4 text-blue-600" />
+                              Productos de {client.razon_social}
+                            </h4>
+                            <button
+                              onClick={() => navigate('/products', { state: { filterCuit: client.cuit } })}
+                              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                            >
+                              Ver todos en Productos
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {loadingProducts[client.cuit] ? (
+                            <div className="flex items-center justify-center py-4">
+                              <LoadingSpinner />
+                            </div>
+                          ) : clientProducts[client.cuit]?.length > 0 ? (
+                            <div className="grid gap-2 max-h-60 overflow-y-auto">
+                              {clientProducts[client.cuit].map((product) => (
+                                <div
+                                  key={product.codificacion}
+                                  className="bg-white p-3 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                        {product.codificacion}
+                                      </p>
+                                      <p className="text-sm text-gray-600 truncate">
+                                        {product.producto}
+                                      </p>
+                                      {(product.marca || product.modelo) && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          {[product.marca, product.modelo].filter(Boolean).join(' - ')}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {client.product_count > 50 && (
+                                <p className="text-xs text-gray-500 text-center py-2">
+                                  Mostrando 50 de {client.product_count} productos
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-4">
+                              No se encontraron productos
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -887,7 +1003,7 @@ export function ClientManagement() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dirección *
+                    Dirección Legal *
                   </label>
                   <input
                     type="text"
@@ -896,6 +1012,36 @@ export function ClientManagement() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                     required
                   />
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      id="usarDireccionLegal"
+                      checked={formData.usarDireccionLegal}
+                      onChange={(e) => setFormData(prev => ({ ...prev, usarDireccionLegal: e.target.checked }))}
+                      className="rounded text-purple-600"
+                    />
+                    <label htmlFor="usarDireccionLegal" className="text-sm text-gray-700">
+                      La dirección de planta/depósito es la misma que la dirección legal
+                    </label>
+                  </div>
+
+                  {!formData.usarDireccionLegal && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Dirección de Planta/Depósito
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.direccion_planta}
+                        onChange={(e) => setFormData(prev => ({ ...prev, direccion_planta: e.target.value }))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="Ingrese la dirección de la planta o depósito"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>

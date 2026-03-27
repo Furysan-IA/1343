@@ -15,6 +15,8 @@ export interface CertificateLogEntry {
   codificacion?: string;
   razon_social?: string;
   missing_fields?: string[];
+  fields_updated?: string[];
+  fields_count?: number;
   raw_data?: any;
 }
 
@@ -53,6 +55,17 @@ export const logCertificateProcessing = async (
   rowNumber?: number
 ): Promise<void> => {
   try {
+    const fieldsUpdated: string[] = [];
+    if (analysis.extraction.productData) {
+      Object.keys(analysis.extraction.productData).forEach(key => {
+        if (analysis.extraction.productData[key] !== null &&
+            analysis.extraction.productData[key] !== undefined &&
+            analysis.extraction.productData[key] !== '') {
+          fieldsUpdated.push(key);
+        }
+      });
+    }
+
     const entry: CertificateLogEntry = {
       batch_id: batchId,
       row_number: rowNumber,
@@ -62,6 +75,8 @@ export const logCertificateProcessing = async (
       codificacion: analysis.extraction.productData?.codificacion,
       razon_social: analysis.extraction.clientData?.razon_social,
       missing_fields: analysis.missingClientData.length > 0 ? analysis.missingClientData : [],
+      fields_updated: fieldsUpdated,
+      fields_count: fieldsUpdated.length,
       raw_data: analysis.extraction.originalRecord
     };
 

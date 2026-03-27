@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { formatCuit } from '../../utils/formatters';
-import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X } from 'lucide-react';
+import { formatCuit, formatDateWithoutTimezone } from '../../utils/formatters';
+import { CircleAlert as AlertCircle, Download, FileText, Search, User, Package, CircleCheck as CheckCircle, Circle as XCircle, Loader as Loader2, TriangleAlert as AlertTriangle, History, Trash2, Eye, X, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DJCPreviewModal } from './DJCPreview';
 import { DJCPdfGenerator } from '../../services/djcPdfGenerator.service';
@@ -11,6 +12,7 @@ interface Client {
   razon_social: string;
   cuit: string;
   direccion?: string;
+  direccion_planta?: string;
   ciudad?: string;
   provincia?: string;
   telefono?: string;
@@ -31,6 +33,7 @@ interface Product {
   origen?: string;
   fabricante?: string;
   planta_fabricacion?: string;
+  codigo_version_simplificada?: string;
   normas_aplicacion?: string;
   informe_ensayo_nro?: string;
   fecha_emision?: string;
@@ -67,6 +70,7 @@ interface DJCPreviewData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -82,9 +86,11 @@ interface DJCPreviewData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 const DJCGenerator: React.FC = () => {
+  const location = useLocation();
   const [searchMode, setSearchMode] = useState<'client' | 'product'>('client');
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -108,6 +114,7 @@ const DJCGenerator: React.FC = () => {
   });
   const [useCustomLink, setUseCustomLink] = useState(false);
   const [customLink, setCustomLink] = useState('');
+  const [useSimplifiedVersion, setUseSimplifiedVersion] = useState(false);
 
   const resolutions = [
     { value: 'Res. SICyC N° 236/24', label: 'Res. SICyC N° 236/24' },
@@ -118,7 +125,61 @@ const DJCGenerator: React.FC = () => {
   useEffect(() => {
     fetchClients();
     fetchProducts();
+
+    // Suscribirse a cambios en tiempo real de la tabla products
+    const subscription = supabase
+      .channel('djc-generator-products')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          console.log('🔄 Producto actualizado en tiempo real:', payload.new);
+
+          // Actualizar en la lista de productos
+          setProducts(prevProducts => {
+            return prevProducts.map(p =>
+              p.codificacion === payload.new.codificacion
+                ? { ...p, ...payload.new as Product }
+                : p
+            );
+          });
+
+          // Si es el producto seleccionado, actualizarlo también
+          setSelectedProduct(prevSelected => {
+            if (prevSelected && prevSelected.codificacion === payload.new.codificacion) {
+              console.log('✨ Actualizando producto seleccionado con nuevo qr_link:', payload.new.qr_link);
+              return { ...prevSelected, ...payload.new as Product };
+            }
+            return prevSelected;
+          });
+        }
+      )
+      .subscribe();
+
+    // Cleanup: desuscribirse al desmontar
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    const stateProduct = location.state?.selectedProduct;
+    if (stateProduct && products.length > 0 && clients.length > 0) {
+      const product = products.find(p => p.codificacion === stateProduct.codificacion);
+      if (product) {
+        setSelectedProduct(product);
+        const client = clients.find(c => c.cuit?.toString() === product.cuit?.toString());
+        if (client) {
+          setSelectedClient(client);
+        }
+        toast.success(`Producto ${product.codificacion} seleccionado`);
+      }
+    }
+  }, [location.state, products, clients]);
 
   useEffect(() => {
     if (selectedClient && products.length > 0) {
@@ -163,13 +224,37 @@ const DJCGenerator: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase
+      // Primero obtener el conteo total
+      const { count } = await supabase
         .from('products')
-        .select('*')
-        .order('producto');
-      
-      if (error) throw error;
-      setProducts(data || []);
+        .select('*', { count: 'exact', head: true });
+
+      console.log('Total de productos en DB:', count);
+
+      // Cargar TODOS los productos en lotes
+      const allProducts: Product[] = [];
+      const batchSize = 1000;
+      const totalBatches = Math.ceil((count || 0) / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = from + batchSize - 1;
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('producto')
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data) {
+          allProducts.push(...data);
+        }
+      }
+
+      console.log('Total de productos cargados en DJCGenerator:', allProducts.length);
+      setProducts(allProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Error al cargar los productos');
@@ -183,9 +268,9 @@ const DJCGenerator: React.FC = () => {
         .select('id, created_at, numero_djc, resolucion, pdf_url')
         .eq('codigo_producto', productCode)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       const mappedData = (data || []).map(djc => ({
         id: djc.id,
         created_at: djc.created_at,
@@ -194,11 +279,45 @@ const DJCGenerator: React.FC = () => {
         status: djc.pdf_url ? 'Generada' : 'Pendiente',
         conformity_status: 'Conforme'
       }));
-      
+
       setDjcHistory(mappedData);
     } catch (error) {
       console.error('Error fetching DJC history:', error);
       setDjcHistory([]);
+    }
+  };
+
+  const refreshSelectedProduct = async () => {
+    if (!selectedProduct) {
+      toast.error('No hay producto seleccionado');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('codificacion', selectedProduct.codificacion)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        console.log('🔄 Producto refrescado manualmente:', data);
+        setSelectedProduct(data);
+
+        // También actualizar en la lista
+        setProducts(prevProducts => {
+          return prevProducts.map(p =>
+            p.codificacion === data.codificacion ? data : p
+          );
+        });
+
+        toast.success('Datos del producto actualizados');
+      }
+    } catch (error) {
+      console.error('Error refreshing product:', error);
+      toast.error('Error al actualizar el producto');
     }
   };
 
@@ -227,9 +346,8 @@ const DJCGenerator: React.FC = () => {
     }
   };
 
-  const generateDJCNumber = (): string => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `DJC-2025-${timestamp}`;
+  const generateDJCNumber = (certificateNumber: string): string => {
+    return `DJC-${certificateNumber}`;
   };
 
   const preparePreview = () => {
@@ -238,7 +356,7 @@ const DJCGenerator: React.FC = () => {
       return;
     }
 
-    const djcNumber = generateDJCNumber();
+    const djcNumber = generateDJCNumber(selectedProduct.codificacion);
     const currentDate = new Date().toLocaleDateString('es-AR', {
       day: 'numeric',
       month: 'long',
@@ -247,27 +365,38 @@ const DJCGenerator: React.FC = () => {
 
     const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
 
-    // Usar link personalizado o generar el link automático según la opción seleccionada
+    // Lógica para domicilio de planta:
+    // 1. Si el cliente tiene direccion_planta Y es diferente al domicilio legal → usar direccion_planta
+    // 2. En cualquier otro caso → usar el domicilio legal (no planta_fabricacion del producto)
+    let domicilioPlanta = domicilio;
+
+    if (selectedClient.direccion_planta &&
+        selectedClient.direccion_planta.trim() !== '' &&
+        selectedClient.direccion_planta.trim() !== domicilio.trim()) {
+      domicilioPlanta = selectedClient.direccion_planta;
+    }
+
+    // Usar link personalizado o el qr_link de la base de datos (actualizado en tiempo real)
     const qrLink = useCustomLink
       ? (customLink || '')
-      : `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`;
+      : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
 
-    // Formatear fecha de emisión del certificado
-    const fechaEmisionCertificado = selectedProduct.fecha_emision
-      ? new Date(selectedProduct.fecha_emision).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
-      : '-';
+    console.log('DJC Link Configuration:', {
+      useCustomLink,
+      customLink,
+      generatedLink: qrLink,
+      productCode: selectedProduct.codificacion,
+      qr_link_from_db: selectedProduct.qr_link
+    });
 
-    // Formatear fecha de próxima vigilancia
+    // Formatear fecha de emisión del certificado (sin conversión de zona horaria)
+    const fechaEmisionCertificado = formatDateWithoutTimezone(selectedProduct.fecha_emision, 'short');
+
+    // Formatear fecha de próxima vigilancia - usar vencimiento si no está disponible
     const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
-      ? new Date(selectedProduct.fecha_proxima_vigilancia).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+      ? formatDateWithoutTimezone(selectedProduct.fecha_proxima_vigilancia, 'short')
+      : selectedProduct.vencimiento
+      ? formatDateWithoutTimezone(selectedProduct.vencimiento, 'short')
       : '-';
 
     const data: DJCPreviewData = {
@@ -277,7 +406,7 @@ const DJCGenerator: React.FC = () => {
       cuit: formatCuit(selectedClient.cuit || ''),
       marca: selectedProduct.marca || selectedProduct.titular || '',
       domicilio_legal: domicilio,
-      domicilio_planta: selectedProduct.planta_fabricacion || selectedProduct.fabricante || 'No especificado',
+      domicilio_planta: domicilioPlanta,
       telefono: selectedClient.telefono || '',
       email: selectedClient.email || '',
       representante_nombre: representante.nombre,
@@ -285,6 +414,7 @@ const DJCGenerator: React.FC = () => {
       representante_cuit: representante.cuit,
       codigo_producto: selectedProduct.codificacion,
       fabricante: selectedProduct.fabricante || '',
+      codigo_version_simplificada: selectedProduct.codigo_version_simplificada || '',
       identificacion_producto: selectedProduct.producto || '',
       producto_marca: selectedProduct.marca || '',
       producto_modelo: selectedProduct.modelo || '',
@@ -301,7 +431,8 @@ const DJCGenerator: React.FC = () => {
       laboratorio_ensayos: selectedProduct.laboratorio || '',
       informe_ensayos: selectedProduct.informe_ensayo_nro || '',
       enlace_declaracion: qrLink,
-      fecha_lugar: currentDate
+      fecha_lugar: currentDate,
+      isSimplified: useSimplifiedVersion
     };
 
     setPreviewData(data);
@@ -323,6 +454,9 @@ const DJCGenerator: React.FC = () => {
         setShowPreview(false);
         return;
       }
+
+      // Verificar el enlace antes de generar
+      console.log('Generating DJC PDF with link:', previewData.enlace_declaracion);
 
       // Generar el PDF usando jsPDF directamente
       const pdfGenerator = new DJCPdfGenerator();
@@ -348,7 +482,28 @@ const DJCGenerator: React.FC = () => {
         .from('djcs')
         .getPublicUrl(fileName);
 
+      // Check if there's an existing active DJC to deactivate
+      const { data: existingDJC } = await supabase
+        .from('djc')
+        .select('id, djc_version')
+        .eq('codigo_producto', previewData.codigo_producto)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      // If there's an existing active DJC, deactivate it
+      if (existingDJC) {
+        await supabase
+          .from('djc')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDJC.id);
+      }
+
       // Guardar registro en tabla djc con created_by
+      console.log('Saving DJC to database with link:', previewData.enlace_declaracion);
+
       const { error: djcError } = await supabase
         .from('djc')
         .insert({
@@ -370,9 +525,13 @@ const DJCGenerator: React.FC = () => {
           reglamentos: previewData.resolucion,
           normas_tecnicas: previewData.normas_tecnicas,
           documento_evaluacion: previewData.informe_ensayos,
-          enlace_declaracion: previewData.enlace_declaracion,
+          enlace_declaracion: previewData.enlace_declaracion || '',
           fecha_lugar: previewData.fecha_lugar,
           pdf_url: urlData.publicUrl,
+          djc_source: 'auto_generated',
+          djc_version: existingDJC ? (existingDJC.djc_version + 1) : 1,
+          is_active: true,
+          is_simplified: previewData.isSimplified || false,
           created_by: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -432,6 +591,7 @@ const DJCGenerator: React.FC = () => {
     setRepresentante({ nombre: '', domicilio: '', cuit: '' });
     setUseCustomLink(false);
     setCustomLink('');
+    setUseSimplifiedVersion(false);
     setDjcHistory([]);
     setShowHistory(false);
     setPreviewData(null);
@@ -688,7 +848,17 @@ const DJCGenerator: React.FC = () => {
 
         {selectedProduct && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-semibold text-gray-700 mb-2">Producto Seleccionado:</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-700">Producto Seleccionado:</h3>
+              <button
+                onClick={refreshSelectedProduct}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                title="Refrescar datos del producto"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Actualizar
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <p className="text-sm text-gray-600">
@@ -714,6 +884,16 @@ const DJCGenerator: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {/* Mostrar QR Link actual */}
+            {selectedProduct.qr_link && (
+              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs text-blue-700">
+                  <span className="font-semibold">QR Link actual:</span>{' '}
+                  <span className="text-blue-600 break-all">{selectedProduct.qr_link}</span>
+                </p>
+              </div>
+            )}
             
             {(!selectedProduct.normas_aplicacion || !selectedProduct.informe_ensayo_nro) && (
               <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
@@ -834,8 +1014,13 @@ const DJCGenerator: React.FC = () => {
                 <div className="p-3 bg-white rounded border border-gray-300">
                   <p className="text-sm text-gray-600 mb-1 font-medium">Enlace automático:</p>
                   <p className="text-sm text-blue-600 break-all">
-                    https://verificar.argentina.gob.ar/qr/{selectedProduct.codificacion}
+                    {selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`}
                   </p>
+                  {!selectedProduct.qr_link && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Este producto no tiene QR generado. El enlace se generará cuando se cree el QR.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -853,11 +1038,34 @@ const DJCGenerator: React.FC = () => {
                   />
                   {!customLink && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Si se deja vacío, el campo aparecerá como "CAMPO NO ENCONTRADO" en el PDF
+                      Si se deja vacío, el campo quedará en blanco para que el cliente lo complete después
                     </p>
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Versión Simplificada */}
+        {selectedProduct && (
+          <div className="mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="useSimplifiedVersion"
+                checked={useSimplifiedVersion}
+                onChange={(e) => setUseSimplifiedVersion(e.target.checked)}
+                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500 mt-0.5"
+              />
+              <div className="flex-1">
+                <label htmlFor="useSimplifiedVersion" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Generar versión simplificada de DJC
+                </label>
+                <p className="text-xs text-gray-600 mt-1">
+                  La versión simplificada omitirá el campo "Fabricante (Nombre y dirección de la planta de producción)" en la sección de Información del Producto.
+                </p>
+              </div>
             </div>
           </div>
         )}
