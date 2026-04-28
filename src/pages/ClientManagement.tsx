@@ -56,10 +56,6 @@ export function ClientManagement() {
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   
-  // Estados para personalización de columnas
-  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
-  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
-  
   // Estados del formulario
   const [formData, setFormData] = useState({
     razon_social: '',
