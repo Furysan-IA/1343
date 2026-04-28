@@ -3,10 +3,7 @@ import { supabase } from '../lib/supabase';
 import { QRCodeModal } from './QRCodeModal';
 import { qrConfigService } from '../services/qrConfig.service';
 import { sharedQRService, Product as SharedProduct } from '../services/sharedQRService';
-import {
-  QrCode, RefreshCw, Download, CheckCircle, AlertCircle,
-  Loader2, Eye, AlertTriangle, ExternalLink, Link as LinkIcon, Unlink, Search, X
-} from 'lucide-react';
+import { QrCode, RefreshCw, Download, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Loader as Loader2, Eye, TriangleAlert as AlertTriangle, ExternalLink, Link as LinkIcon, Unlink, Search, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
 
@@ -118,37 +115,20 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
           filter: `codificacion=eq.${product.codificacion}`
         },
         (payload) => {
-          console.log('🔄 QR Realtime update for product:', payload);
-
-          // Verificar si cambió información relevante del QR o la vinculación
           if (
             payload.new.qr_link !== payload.old?.qr_link ||
             payload.new.qr_status !== payload.old?.qr_status ||
             payload.new.qr_path !== payload.old?.qr_path ||
             payload.new.shared_qr_from !== payload.old?.shared_qr_from
           ) {
-            console.log('✅ QR data changed, triggering update');
-
-            // Recargar el QR efectivo
             loadEffectiveQR();
 
-            // Actualizar el link del QR si cambió
             if (payload.new.qr_link && payload.new.qr_link !== product.qr_link) {
               setQrLink(payload.new.qr_link);
-
-              // Regenerar el QR visual con el nuevo link
               if (payload.new.qr_path) {
                 setQrDataUrl(payload.new.qr_path);
               }
             }
-
-            // Notificar al componente padre para actualizar
-            onUpdate();
-
-            toast.success('QR actualizado automáticamente', {
-              icon: '✨',
-              duration: 2000
-            });
           }
         }
       )
