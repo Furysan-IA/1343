@@ -83,47 +83,56 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     }
   };
 
-  const renderHighResImage = async (): Promise<string> => {
+  const renderAtPixelRatio = async (ratio: number): Promise<string> => {
     if (!labelRef.current) throw new Error('Label ref not available');
-    const selectedPreset = resolutionPresets[outputResolution];
-    const targetWidth = qrModConfig.labelWidth * selectedPreset.pixelRatio;
-    const targetHeight = qrModConfig.labelHeight * selectedPreset.pixelRatio;
+    const w = qrModConfig.labelWidth;
+    const h = qrModConfig.labelHeight;
 
-    const safePixelRatio = Math.min(selectedPreset.pixelRatio, 4);
+    // html-to-image needs multiple passes to render web fonts and images correctly
+    // The first pass warms up the cache; subsequent passes produce the correct result
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await toPng(labelRef.current, {
+        width: w,
+        height: h,
+        pixelRatio: ratio,
+        quality: 1,
+        backgroundColor: '#ffffff',
+        canvasWidth: w * ratio,
+        canvasHeight: h * ratio,
+        skipAutoScale: true,
+        style: { transform: 'scale(1)', transformOrigin: 'top left' }
+      });
+    }
 
-    const baseDataUrl = await toPng(labelRef.current, {
-      width: qrModConfig.labelWidth,
-      height: qrModConfig.labelHeight,
-      pixelRatio: safePixelRatio,
+    return toPng(labelRef.current, {
+      width: w,
+      height: h,
+      pixelRatio: ratio,
       quality: 1,
       backgroundColor: '#ffffff',
-      canvasWidth: qrModConfig.labelWidth * safePixelRatio,
-      canvasHeight: qrModConfig.labelHeight * safePixelRatio,
+      canvasWidth: w * ratio,
+      canvasHeight: h * ratio,
       skipAutoScale: true,
-      style: {
-        transform: 'scale(1)',
-        transformOrigin: 'top left'
+      style: { transform: 'scale(1)', transformOrigin: 'top left' }
+    });
+  };
+
+  const renderHighResImage = async (): Promise<string> => {
+    const selectedPreset = resolutionPresets[outputResolution];
+    const targetRatio = selectedPreset.pixelRatio;
+
+    // Try the target ratio directly first; fall back to lower ratios on failure
+    const fallbackRatios = [targetRatio, Math.min(targetRatio, 10), Math.min(targetRatio, 6), 4];
+    const uniqueRatios = [...new Set(fallbackRatios)];
+
+    for (const ratio of uniqueRatios) {
+      try {
+        return await renderAtPixelRatio(ratio);
+      } catch {
+        // continue to next fallback
       }
-    });
-
-    if (selectedPreset.pixelRatio <= 4) return baseDataUrl;
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { reject(new Error('Canvas context unavailable')); return; }
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = () => reject(new Error('Failed to load base image'));
-      img.src = baseDataUrl;
-    });
+    }
+    throw new Error('No se pudo generar la imagen en ninguna resolución');
   };
 
   const handleDownloadPNG = async () => {
