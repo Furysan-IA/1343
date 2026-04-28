@@ -243,6 +243,13 @@ dias_para_vencer                      (calculado automáticamente)
 
 *Nota: `certificado_status` se actualiza automáticamente a "Subido" si se proporciona `certificado_path` en el archivo.
 
+```
+codificacion            (identificador único)
+titular_responsable     (nombre del titular)
+tipo_certificacion      (tipo del certificado)
+fecha_vencimiento       (fecha de expiración)
+```
+
 ### Ejemplo de Archivo
 
 ```
