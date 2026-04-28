@@ -19,7 +19,8 @@ interface QRCodeModalProps {
 export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [outputResolution, setOutputResolution] = useState<'baja' | 'media' | 'alta'>('media');
+  const [outputResolution, setOutputResolution] = useState<'baja' | 'media' | 'alta' | 'ultra'>('media');
+  const [isDownloading, setIsDownloading] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
 
@@ -29,20 +30,27 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
       pixelRatio: 4,
       description: 'Web y pantalla',
       pixels: '~376x452 px',
-      icon: 'M',
+      icon: 'S',
     },
     media: {
       label: 'Media',
-      pixelRatio: 10,
+      pixelRatio: 8,
       description: 'Impresion estandar',
-      pixels: '~940x1130 px',
-      icon: 'L',
+      pixels: '~752x904 px',
+      icon: 'M',
     },
     alta: {
       label: 'Alta',
-      pixelRatio: 20,
+      pixelRatio: 16,
       description: 'Impresion profesional',
-      pixels: '~1880x2260 px',
+      pixels: '~1504x1808 px',
+      icon: 'L',
+    },
+    ultra: {
+      label: 'Ultra',
+      pixelRatio: 24,
+      description: 'Maxima calidad',
+      pixels: '~2256x2712 px',
       icon: 'XL',
     },
   };
@@ -75,73 +83,88 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     }
   };
 
-  const handleDownloadPNG = async () => {
-    if (!labelRef.current) return;
+  const renderHighResImage = async (): Promise<string> => {
+    if (!labelRef.current) throw new Error('Label ref not available');
+    const selectedPreset = resolutionPresets[outputResolution];
+    const targetWidth = qrModConfig.labelWidth * selectedPreset.pixelRatio;
+    const targetHeight = qrModConfig.labelHeight * selectedPreset.pixelRatio;
 
+    const safePixelRatio = Math.min(selectedPreset.pixelRatio, 4);
+
+    const baseDataUrl = await toPng(labelRef.current, {
+      width: qrModConfig.labelWidth,
+      height: qrModConfig.labelHeight,
+      pixelRatio: safePixelRatio,
+      quality: 1,
+      backgroundColor: '#ffffff',
+      canvasWidth: qrModConfig.labelWidth * safePixelRatio,
+      canvasHeight: qrModConfig.labelHeight * safePixelRatio,
+      skipAutoScale: true,
+      style: {
+        transform: 'scale(1)',
+        transformOrigin: 'top left'
+      }
+    });
+
+    if (selectedPreset.pixelRatio <= 4) return baseDataUrl;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas context unavailable')); return; }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => reject(new Error('Failed to load base image'));
+      img.src = baseDataUrl;
+    });
+  };
+
+  const handleDownloadPNG = async () => {
+    if (!labelRef.current || isDownloading) return;
+    setIsDownloading(true);
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const dataUrl = await toPng(labelRef.current, {
-        width: qrModConfig.labelWidth,
-        height: qrModConfig.labelHeight,
-        pixelRatio: selectedPreset.pixelRatio,
-        quality: 1,
-        backgroundColor: '#ffffff',
-        canvasWidth: qrModConfig.labelWidth * selectedPreset.pixelRatio,
-        canvasHeight: qrModConfig.labelHeight * selectedPreset.pixelRatio,
-        skipAutoScale: true,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left'
-        }
-      });
-      
+      const dataUrl = await renderHighResImage();
       saveAs(dataUrl, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.png`);
       toast.success(`Etiqueta PNG (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
       console.error('Error downloading PNG:', error);
       toast.error('Error al descargar la etiqueta PNG');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   const handleDownloadPDF = async () => {
-    if (!labelRef.current) return;
-
+    if (!labelRef.current || isDownloading) return;
+    setIsDownloading(true);
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const blob = await toBlob(labelRef.current, {
-        width: qrModConfig.labelWidth,
-        height: qrModConfig.labelHeight,
-        pixelRatio: selectedPreset.pixelRatio,
-        quality: 1,
-        backgroundColor: '#ffffff',
-        canvasWidth: qrModConfig.labelWidth * selectedPreset.pixelRatio,
-        canvasHeight: qrModConfig.labelHeight * selectedPreset.pixelRatio,
-        skipAutoScale: true,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left'
-        }
-      });
-
-      if (!blob) throw new Error('Error generating image');
+      const dataUrl = await renderHighResImage();
 
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583] // Convert pixels to mm
+        format: [qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583]
       });
 
-      const imgData = URL.createObjectURL(blob);
-      pdf.addImage(imgData, 'PNG', 0, 0, qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583);
+      pdf.addImage(dataUrl, 'PNG', 0, 0, qrModConfig.labelWidth * 0.264583, qrModConfig.labelHeight * 0.264583);
       pdf.save(`qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.pdf`);
-      
-      URL.revokeObjectURL(imgData);
       toast.success(`Etiqueta PDF (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
       console.error('Error downloading PDF:', error);
       toast.error('Error al descargar la etiqueta PDF');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -409,16 +432,26 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                       <div className="mt-5 grid grid-cols-2 gap-3">
                         <button
                           onClick={handleDownloadPNG}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          disabled={isDownloading}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait text-white rounded-lg text-sm font-medium transition-colors"
                         >
-                          <Download className="h-4 w-4" />
+                          {isDownloading ? (
+                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
                           PNG
                         </button>
                         <button
                           onClick={handleDownloadPDF}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium transition-colors"
+                          disabled={isDownloading}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-500 disabled:cursor-wait text-white rounded-lg text-sm font-medium transition-colors"
                         >
-                          <Download className="h-4 w-4" />
+                          {isDownloading ? (
+                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
                           PDF
                         </button>
                       </div>
