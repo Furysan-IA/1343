@@ -15,6 +15,7 @@ interface DJCData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -30,6 +31,7 @@ interface DJCData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 export class DJCPdfGenerator {
@@ -75,100 +77,172 @@ export class DJCPdfGenerator {
     this.yPos += 9;
   }
 
-  private addTableRow(label: string, value: string, isGray: boolean = false, isHighlight: boolean = false) {
-    const rowHeight = 8;
+  private addTableRow(label: string, value: string, isGray: boolean = false, allowEmpty: boolean = false) {
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
+    const lineHeight = 4;
+    const minRowHeight = 8;
+    const topPadding = 2.5;
+    const bottomPadding = 2.5;
+
+    // Preparar texto de la etiqueta
+    this.pdf.setFontSize(8);
+    this.pdf.setFont('helvetica', 'bold');
+    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
+
+    // Preparar texto del valor
+    this.pdf.setFont('helvetica', 'normal');
+    let valueLines: string[] = [];
+    const isEmpty = !value || value.trim() === '';
+
+    if (isEmpty && !allowEmpty) {
+      valueLines = ['VACIO'];
+    } else if (isEmpty && allowEmpty) {
+      valueLines = [''];
+    } else {
+      valueLines = this.pdf.splitTextToSize(value, valueWidth - 6);
+    }
+
+    // Calcular altura dinámica basada en el contenido
+    const labelHeight = labelLines.length * lineHeight + topPadding + bottomPadding;
+    const valueHeight = valueLines.length * lineHeight + topPadding + bottomPadding;
+    const rowHeight = Math.max(minRowHeight, labelHeight, valueHeight);
 
     // Fondo de la fila
     if (isGray) {
       this.pdf.setFillColor(245, 245, 245);
-    } else if (isHighlight) {
-      this.pdf.setFillColor(255, 255, 200); // Amarillo claro
     } else {
       this.pdf.setFillColor(255, 255, 255);
     }
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'F');
+    this.pdf.rect(this.margin, this.yPos, this.pageWidth - 2 * this.margin, rowHeight, 'F');
 
     // Borde de la fila
     this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, this.pageWidth - 2 * this.margin, rowHeight, 'S');
+    this.pdf.rect(this.margin, this.yPos, this.pageWidth - 2 * this.margin, rowHeight, 'S');
 
-    // Texto de la etiqueta
-    this.pdf.setFontSize(8);
+    // Texto de la etiqueta - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+    const labelContentHeight = labelLines.length * lineHeight;
+    const labelStartY = this.yPos + (rowHeight - labelContentHeight) / 2 + 3.5;
+    labelLines.forEach((line, index) => {
+      this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
+    });
 
-    // Texto del valor
+    // Texto del valor - centrado verticalmente
     this.pdf.setFont('helvetica', 'normal');
-
-    // Verificar si el valor está vacío o es "CAMPO NO ENCONTRADO"
-    if (!value || value.trim() === '') {
+    if (isEmpty && !allowEmpty) {
       this.pdf.setTextColor(255, 0, 0);
-      this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2, this.yPos);
+      const valueStartY = this.yPos + (rowHeight / 2) + 3;
+      this.pdf.text('VACIO', this.margin + labelWidth + 3, valueStartY);
       this.pdf.setTextColor(0, 0, 0);
-    } else {
-      const valueLines = this.pdf.splitTextToSize(value, valueWidth - 4);
-      this.pdf.text(valueLines, this.margin + labelWidth + 2, this.yPos, { maxWidth: valueWidth - 4 });
+    } else if (!isEmpty || allowEmpty) {
+      const valueContentHeight = valueLines.length * lineHeight;
+      const valueStartY = this.yPos + (rowHeight - valueContentHeight) / 2 + 3.5;
+      valueLines.forEach((line, index) => {
+        if (line.trim() !== '' || !isEmpty) {
+          this.pdf.text(line, this.margin + labelWidth + 3, valueStartY + (index * lineHeight));
+        }
+      });
     }
 
     this.yPos += rowHeight;
   }
 
-   private addMultiRowField(label: string, fields: { label: string; value: string; highlight?: boolean }[]) {
+   private addMultiRowField(label: string, fields: { label: string; value: string }[]) {
     const labelWidth = 70;
     const valueWidth = this.pageWidth - 2 * this.margin - labelWidth;
-    const totalHeight = fields.length * 7;
+    const lineHeight = 4;
+    const minSubRowHeight = 8;
+    const topPadding = 2.5;
+    const bottomPadding = 2.5;
+
+    // Calcular alturas de cada subfila
+    this.pdf.setFontSize(8);
+    const subRowHeights: number[] = [];
+    let totalHeight = 0;
+
+    fields.forEach(field => {
+      this.pdf.setFont('helvetica', 'bold');
+      const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
+
+      this.pdf.setFont('helvetica', 'normal');
+      const availableWidth = valueWidth - labelTextWidth - 6;
+
+      let valueLines: string[] = [];
+      if (!field.value || field.value.trim() === '') {
+        valueLines = ['VACIO'];
+      } else {
+        valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
+      }
+
+      const subRowHeight = Math.max(minSubRowHeight, valueLines.length * lineHeight + topPadding + bottomPadding);
+      subRowHeights.push(subRowHeight);
+      totalHeight += subRowHeight;
+    });
 
     // Fondo gris para la etiqueta principal
     this.pdf.setFillColor(245, 245, 245);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'F');
+    this.pdf.rect(this.margin, this.yPos, labelWidth, totalHeight, 'F');
 
     // Borde para la etiqueta
     this.pdf.setDrawColor(200, 200, 200);
-    this.pdf.rect(this.margin, this.yPos - 5, labelWidth, totalHeight, 'S');
+    this.pdf.rect(this.margin, this.yPos, labelWidth, totalHeight, 'S');
 
-    // Texto de la etiqueta principal
-    this.pdf.setFontSize(8);
+    // Texto de la etiqueta principal - centrado verticalmente
     this.pdf.setFont('helvetica', 'bold');
-    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 4);
-    this.pdf.text(labelLines, this.margin + 2, this.yPos, { maxWidth: labelWidth - 4 });
+    const labelLines = this.pdf.splitTextToSize(label, labelWidth - 6);
+    const labelContentHeight = labelLines.length * lineHeight;
+    const labelStartY = this.yPos + (totalHeight - labelContentHeight) / 2 + 3.5;
+    labelLines.forEach((line, index) => {
+      this.pdf.text(line, this.margin + 3, labelStartY + (index * lineHeight));
+    });
 
     // Agregar cada subfila
     let subYPos = this.yPos;
     fields.forEach((field, index) => {
-      const rowHeight = 7;
+      const subRowHeight = subRowHeights[index];
 
-      // Fondo de la subfila
-      if (field.highlight) {
-        this.pdf.setFillColor(255, 255, 200);
-      } else {
-        this.pdf.setFillColor(255, 255, 255);
-      }
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'F');
+      // Fondo blanco uniforme para todas las subfilas
+      this.pdf.setFillColor(255, 255, 255);
+      this.pdf.rect(this.margin + labelWidth, subYPos, valueWidth, subRowHeight, 'F');
 
       // Borde de la subfila
-      this.pdf.rect(this.margin + labelWidth, subYPos - 5, valueWidth, rowHeight, 'S');
+      this.pdf.rect(this.margin + labelWidth, subYPos, valueWidth, subRowHeight, 'S');
 
-      // Texto
-      this.pdf.setFontSize(7);
+      // Calcular ancho de la etiqueta del campo
       this.pdf.setFont('helvetica', 'bold');
-      this.pdf.text(field.label + ': ', this.margin + labelWidth + 2, subYPos);
-
-      this.pdf.setFont('helvetica', 'normal');
       const labelTextWidth = this.pdf.getTextWidth(field.label + ': ');
 
+      // Texto del valor
+      this.pdf.setFont('helvetica', 'normal');
+      const availableWidth = valueWidth - labelTextWidth - 6;
+
       if (!field.value || field.value.trim() === '') {
+        // Centrar verticalmente el texto de una línea
+        const textStartY = subYPos + (subRowHeight / 2) + 3;
+        this.pdf.setFont('helvetica', 'bold');
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textStartY);
+        this.pdf.setFont('helvetica', 'normal');
         this.pdf.setTextColor(255, 0, 0);
-        this.pdf.text('CAMPO NO ENCONTRADO', this.margin + labelWidth + 2 + labelTextWidth, subYPos);
+        this.pdf.text('VACIO', this.margin + labelWidth + 3 + labelTextWidth, textStartY);
         this.pdf.setTextColor(0, 0, 0);
       } else {
-        const valueText = this.pdf.splitTextToSize(field.value, valueWidth - labelTextWidth - 6);
-        this.pdf.text(valueText, this.margin + labelWidth + 2 + labelTextWidth, subYPos, { maxWidth: valueWidth - labelTextWidth - 6 });
+        const valueLines = this.pdf.splitTextToSize(field.value, availableWidth);
+        const contentHeight = valueLines.length * lineHeight;
+        const textStartY = subYPos + (subRowHeight - contentHeight) / 2 + 3.5;
+
+        // Dibujar etiqueta en la misma línea que el primer valor
+        this.pdf.setFont('helvetica', 'bold');
+        this.pdf.text(field.label + ': ', this.margin + labelWidth + 3, textStartY);
+
+        // Dibujar valores
+        this.pdf.setFont('helvetica', 'normal');
+        valueLines.forEach((line, lineIndex) => {
+          this.pdf.text(line, this.margin + labelWidth + 3 + labelTextWidth, textStartY + (lineIndex * lineHeight));
+        });
       }
 
-      subYPos += rowHeight;
+      subYPos += subRowHeight;
     });
 
     this.yPos += totalHeight;
@@ -213,11 +287,20 @@ export class DJCPdfGenerator {
     this.checkPageBreak();
     this.addSectionHeader('(4) INFORMACIÓN DEL PRODUCTO');
     this.addTableRow('Código de identificación único del producto (Autodeterminado)', djcData.codigo_producto, true);
-    this.addTableRow('Fabricante (Nombre y dirección de la planta de producción)', djcData.fabricante);
-    this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
-    this.addTableRow('Marca/s', djcData.producto_marca);
-    this.addTableRow('Modelo/s', djcData.producto_modelo, true);
-    this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
+    if (!djcData.isSimplified) {
+      this.addTableRow('Fabricante (Nombre y dirección de la planta de producción)', djcData.fabricante);
+      this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
+      this.addTableRow('Marca/s', djcData.producto_marca);
+      this.addTableRow('Modelo/s', djcData.producto_modelo, true);
+      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
+    } else {
+      // En versión simplificada, mostrar solo fabricante con codigo_version_simplificada
+      this.addTableRow('Fabricante', djcData.codigo_version_simplificada || djcData.fabricante);
+      this.addTableRow('Identificación del producto', djcData.identificacion_producto, true);
+      this.addTableRow('Marca/s', djcData.producto_marca);
+      this.addTableRow('Modelo/s', djcData.producto_modelo, true);
+      this.addTableRow('Características técnicas', djcData.caracteristicas_tecnicas);
+    }
     this.yPos += 3;
 
     // Sección 5: Normas y Evaluación
@@ -232,11 +315,11 @@ export class DJCPdfGenerator {
       [
         { label: 'N° de Certificado', value: djcData.numero_certificado },
         { label: 'Organismo de Certificación', value: djcData.organismo_certificacion },
-        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion, highlight: true },
-        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado, highlight: true },
-        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia, highlight: true },
-        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos, highlight: true },
-        { label: 'Informe de ensayos', value: djcData.informe_ensayos, highlight: true }
+        { label: 'Esquema de certificacion', value: djcData.esquema_certificacion },
+        { label: 'Fecha de emision (Certificado / Ultima Vigilancia)', value: djcData.fecha_emision_certificado },
+        { label: 'Fecha de proxima vigilancia', value: djcData.fecha_proxima_vigilancia },
+        { label: 'Laboratorio de ensayos', value: djcData.laboratorio_ensayos },
+        { label: 'Informe de ensayos', value: djcData.informe_ensayos }
       ]
     );
     this.yPos += 3;
@@ -244,7 +327,7 @@ export class DJCPdfGenerator {
     // Sección 6: Otros Datos
     this.checkPageBreak();
     this.addSectionHeader('(6) OTROS DATOS');
-    this.addTableRow('Enlace a la copia de la declaración de conformidad en Internet', djcData.enlace_declaracion, true);
+    this.addTableRow('Enlace a la copia de la declaración de conformidad en Internet', djcData.enlace_declaracion, true, true);
     this.yPos += 5;
 
     // Texto legal

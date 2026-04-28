@@ -1,17 +1,28 @@
 import React, { useState } from 'react';
-import { Upload, RefreshCw, FileSpreadsheet, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Circle as XCircle } from 'lucide-react';
+import { Upload, RefreshCw, FileSpreadsheet, CheckCircle, AlertCircle, XCircle, Settings, History } from 'lucide-react';
 import { ProductUpdateService, UpdateStats } from '../services/productUpdate.service';
 import { DataMapper } from '../services/dataMapper.service';
 import { parseFile } from '../services/universalDataValidation.service';
+import { FieldSelector } from '../components/FieldSelector';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+type UpdateMode = 'fill_empty' | 'selective';
+
 export default function DataUpdate() {
+  const navigate = useNavigate();
+  const [updateMode, setUpdateMode] = useState<UpdateMode>('fill_empty');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingStep, setProcessingStep] = useState('');
   const [updateResult, setUpdateResult] = useState<UpdateStats | null>(null);
+
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [overwriteMode, setOverwriteMode] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -45,13 +56,29 @@ export default function DataUpdate() {
   const handleUpdate = async () => {
     if (!selectedFile) return;
 
+    if (updateMode === 'selective' && selectedFields.length === 0) {
+      toast.error('Debes seleccionar al menos un campo para actualizar');
+      return;
+    }
+
+    if (updateMode === 'selective' && overwriteMode) {
+      setShowConfirmModal(true);
+      return;
+    }
+
+    executeUpdate();
+  };
+
+  const executeUpdate = async () => {
+    if (!selectedFile) return;
+
     setIsProcessing(true);
     setProgress(0);
     setProcessingStep('Leyendo archivo Excel...');
     setUpdateResult(null);
 
     try {
-      console.log('🚀 Iniciando actualización de datos preexistentes...');
+      console.log('🚀 Iniciando actualización de datos...');
 
       setProgress(20);
       const parsedData = await parseFile(selectedFile);
@@ -69,16 +96,34 @@ export default function DataUpdate() {
       }
 
       setProgress(60);
-      setProcessingStep('Actualizando productos existentes...');
+      setProcessingStep('Actualizando productos...');
 
-      const stats = await ProductUpdateService.updateProductsFromExcel(
-        mappingResult.products,
-        (current, total) => {
-          const percent = 60 + Math.round((current / total) * 40);
-          setProgress(percent);
-          setProcessingStep(`Actualizando ${current} de ${total} productos...`);
-        }
-      );
+      let stats: UpdateStats;
+
+      if (updateMode === 'fill_empty') {
+        stats = await ProductUpdateService.updateProductsFromExcel(
+          mappingResult.products,
+          (current, total) => {
+            const percent = 60 + Math.round((current / total) * 40);
+            setProgress(percent);
+            setProcessingStep(`Actualizando ${current} de ${total} productos...`);
+          }
+        );
+      } else {
+        stats = await ProductUpdateService.updateProductsSelective(
+          mappingResult.products,
+          {
+            allowedFields: selectedFields,
+            overwriteMode: overwriteMode,
+            sourceFile: selectedFile.name
+          },
+          (current, total) => {
+            const percent = 60 + Math.round((current / total) * 40);
+            setProgress(percent);
+            setProcessingStep(`Actualizando ${current} de ${total} productos...`);
+          }
+        );
+      }
 
       console.log('✅ Actualización completada:', stats);
       setUpdateResult(stats);
@@ -88,7 +133,7 @@ export default function DataUpdate() {
       if (stats.updated > 0) {
         toast.success(`${stats.updated} productos actualizados exitosamente!`);
       } else {
-        toast.info('No se encontraron campos vacíos para actualizar');
+        toast.info('No se encontraron productos para actualizar');
       }
 
       setIsProcessing(false);
@@ -107,7 +152,7 @@ export default function DataUpdate() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl p-8 text-center max-w-md">
             <RefreshCw className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">🔄 Actualizando Productos</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Actualizando Productos</h2>
             <p className="text-slate-600 mb-2">{processingStep}</p>
             <div className="mt-4 w-full bg-slate-200 rounded-full h-3 overflow-hidden">
               <div
@@ -120,54 +165,141 @@ export default function DataUpdate() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto">
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={executeUpdate}
+        title="Confirmar Sobrescritura de Datos"
+        message="Estás a punto de sobrescribir datos existentes. Esta acción modificará información que ya existe en la base de datos."
+        confirmText="Sí, Sobrescribir"
+        cancelText="Cancelar"
+        type="warning"
+        details={[
+          `Se actualizarán ${selectedFields.length} campos en cada producto`,
+          'Los valores antiguos serán reemplazados por los nuevos del Excel',
+          'Se guardará un registro de auditoría completo de los cambios'
+        ]}
+      />
+
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-10 h-10 text-blue-600" />
+            <h1 className="text-3xl font-bold text-slate-800">
+              Actualización de Datos
+            </h1>
+          </div>
+          <button
+            onClick={() => navigate('/audit-history')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <History className="w-5 h-5" />
+            Ver Historial
+          </button>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Modo de Actualización
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setUpdateMode('fill_empty')}
+                className={`p-6 rounded-xl border-2 transition-all text-left ${
+                  updateMode === 'fill_empty'
+                    ? 'border-blue-500 bg-blue-50 shadow-lg'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h4 className="font-semibold text-slate-800">Solo Completar Vacíos</h4>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    updateMode === 'fill_empty' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'
+                  }`}>
+                    {updateMode === 'fill_empty' && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Actualiza únicamente los campos que están vacíos (NULL o vacío).
+                  No sobrescribe datos existentes.
+                </p>
+              </button>
+
+              <button
+                onClick={() => setUpdateMode('selective')}
+                className={`p-6 rounded-xl border-2 transition-all text-left ${
+                  updateMode === 'selective'
+                    ? 'border-blue-500 bg-blue-50 shadow-lg'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h4 className="font-semibold text-slate-800">Actualización Personalizada</h4>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    updateMode === 'selective' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'
+                  }`}>
+                    {updateMode === 'selective' && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Selecciona qué campos actualizar con opción de sobrescribir datos existentes.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {updateMode === 'selective' && (
+            <div className="space-y-6">
+              <FieldSelector
+                selectedFields={selectedFields}
+                onChange={setSelectedFields}
+              />
+
+              <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-6">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overwriteMode}
+                    onChange={(e) => setOverwriteMode(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <span className="font-semibold text-slate-800">Sobrescribir datos existentes</span>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Si está activado, los valores del Excel reemplazarán los datos existentes en los campos seleccionados.
+                      Si está desactivado, solo se completarán campos vacíos.
+                    </p>
+                  </div>
+                </label>
+
+                {overwriteMode && (
+                  <div className="mt-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded">
+                    <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Los datos existentes serán sobrescritos. Se guardará un registro de auditoría completo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {updateMode === 'fill_empty' && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+              <h3 className="font-semibold text-blue-900 mb-2">Cómo funciona</h3>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Busca cada producto por su codificación</li>
+                <li>• Actualiza solo campos vacíos (NULL o vacío)</li>
+                <li>• NO sobrescribe datos existentes</li>
+                <li>• Procesa todos los campos automáticamente</li>
+              </ul>
+            </div>
+          )}
+        </div>
+
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <RefreshCw className="w-10 h-10 text-blue-600" />
-              <h1 className="text-3xl font-bold text-slate-800">
-                Actualización de Datos Existentes
-              </h1>
-            </div>
-            <p className="text-slate-600 max-w-2xl mx-auto">
-              Esta herramienta actualiza productos que ya existen en la base de datos,
-              rellenando únicamente los campos vacíos con los datos del Excel.
-            </p>
-          </div>
-
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-            <h3 className="font-semibold text-blue-900 mb-2">📋 ¿Cómo funciona?</h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Busca cada producto por su <strong>codificación</strong></li>
-              <li>• Actualiza <strong>solo campos vacíos</strong> (NULL o vacío)</li>
-              <li>• <strong>NO sobrescribe</strong> datos existentes</li>
-              <li>• Procesa todos los productos automáticamente</li>
-            </ul>
-          </div>
-
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mb-6">
-            <h3 className="font-semibold text-amber-900 mb-2">⚠️ Campos que se pueden actualizar</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm text-amber-800">
-              <div>
-                <ul className="space-y-1">
-                  <li>• Dirección Legal Empresa</li>
-                  <li>• Fabricante</li>
-                  <li>• Planta de Fabricación</li>
-                  <li>• Laboratorio</li>
-                  <li>• Informe de Ensayo</li>
-                </ul>
-              </div>
-              <div>
-                <ul className="space-y-1">
-                  <li>• OCP Extranjero</li>
-                  <li>• Certificado Extranjero</li>
-                  <li>• Esquema Certificación</li>
-                  <li>• Y todos los demás campos...</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
           {!selectedFile ? (
             <div
               onDragOver={handleDragOver}
@@ -228,7 +360,7 @@ export default function DataUpdate() {
                   className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <RefreshCw className={`w-5 h-5 ${isProcessing ? 'animate-spin' : ''}`} />
-                  {isProcessing ? 'Actualizando...' : 'Actualizar Productos Existentes'}
+                  {isProcessing ? 'Actualizando...' : 'Actualizar Productos'}
                 </button>
                 <button
                   onClick={() => {
@@ -275,6 +407,22 @@ export default function DataUpdate() {
                   <p className="text-3xl font-bold text-orange-900">{updateResult.notFound}</p>
                 </div>
               </div>
+
+              {updateResult.fieldBreakdown && Object.keys(updateResult.fieldBreakdown).length > 0 && (
+                <div className="bg-slate-50 border-2 border-slate-200 rounded-lg p-6">
+                  <h3 className="font-semibold text-slate-800 mb-4">Campos Actualizados</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {Object.entries(updateResult.fieldBreakdown)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([field, count]) => (
+                        <div key={field} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                          <span className="text-sm text-slate-700 font-medium">{field}</span>
+                          <span className="text-sm text-blue-600 font-bold">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               {updateResult.errors.length > 0 && (
                 <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">

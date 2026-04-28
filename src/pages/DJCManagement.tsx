@@ -1,23 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { StatusBadge } from '../components/Common/StatusBadge';
-import { 
-  FileText, 
-  Upload, 
-  Edit, 
-  Send, 
-  RefreshCw, 
-  Search, 
-  Filter,
-  Package,
-  AlertCircle,
-  Download
-} from 'lucide-react';
+import { FileText, Upload, CreditCard as Edit, Send, RefreshCw, Search, ListFilter as Filter, Package, CircleAlert as AlertCircle, Download, X, User, Building2, MapPin, Phone, Mail, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatDateWithoutTimezone } from '../utils/formatters';
+import { DJCPdfGenerator } from '../services/djcPdfGenerator.service';
+import { formatCuit } from '../utils/formatters';
+import { DJCPreviewModal } from '../components/DJC/DJCPreview';
 
 interface Product {
   codificacion: string;
@@ -62,11 +56,26 @@ interface Product {
 
 export function DJCManagement() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDJCModal, setShowDJCModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [selectedResolution, setSelectedResolution] = useState('Res. SICyC N° 236/24');
+  const [generating, setGenerating] = useState(false);
+  const [representante, setRepresentante] = useState({
+    nombre: '',
+    domicilio: '',
+    cuit: ''
+  });
+  const [useCustomLink, setUseCustomLink] = useState(false);
+  const [customLink, setCustomLink] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -75,13 +84,41 @@ export function DJCManagement() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setProducts(data || []);
+      // Primero obtener el conteo total
+      const { count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true });
+
+      console.log('Total de productos en DB:', count);
+
+      // Cargar TODOS los productos en lotes
+      const allProducts: Product[] = [];
+      const batchSize = 1000;
+      const totalBatches = Math.ceil((count || 0) / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = from + batchSize - 1;
+
+        console.log(`Cargando lote ${i + 1}/${totalBatches}: registros ${from}-${to}`);
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data) {
+          allProducts.push(...data);
+          console.log(`Lote ${i + 1} cargado: ${data.length} productos. Total acumulado: ${allProducts.length}`);
+        }
+      }
+
+      console.log('Total de productos cargados:', allProducts.length);
+      setProducts(allProducts);
     } catch (error: any) {
       toast.error(`Error al cargar productos: ${error.message}`);
       
@@ -113,16 +150,207 @@ export function DJCManagement() {
 
   const handleGenerateDJC = async (product: Product) => {
     try {
-      toast(`Generando DJC para producto ${product.codificacion}...`);
-      
-      // TODO: Implementar lógica de generación de DJC
-      // Por ahora solo mostramos un mensaje de confirmación
-      setTimeout(() => {
-        toast.success(`DJC generada exitosamente para ${product.codificacion}`);
-      }, 1000);
-      
-    } catch (error: any) {
-      toast.error(`Error al generar DJC: ${error.message}`);
+      const { data: client, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('cuit', product.cuit)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!client) {
+        toast.error('No se encontró el cliente asociado al producto');
+        return;
+      }
+
+      setSelectedProduct(product);
+      setSelectedClient(client);
+      setShowDJCModal(true);
+    } catch (error) {
+      console.error('Error loading client:', error);
+      toast.error('Error al cargar información del cliente');
+    }
+  };
+
+  const prepareDJCData = () => {
+    if (!selectedProduct || !selectedClient) return null;
+
+    const domicilio = selectedClient.direccion || selectedProduct.direccion_legal_empresa || '';
+
+    let domicilioPlanta = domicilio;
+    if (selectedClient.direccion_planta &&
+        selectedClient.direccion_planta.trim() !== '' &&
+        selectedClient.direccion_planta.trim() !== domicilio.trim()) {
+      domicilioPlanta = selectedClient.direccion_planta;
+    }
+
+    const djcNumber = `DJC-${selectedProduct.codificacion}`;
+    const currentDate = new Date().toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const finalLink = useCustomLink && customLink
+      ? customLink
+      : (selectedProduct.qr_link || `https://verificar.argentina.gob.ar/qr/${selectedProduct.codificacion}`);
+
+    // Formatear fechas sin conversión de zona horaria
+    const fechaEmisionCertificado = formatDateWithoutTimezone(selectedProduct.fecha_emision, 'short');
+
+    const fechaProximaVigilancia = selectedProduct.fecha_proxima_vigilancia
+      ? formatDateWithoutTimezone(selectedProduct.fecha_proxima_vigilancia, 'short')
+      : selectedProduct.vencimiento
+      ? formatDateWithoutTimezone(selectedProduct.vencimiento, 'short')
+      : '-';
+
+    return {
+      numero_djc: djcNumber,
+      resolucion: selectedResolution,
+      razon_social: selectedClient.razon_social,
+      cuit: formatCuit(selectedClient.cuit?.toString() || ''),
+      marca: selectedProduct.marca || selectedProduct.titular || '',
+      domicilio_legal: domicilio,
+      domicilio_planta: domicilioPlanta,
+      telefono: selectedClient.telefono || '',
+      email: selectedClient.email || '',
+      representante_nombre: representante.nombre,
+      representante_domicilio: representante.domicilio,
+      representante_cuit: representante.cuit,
+      codigo_producto: selectedProduct.codificacion,
+      fabricante: selectedProduct.fabricante || '',
+      identificacion_producto: selectedProduct.producto || '',
+      producto_marca: selectedProduct.marca || '',
+      producto_modelo: selectedProduct.modelo || '',
+      caracteristicas_tecnicas: selectedProduct.caracteristicas_tecnicas || '',
+      reglamento_alcanzado: selectedResolution,
+      normas_tecnicas: selectedProduct.normas_aplicacion || '',
+      numero_certificado: selectedProduct.codificacion,
+      organismo_certificacion: selectedProduct.organismo_certificacion === 'IACSA'
+        ? 'Intertek Argentina Certificaciones SA'
+        : (selectedProduct.organismo_certificacion || selectedProduct.ocp_extranjero || 'Intertek Argentina Certificaciones SA'),
+      esquema_certificacion: selectedProduct.esquema_certificacion || '',
+      fecha_emision_certificado: fechaEmisionCertificado,
+      fecha_proxima_vigilancia: fechaProximaVigilancia,
+      laboratorio_ensayos: selectedProduct.laboratorio || '',
+      informe_ensayos: selectedProduct.informe_ensayo_nro || '',
+      enlace_declaracion: finalLink,
+      fecha_lugar: `Buenos Aires, ${currentDate}`
+    };
+  };
+
+  const handlePreview = () => {
+    const djcData = prepareDJCData();
+    if (djcData) {
+      setPreviewData(djcData);
+      setShowPreview(true);
+    }
+  };
+
+  const generateDJC = async () => {
+    if (!previewData || !selectedProduct || !selectedClient) {
+      console.error('Missing data:', { previewData, selectedProduct, selectedClient });
+      toast.error('Faltan datos para generar la DJC');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error('Debe estar autenticado para generar DJCs');
+        setGenerating(false);
+        return;
+      }
+
+      const pdfGenerator = new DJCPdfGenerator();
+      const pdf = pdfGenerator.generate(previewData);
+      const pdfBlob = pdf.output('blob');
+      const fileName = `DJC_${previewData.numero_djc}.pdf`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('djcs')
+        .upload(fileName, pdfBlob, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('djcs')
+        .getPublicUrl(fileName);
+
+      const { error: djcError } = await supabase
+        .from('djc')
+        .insert({
+          numero_djc: previewData.numero_djc,
+          resolucion: previewData.resolucion,
+          razon_social: previewData.razon_social,
+          cuit: selectedClient.cuit,
+          marca: previewData.marca,
+          domicilio_legal: previewData.domicilio_legal,
+          domicilio_planta: previewData.domicilio_planta,
+          telefono: previewData.telefono,
+          email: previewData.email,
+          representante_nombre: previewData.representante_nombre || null,
+          representante_domicilio: previewData.representante_domicilio || null,
+          representante_cuit: previewData.representante_cuit || null,
+          codigo_producto: previewData.codigo_producto,
+          fabricante: previewData.fabricante,
+          identificacion_producto: previewData.identificacion_producto,
+          reglamentos: previewData.resolucion,
+          normas_tecnicas: previewData.normas_tecnicas,
+          documento_evaluacion: previewData.informe_ensayos,
+          enlace_declaracion: previewData.enlace_declaracion,
+          fecha_lugar: previewData.fecha_lugar,
+          pdf_url: urlData.publicUrl,
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (djcError) {
+        console.error('Error saving DJC:', djcError);
+        if (djcError.code === '42501') {
+          toast.error('Error de permisos. Verifique las políticas RLS en Supabase');
+          throw new Error('Row Level Security error - check database policies');
+        }
+        throw djcError;
+      }
+
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          djc_status: 'Generada Pendiente de Firma',
+          djc_path: urlData.publicUrl
+        })
+        .eq('codificacion', selectedProduct.codificacion);
+
+      if (updateError) {
+        console.error('Error updating product:', updateError);
+        throw updateError;
+      }
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+
+      toast.success('DJC generada y guardada exitosamente');
+      setShowPreview(false);
+      setShowDJCModal(false);
+      await fetchProducts();
+    } catch (error) {
+      console.error('Error generating DJC:', error);
+      toast.error('Error al generar la DJC. Verifique los permisos en la base de datos.');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -264,31 +492,31 @@ export function DJCManagement() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('codification')}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('titular')}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Producto
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('expirationDate')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vencimiento
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('daysToExpire')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Días
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('djcStatus')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    DJC
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('certificateStatus')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Certificado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('sentToClient')}
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Enviado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
@@ -296,42 +524,42 @@ export function DJCManagement() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map((product) => (
                   <tr key={product.codificacion} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900 max-w-xs truncate" title={product.codificacion}>
                       {product.codificacion}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 text-sm text-gray-700 max-w-xs truncate" title={product.titular || 'N/A'}>
                       {product.titular || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 text-sm text-gray-700 max-w-xs truncate" title={product.producto || 'N/A'}>
                       {product.producto || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {product.vencimiento ? format(new Date(product.vencimiento), 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 text-center">
+                      {product.vencimiento ? format(new Date(product.vencimiento), 'dd/MM/yyyy', { locale: es }) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       {product.dias_para_vencer !== null ? (
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          product.dias_para_vencer < 0 
-                            ? 'bg-red-100 text-red-800' 
-                            : product.dias_para_vencer <= 30 
-                            ? 'bg-yellow-100 text-yellow-800' 
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          product.dias_para_vencer < 0
+                            ? 'bg-red-100 text-red-800'
+                            : product.dias_para_vencer <= 30
+                            ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-green-100 text-green-800'
                         }`}>
-                          {product.dias_para_vencer} días
+                          {product.dias_para_vencer}
                         </span>
-                      ) : 'N/A'}
+                      ) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.djc_status} type="djc" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.certificado_status} type="certificate" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <StatusBadge status={product.enviado_cliente} type="sent" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center justify-center space-x-1">
                         {/* Generar DJC Button */}
                         <button
                           onClick={() => handleGenerateDJC(product)}
@@ -402,6 +630,193 @@ export function DJCManagement() {
           </div>
         )}
       </div>
+
+      {/* Modal de Generación de DJC */}
+      {showDJCModal && selectedProduct && selectedClient && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Generar DJC</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Producto: {selectedProduct.codificacion}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDJCModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                disabled={generating}
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
+              {/* Información del Cliente */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                  Información del Cliente
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">Razón Social:</span>
+                    <p className="font-medium text-gray-900">{selectedClient.razon_social}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">CUIT:</span>
+                    <p className="font-medium text-gray-900">{formatCuit(selectedClient.cuit?.toString())}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Dirección:</span>
+                    <p className="font-medium text-gray-900">{selectedClient.direccion}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Producto */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-green-600" />
+                  Información del Producto
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Producto:</span>
+                    <p className="font-medium text-gray-900">{selectedProduct.producto}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Marca:</span>
+                    <p className="font-medium text-gray-900">{selectedProduct.marca || '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Modelo:</span>
+                    <p className="font-medium text-gray-900">{selectedProduct.modelo || '-'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Configuración de DJC */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Configuración de DJC
+                </h3>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Resolución
+                  </label>
+                  <select
+                    value={selectedResolution}
+                    onChange={(e) => setSelectedResolution(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    disabled={generating}
+                  >
+                    <option value="Res. SICyC N° 236/24">Res. SICyC N° 236/24</option>
+                    <option value="Res. SICyC N° 17/2025">Res. SICyC N° 17/2025</option>
+                    <option value="Res. SICyC N° 16/2025">Res. SICyC N° 16/2025</option>
+                  </select>
+                </div>
+
+                {/* Representante (Opcional) */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    Representante Autorizado (Opcional)
+                  </h4>
+                  <div className="grid grid-cols-1 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Nombre y Apellido / Razón Social"
+                      value={representante.nombre}
+                      onChange={(e) => setRepresentante({ ...representante, nombre: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={generating}
+                    />
+                    <input
+                      type="text"
+                      placeholder="CUIT"
+                      value={representante.cuit}
+                      onChange={(e) => setRepresentante({ ...representante, cuit: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={generating}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Domicilio Legal"
+                      value={representante.domicilio}
+                      onChange={(e) => setRepresentante({ ...representante, domicilio: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={generating}
+                    />
+                  </div>
+                </div>
+
+                {/* Enlace Personalizado (Opcional) */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      Enlace QR Personalizado
+                    </h4>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useCustomLink}
+                        onChange={(e) => setUseCustomLink(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        disabled={generating}
+                      />
+                      <span className="text-sm text-gray-600">Usar enlace personalizado</span>
+                    </label>
+                  </div>
+                  {useCustomLink && (
+                    <input
+                      type="text"
+                      placeholder="https://ejemplo.com/producto"
+                      value={customLink}
+                      onChange={(e) => setCustomLink(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={generating}
+                    />
+                  )}
+                  {!useCustomLink && selectedProduct?.qr_link && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Usando enlace del producto: {selectedProduct.qr_link}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+              <button
+                onClick={() => setShowDJCModal(false)}
+                disabled={generating}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePreview}
+                disabled={generating}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                <Eye className="w-5 h-5" />
+                Vista Previa DJC
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Vista Previa */}
+      <DJCPreviewModal
+        isOpen={showPreview}
+        djcData={previewData}
+        onClose={() => setShowPreview(false)}
+        onConfirm={generateDJC}
+        isGenerating={generating}
+      />
     </div>
   );
 }

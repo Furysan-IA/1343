@@ -249,39 +249,164 @@ export const updateClient = async (cuit: string, clientData: any): Promise<boole
   return true;
 };
 
+const PROTECTED_PRODUCT_FIELDS = [
+  'qr_path',
+  'qr_link',
+  'qr_status',
+  'qr_generated_at',
+  'djc_path',
+  'djc_status',
+  'certificado_status',
+  'enviado_cliente',
+  'uuid',
+  'created_at',
+  'updated_at',
+  'dias_para_vencer'
+];
+
+const prepareProductDataForInsert = (productData: any): any => {
+  const insertPayload: any = {};
+
+  Object.keys(productData).forEach(key => {
+    if (PROTECTED_PRODUCT_FIELDS.includes(key)) {
+      return;
+    }
+
+    const value = productData[key];
+    if (value === null || value === undefined || value === '') {
+      return;
+    }
+
+    if (key === 'fecha_vencimiento' || key === 'vencimiento') {
+      if (value instanceof Date) {
+        insertPayload.vencimiento = value.toISOString();
+      } else {
+        insertPayload.vencimiento = value;
+      }
+    } else if (key === 'fecha_emision') {
+      if (value instanceof Date) {
+        insertPayload.fecha_emision = value.toISOString();
+      } else {
+        insertPayload.fecha_emision = value;
+      }
+    } else if (key === 'fecha_emision_certificado_extranjero' || key === 'fecha_cancelacion' || key === 'fecha_proxima_vigilancia') {
+      if (value instanceof Date) {
+        insertPayload[key] = value.toISOString();
+      } else {
+        insertPayload[key] = value;
+      }
+    } else if (key === 'titular_responsable' && !insertPayload.titular) {
+      insertPayload.titular = value;
+    } else {
+      insertPayload[key] = value;
+    }
+  });
+
+  if (productData.certificado_path && productData.certificado_path.trim() !== '') {
+    insertPayload.certificado_status = 'Subido';
+  }
+
+  insertPayload.created_at = new Date().toISOString();
+  insertPayload.updated_at = new Date().toISOString();
+
+  return insertPayload;
+};
+
 export const insertProduct = async (productData: any): Promise<boolean> => {
-  if (!productData) return false;
+  if (!productData || !productData.codificacion) {
+    console.error('Cannot insert product: missing codificacion');
+    return false;
+  }
+
+  const insertPayload = prepareProductDataForInsert(productData);
 
   const { error } = await supabase
     .from('products')
-    .insert({
-      codificacion: productData.codificacion,
-      titular_responsable: productData.titular_responsable,
-      tipo_certificacion: productData.tipo_certificacion,
-      fecha_vencimiento: productData.fecha_vencimiento?.toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
+    .insert(insertPayload);
 
   if (error) {
     console.error('Error inserting product:', error);
     return false;
   }
 
+  console.log(`Product inserted: ${productData.codificacion}, fields: ${Object.keys(insertPayload).length}`);
   return true;
 };
 
+const prepareProductDataForUpdate = (productData: any): any => {
+  const updatePayload: any = {};
+  let fieldCount = 0;
+
+  Object.keys(productData).forEach(key => {
+    if (PROTECTED_PRODUCT_FIELDS.includes(key)) {
+      return;
+    }
+
+    if (key === 'codificacion' || key === 'cuit') {
+      return;
+    }
+
+    const value = productData[key];
+    if (value === null || value === undefined || value === '') {
+      return;
+    }
+
+    if (key === 'fecha_vencimiento' || key === 'vencimiento') {
+      if (value instanceof Date) {
+        updatePayload.vencimiento = value.toISOString();
+      } else {
+        updatePayload.vencimiento = value;
+      }
+      fieldCount++;
+    } else if (key === 'fecha_emision') {
+      if (value instanceof Date) {
+        updatePayload.fecha_emision = value.toISOString();
+      } else {
+        updatePayload.fecha_emision = value;
+      }
+      fieldCount++;
+    } else if (key === 'fecha_emision_certificado_extranjero' || key === 'fecha_cancelacion' || key === 'fecha_proxima_vigilancia') {
+      if (value instanceof Date) {
+        updatePayload[key] = value.toISOString();
+      } else {
+        updatePayload[key] = value;
+      }
+      fieldCount++;
+    } else if (key === 'titular_responsable') {
+      updatePayload.titular = value;
+      fieldCount++;
+    } else {
+      updatePayload[key] = value;
+      fieldCount++;
+    }
+  });
+
+  if (productData.certificado_path && productData.certificado_path.trim() !== '') {
+    updatePayload.certificado_status = 'Subido';
+    fieldCount++;
+  }
+
+  updatePayload.updated_at = new Date().toISOString();
+
+  return { payload: updatePayload, fieldCount };
+};
+
 export const updateProduct = async (codificacion: string, productData: any): Promise<boolean> => {
-  if (!productData || !codificacion) return false;
+  if (!productData || !codificacion) {
+    console.error('Cannot update product: missing codificacion or productData');
+    return false;
+  }
+
+  const { payload, fieldCount } = prepareProductDataForUpdate(productData);
+
+  if (fieldCount === 0) {
+    console.warn(`No fields to update for product ${codificacion}`);
+    return true;
+  }
 
   const { error } = await supabase
     .from('products')
-    .update({
-      titular_responsable: productData.titular_responsable,
-      tipo_certificacion: productData.tipo_certificacion,
-      fecha_vencimiento: productData.fecha_vencimiento?.toISOString(),
-      updated_at: new Date().toISOString()
-    })
+    .update(payload)
     .eq('codificacion', codificacion);
 
   if (error) {
@@ -289,6 +414,7 @@ export const updateProduct = async (codificacion: string, productData: any): Pro
     return false;
   }
 
+  console.log(`Product updated: ${codificacion}, fields: ${fieldCount}`);
   return true;
 };
 

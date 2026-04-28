@@ -99,7 +99,56 @@ const parseDate = (value: any): Date | null => {
 };
 
 const CLIENT_FIELDS = ['cuit', 'razon_social', 'direccion', 'email', 'telefono', 'contacto'];
-const PRODUCT_FIELDS = ['codificacion', 'titular_responsable', 'tipo_certificacion', 'fecha_vencimiento'];
+
+const PRODUCT_FIELDS = [
+  'codificacion',
+  'titular', 'titular_responsable',
+  'tipo_certificacion',
+  'estado',
+  'en_proceso_renovacion',
+  'direccion_legal_empresa',
+  'fabricante',
+  'planta_fabricacion',
+  'origen',
+  'producto',
+  'marca',
+  'modelo',
+  'caracteristicas_tecnicas',
+  'normas_aplicacion',
+  'informe_ensayo_nro',
+  'laboratorio',
+  'ocp_extranjero',
+  'n_certificado_extranjero',
+  'fecha_emision_certificado_extranjero',
+  'disposicion_convenio',
+  'cod_rubro',
+  'cod_subrubro',
+  'nombre_subrubro',
+  'fecha_emision',
+  'vencimiento', 'fecha_vencimiento',
+  'fecha_cancelacion',
+  'motivo_cancelacion',
+  'certificado_path',
+  'organismo_certificacion',
+  'esquema_certificacion',
+  'fecha_proxima_vigilancia'
+];
+
+const PROTECTED_FIELDS = [
+  'qr_path',
+  'qr_link',
+  'qr_status',
+  'qr_generated_at',
+  'djc_path',
+  'djc_status',
+  'certificado_status',
+  'enviado_cliente',
+  'uuid',
+  'created_at',
+  'updated_at',
+  'dias_para_vencer'
+];
+
 const REQUIRED_FIELD = 'fecha_emision';
 
 export const validateFile = (file: File): { isValid: boolean; errors: ValidationError[] } => {
@@ -281,11 +330,24 @@ export const extractClientAndProductData = (record: CertificateRecord): Extracti
     }
   });
 
-  PRODUCT_FIELDS.forEach(field => {
-    if (record[field]) {
-      productData[field] = record[field];
-      hasProductData = true;
-    } else {
+  Object.keys(record).forEach(key => {
+    if (PRODUCT_FIELDS.includes(key) && !PROTECTED_FIELDS.includes(key)) {
+      if (record[key] !== null && record[key] !== undefined && record[key] !== '') {
+        if (key === 'titular_responsable' && !productData['titular']) {
+          productData['titular'] = record[key];
+        } else if (key === 'fecha_vencimiento' && !productData['vencimiento']) {
+          productData['vencimiento'] = record[key];
+        } else {
+          productData[key] = record[key];
+        }
+        hasProductData = true;
+      }
+    }
+  });
+
+  const requiredProductFields = ['codificacion'];
+  requiredProductFields.forEach(field => {
+    if (!productData[field]) {
       missingProductFields.push(field);
     }
   });

@@ -19,36 +19,32 @@ interface QRCodeModalProps {
 export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [outputResolution, setOutputResolution] = useState<'web' | 'standard' | 'high' | 'ultra'>('standard');
+  const [outputResolution, setOutputResolution] = useState<'baja' | 'media' | 'alta'>('media');
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
 
-  // Resolution presets
   const resolutionPresets = {
-    web: { 
-      label: 'Web/Pantalla (Baja)', 
-      pixelRatio: 4, 
-      description: 'Ideal para visualización en pantalla',
-      fileSize: 'Pequeño (~50KB)'
+    baja: {
+      label: 'Baja',
+      pixelRatio: 4,
+      description: 'Web y pantalla',
+      pixels: '~376x452 px',
+      icon: 'M',
     },
-    standard: { 
-      label: 'Impresión Estándar (Media)', 
-      pixelRatio: 8, 
-      description: 'Recomendado para impresión normal',
-      fileSize: 'Medio (~200KB)'
+    media: {
+      label: 'Media',
+      pixelRatio: 10,
+      description: 'Impresion estandar',
+      pixels: '~940x1130 px',
+      icon: 'L',
     },
-    high: { 
-      label: 'Alta Calidad (Alta)', 
-      pixelRatio: 16, 
-      description: 'Para impresión profesional',
-      fileSize: 'Grande (~800KB)'
+    alta: {
+      label: 'Alta',
+      pixelRatio: 20,
+      description: 'Impresion profesional',
+      pixels: '~1880x2260 px',
+      icon: 'XL',
     },
-    ultra: { 
-      label: 'Ultra HD (Máxima)', 
-      pixelRatio: 24, 
-      description: 'Máxima calidad para impresión industrial',
-      fileSize: 'Muy grande (~1.8MB)'
-    }
   };
 
   useEffect(() => {
@@ -362,62 +358,68 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                         </div>
                       </div>
 
-                      {/* Resolution Selection */}
-                      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                        <h4 className="text-sm font-medium text-gray-900 mb-3">Calidad de Exportación</h4>
-                        <div className="space-y-2">
-                          {Object.entries(resolutionPresets).map(([key, preset]) => (
-                            <label
-                              key={key}
-                              className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-white transition-colors"
-                            >
-                              <input
-                                type="radio"
-                                name="resolution"
-                                value={key}
-                                checked={outputResolution === key}
-                                onChange={(e) => setOutputResolution(e.target.value as any)}
-                                className="mt-1 w-4 h-4 text-purple-600"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-medium text-gray-900">
-                                    {preset.label}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    {preset.fileSize}
-                                  </span>
+                      {/* Quality Selection */}
+                      <div className="mt-6">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Calidad de imagen</h4>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(Object.entries(resolutionPresets) as [string, typeof resolutionPresets.baja][]).map(([key, preset]) => {
+                            const isSelected = outputResolution === key;
+                            return (
+                              <button
+                                key={key}
+                                onClick={() => setOutputResolution(key as any)}
+                                className={`relative p-3 rounded-xl border-2 transition-all duration-200 text-center ${
+                                  isSelected
+                                    ? 'border-blue-600 bg-blue-50 shadow-sm'
+                                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                <div className={`text-xs font-bold uppercase tracking-wider mb-1 ${
+                                  isSelected ? 'text-blue-600' : 'text-gray-400'
+                                }`}>
+                                  {preset.icon}
                                 </div>
-                                <p className="text-xs text-gray-600 mt-1">
+                                <div className={`text-sm font-semibold ${
+                                  isSelected ? 'text-blue-900' : 'text-gray-700'
+                                }`}>
+                                  {preset.label}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5">
                                   {preset.description}
-                                </p>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                        
-                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                          <p className="text-xs text-blue-700">
-                            <strong>Recomendación:</strong> Use "Impresión Estándar" para la mayoría de casos. 
-                            Para QR codes muy pequeños (menos de 15mm) o con problemas de escaneo, use "Alta Calidad".
-                          </p>
+                                </div>
+                                <div className={`text-xs mt-1 font-mono ${
+                                  isSelected ? 'text-blue-600' : 'text-gray-400'
+                                }`}>
+                                  {preset.pixels}
+                                </div>
+                                {isSelected && (
+                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      <div className="mt-6 flex justify-center gap-3">
+                      {/* Download Buttons */}
+                      <div className="mt-5 grid grid-cols-2 gap-3">
                         <button
                           onClick={handleDownloadPNG}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-1"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                         >
-                          <Download className="h-4 w-4 mr-2" />
-                          Descargar PNG
+                          <Download className="h-4 w-4" />
+                          PNG
                         </button>
                         <button
                           onClick={handleDownloadPDF}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-1"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium transition-colors"
                         >
-                          <Download className="h-4 w-4 mr-2" />
-                          Descargar PDF
+                          <Download className="h-4 w-4" />
+                          PDF
                         </button>
                       </div>
                     </>

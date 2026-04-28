@@ -123,7 +123,7 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf,.jpg,.jpeg,.png';
-    
+
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -131,24 +131,33 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
       setUploadingFile(field);
       try {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${field}_${product.codificacion}_${Date.now()}.${fileExt}`;
-        
+        const bucketName = field === 'djc_path' ? 'djcs' : 'documents';
+        const fileName = `signed_${product.codificacion}_${Date.now()}.${fileExt}`;
+
         const { error: uploadError } = await supabase.storage
-          .from('documents')
+          .from(bucketName)
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-          .from('documents')
+          .from(bucketName)
           .getPublicUrl(fileName);
 
         setEditedProduct(prev => ({ ...prev, [field]: publicUrl }));
-        
+
+        // If uploading a DJC, sync with djc table
+        if (field === 'djc_path') {
+          await handleDJCUpload(publicUrl);
+        }
+
         // Auto-guardar después de subir
         const { error: updateError } = await supabase
           .from('products')
-          .update({ [field]: publicUrl })
+          .update({
+            [field]: publicUrl,
+            djc_status: field === 'djc_path' ? 'Firmada' : editedProduct.djc_status
+          })
           .eq('codificacion', product.codificacion);
 
         if (updateError) throw updateError;
@@ -161,29 +170,138 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
         setUploadingFile(null);
       }
     };
-    
+
     input.click();
   };
 
+  const handleDJCUpload = async (pdfUrl: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const { data: existingDJC, error: fetchError } = await supabase
+        .from('djc')
+        .select('*')
+        .eq('codigo_producto', product.codificacion)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      if (existingDJC) {
+        // Update the existing DJC record directly with the signed PDF
+        const { error: updateError } = await supabase
+          .from('djc')
+          .update({
+            pdf_url: pdfUrl,
+            djc_source: 'manually_uploaded',
+            djc_version: (existingDJC.djc_version || 1) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDJC.id);
+
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('djc')
+          .insert({
+            resolucion: 'Res. SICyC N° 236/24',
+            razon_social: editedProduct.titular || 'N/A',
+            cuit: editedProduct.cuit,
+            marca: editedProduct.marca || 'N/A',
+            domicilio_legal: editedProduct.direccion_legal_empresa || 'N/A',
+            domicilio_planta: editedProduct.planta_fabricacion || editedProduct.direccion_legal_empresa || 'N/A',
+            telefono: '',
+            email: '',
+            codigo_producto: product.codificacion,
+            fabricante: editedProduct.fabricante || 'N/A',
+            identificacion_producto: editedProduct.producto || 'N/A',
+            fecha_lugar: new Date().toLocaleDateString('es-AR', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            }),
+            numero_djc: `DJC-${product.codificacion}`,
+            pdf_url: pdfUrl,
+            djc_source: 'manually_uploaded',
+            djc_version: 1,
+            is_active: true,
+            created_by: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error syncing DJC table:', error);
+    }
+  };
+
   const getProductStatus = () => {
+    // 1. PRIORIDAD: Usar el campo oficial "estado" de la base de datos
+    if (editedProduct.estado) {
+      const estadoUpper = editedProduct.estado.toUpperCase().trim();
+
+      // Mapear estados oficiales a visualización
+      const estadoMap: Record<string, { status: string; color: string; bgColor: string }> = {
+        'VIGENTE': {
+          status: 'Vigente',
+          color: 'text-green-600',
+          bgColor: 'bg-green-50'
+        },
+        'VENCIDO': {
+          status: 'Vencido',
+          color: 'text-red-600',
+          bgColor: 'bg-red-50'
+        },
+        'CANCELADO': {
+          status: 'Cancelado',
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-50'
+        },
+        'SUSPENDIDO': {
+          status: 'Suspendido',
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-50'
+        },
+        'EN PROCESO DE RENOVACIÓN': {
+          status: 'En Renovación',
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-50'
+        }
+      };
+
+      return estadoMap[estadoUpper] || {
+        status: editedProduct.estado,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50'
+      };
+    }
+
+    // 2. RESPALDO: Calcular estado basándose en fechas si no hay estado oficial
     if (!editedProduct.vencimiento) {
       return { status: 'Sin vencimiento', color: 'text-yellow-600', bgColor: 'bg-yellow-50' };
     }
 
     const now = new Date();
     const vencimiento = new Date(editedProduct.vencimiento);
-    
+
     if (vencimiento < now) {
-      return { status: 'Vencido', color: 'text-red-600', bgColor: 'bg-red-50' };
+      return { status: 'Vencido (por fecha)', color: 'text-red-600', bgColor: 'bg-red-50' };
     }
 
     const diasParaVencer = Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diasParaVencer <= 30) {
       return { status: `Vence en ${diasParaVencer} días`, color: 'text-orange-600', bgColor: 'bg-orange-50' };
     }
 
-    return { status: 'Vigente', color: 'text-green-600', bgColor: 'bg-green-50' };
+    return { status: 'Vigente (por fecha)', color: 'text-green-600', bgColor: 'bg-green-50' };
   };
 
   const getMissingFields = (tabId: string): string[] => {
@@ -507,6 +625,42 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
                   className={`w-full px-4 py-2 border rounded-lg ${
                     !editedProduct.vencimiento ? 'border-red-300' : 'border-gray-300'
                   } ${editMode ? 'focus:ring-2 focus:ring-purple-500' : 'bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado Oficial
+                </label>
+                <select
+                  value={editedProduct.estado || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, estado: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
+                >
+                  <option value="">Seleccionar estado...</option>
+                  <option value="VIGENTE">Vigente</option>
+                  <option value="VENCIDO">Vencido</option>
+                  <option value="CANCELADO">Cancelado</option>
+                  <option value="SUSPENDIDO">Suspendido</option>
+                  <option value="EN PROCESO DE RENOVACIÓN">En Proceso de Renovación</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Certificación
+                </label>
+                <input
+                  type="text"
+                  value={editedProduct.tipo_certificacion || ''}
+                  onChange={(e) => setEditedProduct(prev => ({ ...prev, tipo_certificacion: e.target.value }))}
+                  disabled={!editMode}
+                  className={`w-full px-4 py-2 border rounded-lg ${
+                    editMode ? 'border-gray-300 focus:ring-2 focus:ring-purple-500' : 'border-gray-300 bg-gray-50'
+                  }`}
                 />
               </div>
 

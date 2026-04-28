@@ -53,8 +53,32 @@ const PRODUCT_PROTECTED_FIELDS = [
   'qr_config', 'djc_status', 'certificado_status'
 ];
 
+// Mapeo de variaciones de columnas a campos de base de datos
+const COLUMN_MAPPING: Record<string, string[]> = {
+  estado: ['estado', 'status', 'vigencia', 'estado ensayos', 'estado_ensayos', 'estado ensayo', 'estado_ensayo'],
+  cuit: ['cuit', 'cuil', 'nro cuit', 'numero cuit', 'nro. cuit'],
+  razon_social: ['razon_social', 'razon social', 'titular', 'empresa', 'nombre empresa', 'razón social'],
+  direccion: ['direccion', 'dirección', 'domicilio'],
+  email: ['email', 'e-mail', 'correo', 'mail', 'correo electronico', 'correo electrónico'],
+  telefono: ['telefono', 'teléfono', 'tel', 'tel.', 'celular'],
+  contacto: ['contacto', 'persona contacto', 'nombre contacto'],
+  codificacion: ['codificacion', 'codificación', 'codigo', 'código', 'cod', 'nro certificado', 'numero certificado'],
+  producto: ['producto', 'product', 'item', 'descripcion', 'descripción'],
+  marca: ['marca', 'brand'],
+  modelo: ['modelo', 'model'],
+  origen: ['origen', 'pais origen', 'país origen', 'procedencia'],
+  fecha_emision: ['fecha_emision', 'fecha emision', 'fecha emisión', 'emision', 'emisión', 'fecha alta'],
+  vencimiento: ['vencimiento', 'fecha_vencimiento', 'fecha vencimiento', 'valido hasta', 'válido hasta'],
+  caracteristicas_tecnicas: ['caracteristicas_tecnicas', 'características técnicas', 'caracteristicas tecnicas', 'especificaciones'],
+  normas_aplicacion: ['normas_aplicacion', 'normas aplicacion', 'normas aplicación', 'normas', 'normativa'],
+  fabricante: ['fabricante', 'manufacturer', 'productor'],
+  laboratorio: ['laboratorio', 'lab', 'laboratory'],
+  organismo_certificacion: ['organismo_certificacion', 'organismo certificacion', 'organismo certificación', 'organismo'],
+  esquema_certificacion: ['esquema_certificacion', 'esquema certificacion', 'esquema certificación', 'esquema']
+};
+
 const normalizeHeader = (header: string): string => {
-  return header
+  const normalized = header
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '_')
@@ -64,6 +88,17 @@ const normalizeHeader = (header: string): string => {
     .replace(/[óòöô]/g, 'o')
     .replace(/[úùüû]/g, 'u')
     .replace(/ñ/g, 'n');
+
+  // Intentar mapear a un campo conocido
+  for (const [dbField, variations] of Object.entries(COLUMN_MAPPING)) {
+    for (const variation of variations) {
+      if (normalized.includes(variation.toLowerCase())) {
+        return dbField;
+      }
+    }
+  }
+
+  return normalized;
 };
 
 const parseDate = (value: any): Date | null => {
@@ -109,6 +144,13 @@ export const parseUnifiedFile = async (file: File): Promise<UnifiedRecord[]> => 
         const originalHeaders = Object.keys(jsonData[0]);
         const headers = originalHeaders.map(h => normalizeHeader(String(h)));
         const records: UnifiedRecord[] = [];
+
+        console.log('📋 Headers originales:', originalHeaders);
+        console.log('🔄 Headers normalizados:', headers);
+        console.log('📊 Mapeo de headers:');
+        originalHeaders.forEach((orig, idx) => {
+          console.log(`  ${idx}: "${orig}" → "${headers[idx]}"`);
+        });
 
         for (const rawRow of jsonData) {
           const fullRecord: any = {};
@@ -269,26 +311,39 @@ export const processUnifiedData = async (
 
         updateData.updated_at = new Date().toISOString();
 
+        console.log(`🔄 Actualizando producto ${productData.codificacion}:`);
+        console.log(`  Campos a actualizar:`, Object.keys(updateData));
+        if (updateData.estado) {
+          console.log(`  ✓ Estado: "${existing.estado}" → "${updateData.estado}"`);
+        }
+
         const { error } = await supabase
           .from('products')
           .update(updateData)
           .eq('codificacion', productData.codificacion);
 
         if (error) {
-          console.error(`Error updating product ${productData.codificacion}:`, error);
+          console.error(`❌ Error updating product ${productData.codificacion}:`, error);
           result.errors.push({
             row: i + 1,
             message: `Product ${productData.codificacion}: ${error.message}`
           });
         } else {
+          console.log(`✅ Producto ${productData.codificacion} actualizado exitosamente`);
           result.productsProcessed.updated++;
         }
       } else {
         // Validar campos requeridos antes de insertar
         if (!productData.codificacion || !productData.cuit) {
-          console.warn(`Skipping product - missing required fields`);
+          console.warn(`⚠️ Skipping product - missing required fields (codificacion or cuit)`);
           result.productsProcessed.skipped++;
           continue;
+        }
+
+        console.log(`✨ Insertando nuevo producto ${productData.codificacion}:`);
+        console.log(`  Campos incluidos:`, Object.keys(productData));
+        if (productData.estado) {
+          console.log(`  ✓ Estado: "${productData.estado}"`);
         }
 
         const { error } = await supabase
@@ -296,13 +351,14 @@ export const processUnifiedData = async (
           .insert(productData);
 
         if (error) {
-          console.error(`Error inserting product ${productData.codificacion}:`, error);
+          console.error(`❌ Error inserting product ${productData.codificacion}:`, error);
           result.errors.push({
             row: i + 1,
             message: `Product ${productData.codificacion}: ${error.message}`,
             data: productData
           });
         } else {
+          console.log(`✅ Producto ${productData.codificacion} insertado exitosamente`);
           result.productsProcessed.inserted++;
         }
       }

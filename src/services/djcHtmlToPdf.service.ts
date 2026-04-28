@@ -15,6 +15,7 @@ interface DJCData {
   representante_cuit: string;
   codigo_producto: string;
   fabricante: string;
+  codigo_version_simplificada: string;
   identificacion_producto: string;
   producto_marca: string;
   producto_modelo: string;
@@ -30,15 +31,24 @@ interface DJCData {
   informe_ensayos: string;
   enlace_declaracion: string;
   fecha_lugar: string;
+  isSimplified?: boolean;
 }
 
 const formatFieldValue = (value: string | null | undefined): string => {
   if (!value || value.trim() === '') {
-    return '<span style="color: #dc2626; font-weight: bold;">CAMPO NO ENCONTRADO</span>';
+    return '<span style="color: #dc2626; font-weight: bold;">VACIO</span>';
   }
   // Si el valor es solo un guión, devolverlo tal cual (no es un error)
   if (value.trim() === '-') {
     return value;
+  }
+  return value;
+};
+
+const formatLinkField = (value: string | null | undefined): string => {
+  // Para el campo de enlace, si está vacío simplemente devolver cadena vacía
+  if (!value || value.trim() === '') {
+    return '';
   }
   return value;
 };
@@ -207,10 +217,17 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
           <td class="label">Código de identificación único del producto (Autodeterminado)</td>
           <td class="value">${djcData.codigo_producto}</td>
         </tr>
+        ${!djcData.isSimplified ? `
         <tr>
           <td class="label">Fabricante (Nombre y dirección de la planta de producción)</td>
           <td class="value">${djcData.fabricante}</td>
         </tr>
+        ` : `
+        <tr>
+          <td class="label">Fabricante</td>
+          <td class="value">${djcData.codigo_version_simplificada || djcData.fabricante}</td>
+        </tr>
+        `}
         <tr>
           <td class="label">Identificación del producto</td>
           <td class="value">${djcData.identificacion_producto}</td>
@@ -272,7 +289,7 @@ export const generateDJCPdfFromHtml = async (djcData: DJCData): Promise<Blob> =>
       <table>
         <tr>
           <td class="label">Enlace a la copia de la declaración de conformidad en Internet</td>
-          <td class="value">${djcData.enlace_declaracion}</td>
+          <td class="value">${formatLinkField(djcData.enlace_declaracion)}</td>
         </tr>
       </table>
 

@@ -20,6 +20,7 @@ export interface Product {
   direccion_legal_empresa?: string;
   fabricante?: string;
   planta_fabricacion?: string;
+  codigo_version_simplificada?: string;
   origen?: string;
   producto?: string;
   marca?: string;

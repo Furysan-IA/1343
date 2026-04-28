@@ -30,19 +30,31 @@ export class DatabaseService {
 
     if (cuits.length === 0) return [];
 
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .in('cuit', cuits);
+    const BATCH_SIZE = 100;
+    const allClients: Client[] = [];
 
-    if (error) {
-      console.error('❌ Error obteniendo clientes por CUIT:', error);
-      throw new Error(`Error obteniendo clientes por CUIT: ${error.message}`);
+    for (let i = 0; i < cuits.length; i += BATCH_SIZE) {
+      const batch = cuits.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(cuits.length / BATCH_SIZE)}: ${batch.length} CUITs`);
+
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .in('cuit', batch);
+
+      if (error) {
+        console.error(`❌ Error obteniendo clientes (lote ${Math.floor(i / BATCH_SIZE) + 1}):`, error);
+        throw new Error(`Error obteniendo clientes por CUIT: ${error.message}`);
+      }
+
+      if (data) {
+        allClients.push(...data);
+      }
     }
 
-    console.log(`✅ Clientes existentes encontrados: ${data?.length || 0} de ${cuits.length}`);
+    console.log(`✅ Clientes existentes encontrados: ${allClients.length} de ${cuits.length}`);
 
-    return data || [];
+    return allClients;
   }
 
   async getAllProducts(): Promise<Product[]> {
@@ -83,22 +95,34 @@ export class DatabaseService {
 
     if (codificaciones.length === 0) return [];
 
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .in('codificacion', codificaciones);
+    const BATCH_SIZE = 100;
+    const allProducts: Product[] = [];
 
-    if (error) {
-      console.error('❌ Error obteniendo productos por codificación:', error);
-      throw new Error(`Error obteniendo productos por codificación: ${error.message}`);
+    for (let i = 0; i < codificaciones.length; i += BATCH_SIZE) {
+      const batch = codificaciones.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(codificaciones.length / BATCH_SIZE)}: ${batch.length} codificaciones`);
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .in('codificacion', batch);
+
+      if (error) {
+        console.error(`❌ Error obteniendo productos (lote ${Math.floor(i / BATCH_SIZE) + 1}):`, error);
+        throw new Error(`Error obteniendo productos por codificación: ${error.message}`);
+      }
+
+      if (data) {
+        allProducts.push(...data);
+      }
     }
 
-    console.log(`✅ Productos existentes encontrados: ${data?.length || 0} de ${codificaciones.length}`);
-    if (data && data.length > 0) {
-      console.log(`📋 Primeras 3 codificaciones encontradas:`, data.slice(0, 3).map(p => p.codificacion));
+    console.log(`✅ Productos existentes encontrados: ${allProducts.length} de ${codificaciones.length}`);
+    if (allProducts.length > 0) {
+      console.log(`📋 Primeras 3 codificaciones encontradas:`, allProducts.slice(0, 3).map(p => p.codificacion));
     }
 
-    return data || [];
+    return allProducts;
   }
 
   async insertClient(client: Client, userId: string, batchId: string): Promise<void> {
