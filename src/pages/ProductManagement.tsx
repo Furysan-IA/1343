@@ -5,11 +5,7 @@ import { supabase } from '../lib/supabase';
 import { ProductDetailView } from '../components/ProductDetailView';
 import { qrConfigService } from '../services/qrConfig.service';
 import { QRConfigModal } from '../components/QRConfigModal';
-import { 
-  Package, AlertCircle, CheckCircle, Search, Calendar, 
-  X, Eye, Download, Clock, XCircle, Settings, QrCode,
-  RefreshCw, Trash2, GripVertical, RotateCcw
-} from 'lucide-react';
+import { Package, CircleAlert as AlertCircle, CircleCheck as CheckCircle, Search, Calendar, X, Eye, Download, Clock, Circle as XCircle, Settings, QrCode, RefreshCw, Trash2, GripVertical, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -408,25 +404,38 @@ export function ProductManagement() {
           table: 'products'
         },
         (payload) => {
-          console.log('🔄 Realtime update detected:', payload);
+          console.log('Realtime update detected:', payload);
+          const incoming = payload.new as Record<string, unknown>;
+          const cod = incoming.codificacion as string;
 
-          // Actualizar el producto específico en el estado
-          setProducts(prevProducts => {
-            const updatedProducts = prevProducts.map(product =>
-              product.codificacion === payload.new.codificacion
-                ? { ...product, ...payload.new }
-                : product
-            );
-            return updatedProducts;
+          const safeMerge = (prev: Product): Product => {
+            const merged = { ...prev };
+            for (const key of Object.keys(incoming)) {
+              if (incoming[key] !== undefined) {
+                (merged as Record<string, unknown>)[key] = incoming[key];
+              }
+            }
+            return merged;
+          };
+
+          setProducts(prevProducts =>
+            prevProducts.map(product =>
+              product.codificacion === cod ? safeMerge(product) : product
+            )
+          );
+
+          setSelectedProduct(prev => {
+            if (prev && prev.codificacion === cod) {
+              return safeMerge(prev);
+            }
+            return prev;
           });
 
-          // Mostrar notificación solo para cambios en QR
           if (
-            payload.new.qr_link !== payload.old?.qr_link ||
-            payload.new.qr_status !== payload.old?.qr_status
+            incoming.qr_link !== payload.old?.qr_link ||
+            incoming.qr_status !== payload.old?.qr_status
           ) {
             toast.success('QR actualizado en tiempo real', {
-              icon: '🔄',
               duration: 3000
             });
           }
@@ -556,6 +565,12 @@ export function ProductManagement() {
 
       setProducts(allProducts);
       setLastSync(new Date());
+
+      setSelectedProduct(prev => {
+        if (!prev) return prev;
+        const updated = allProducts.find(p => p.codificacion === prev.codificacion);
+        return updated || null;
+      });
 
       toast.success(`${allProducts.length} productos cargados exitosamente`);
     } catch (error: any) {

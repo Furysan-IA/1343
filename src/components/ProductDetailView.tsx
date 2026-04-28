@@ -3,11 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase, Database } from '../lib/supabase';
 import { ProductQRDisplay } from './ProductQRDisplay';
 import { qrConfigService } from '../services/qrConfig.service';
-import { 
-  X, Edit2, Save, Upload, FileText, QrCode, Award, 
-  Calendar, AlertCircle, CheckCircle, Clock, Download,
-  Eye, Package, Factory, Shield, RefreshCw
-} from 'lucide-react';
+import { X, CreditCard as Edit2, Save, Upload, FileText, QrCode, Award, Calendar, CircleAlert as AlertCircle, CircleCheck as CheckCircle, Clock, Download, Eye, Package, Factory, Shield, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -69,7 +65,13 @@ export function ProductDetailView({ product, onClose, onUpdate }: ProductDetailV
   const [activeTab, setActiveTab] = useState('general');
   const [shouldRegenerateQR, setShouldRegenerateQR] = useState(false);
 
-  // Detectar si se deben regenerar los QR cuando cambian datos relevantes
+  useEffect(() => {
+    if (!editMode) {
+      setEditedProduct(product);
+      setOriginalProduct(product);
+    }
+  }, [product, editMode]);
+
   useEffect(() => {
     const checkQRRegeneration = async () => {
       const needsRegeneration = await qrConfigService.regenerateQRIfNeeded(
