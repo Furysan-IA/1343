@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { Download, X, Link as LinkIcon } from 'lucide-react';
+import { Download, X, Link as LinkIcon, Check } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { saveAs } from 'file-saver';
@@ -8,19 +8,25 @@ import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import toast from 'react-hot-toast';
 import { getQRModConfig, cmykToRgb } from '../utils/qrModConfig';
+import { qrStorageService } from '../services/qrStorage.service';
+import { supabase } from '../lib/supabase';
+
+type Resolution = 'baja' | 'media' | 'alta' | 'ultra';
 
 interface QRCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   qrLink: string;
   productName: string;
+  codificacion?: string;
 }
 
-export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModalProps) {
+export function QRCodeModal({ isOpen, onClose, qrLink, productName, codificacion }: QRCodeModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [outputResolution, setOutputResolution] = useState<'baja' | 'media' | 'alta' | 'ultra'>('media');
+  const [outputResolution, setOutputResolution] = useState<Resolution>('media');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [cachedResolutions, setCachedResolutions] = useState<Set<string>>(new Set());
   const labelRef = useRef<HTMLDivElement>(null);
   const qrModConfig = getQRModConfig();
 
@@ -58,8 +64,31 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
   useEffect(() => {
     if (isOpen) {
       generateQRCode();
+      loadCachedResolutions();
     }
   }, [isOpen, qrLink]);
+
+  const loadCachedResolutions = async () => {
+    if (!codificacion) return;
+    try {
+      const { data } = await supabase
+        .from('products')
+        .select('qr_labels, qr_config_hash')
+        .eq('codificacion', codificacion)
+        .maybeSingle();
+
+      if (!data) return;
+
+      const currentHash = qrStorageService.computeConfigHash();
+      if (data.qr_config_hash === currentHash && data.qr_labels) {
+        setCachedResolutions(new Set(Object.keys(data.qr_labels)));
+      } else {
+        setCachedResolutions(new Set());
+      }
+    } catch {
+      // Non-critical
+    }
+  };
 
   const generateQRCode = async () => {
     setIsGenerating(true);
@@ -133,13 +162,53 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     });
   };
 
+  const getCachedOrRender = async (): Promise<Blob> => {
+    if (!codificacion) return renderHighResBlob();
+
+    const configHash = qrStorageService.computeConfigHash();
+
+    // Check if we have a cached version in storage
+    const { data: product } = await supabase
+      .from('products')
+      .select('qr_labels, qr_config_hash')
+      .eq('codificacion', codificacion)
+      .maybeSingle();
+
+    const labels = product?.qr_labels as Record<string, string> | null;
+    const cachedUrl = await qrStorageService.getExistingLabel(
+      codificacion,
+      outputResolution,
+      configHash,
+      labels,
+      product?.qr_config_hash
+    );
+
+    if (cachedUrl) {
+      const response = await fetch(cachedUrl);
+      if (response.ok) return response.blob();
+    }
+
+    // Render fresh and cache it
+    const blob = await renderHighResBlob();
+
+    try {
+      const storagePath = await qrStorageService.uploadLabel(codificacion, outputResolution, blob);
+      await qrStorageService.saveLabelReference(codificacion, outputResolution, storagePath, configHash);
+      setCachedResolutions(prev => new Set([...prev, outputResolution]));
+    } catch {
+      // Upload failed but download can still proceed
+    }
+
+    return blob;
+  };
+
   const handleDownloadPNG = async () => {
     if (!labelRef.current || isDownloading) return;
     setIsDownloading(true);
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const blob = await renderHighResBlob();
+      const blob = await getCachedOrRender();
       saveAs(blob, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.png`);
       toast.success(`Etiqueta PNG (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
@@ -156,7 +225,7 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const blob = await renderHighResBlob();
+      const blob = await getCachedOrRender();
       const dataUrl = await blobToDataUrl(blob);
 
       const pdf = new jsPDF({
@@ -395,10 +464,11 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                         <div className="grid grid-cols-3 gap-2">
                           {(Object.entries(resolutionPresets) as [string, typeof resolutionPresets.baja][]).map(([key, preset]) => {
                             const isSelected = outputResolution === key;
+                            const isCached = cachedResolutions.has(key);
                             return (
                               <button
                                 key={key}
-                                onClick={() => setOutputResolution(key as any)}
+                                onClick={() => setOutputResolution(key as Resolution)}
                                 className={`relative p-3 rounded-xl border-2 transition-all duration-200 text-center ${
                                   isSelected
                                     ? 'border-blue-600 bg-blue-50 shadow-sm'
@@ -428,6 +498,11 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
                                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
+                                  </div>
+                                )}
+                                {isCached && !isSelected && (
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center" title="Descarga instantanea">
+                                    <Check className="w-2.5 h-2.5 text-white" />
                                   </div>
                                 )}
                               </button>

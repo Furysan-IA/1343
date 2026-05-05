@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { QRCodeModal } from './QRCodeModal';
 import { qrConfigService } from '../services/qrConfig.service';
 import { sharedQRService, Product as SharedProduct } from '../services/sharedQRService';
+import { qrStorageService } from '../services/qrStorage.service';
 import { QrCode, RefreshCw, Download, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Loader as Loader2, Eye, TriangleAlert as AlertTriangle, ExternalLink, Link as LinkIcon, Unlink, Search, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
@@ -167,87 +168,76 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
   };
 
   const handleGenerateQR = async () => {
-    console.log('🔄 Iniciando generación de QR...');
-    console.log('📦 Producto:', product);
-    
     if (!canGenerateQR()) {
-      console.log('❌ No se puede generar QR - datos faltantes');
-      console.log('📋 Datos del producto:', {
-        titular: product.titular,
-        producto: product.producto,
-        marca: product.marca
-      });
       toast.error('El producto debe tener titular, nombre y marca para generar QR');
       return;
     }
 
-    console.log('✅ Verificación de datos pasada');
-    console.log('🆔 UUID del producto:', product.uuid);
-    
     setIsGenerating(true);
     try {
-      // Generate product URL using UUID
-      console.log('🔗 Generando URL del producto...');
       const productUrl = qrConfigService.generateProductUrl(product.uuid);
-      console.log('🔗 URL generada:', productUrl);
       setQrLink(productUrl);
 
-      // Generate QR code data URL
-      console.log('🔲 Generando código QR...');
+      // Generate QR code as PNG blob
       const dataUrl = await QRCode.toDataURL(productUrl, {
         type: 'image/png',
         width: 1000,
         margin: 0,
         errorCorrectionLevel: 'H',
-        color: {
-          dark: '#000000',
-          light: '#ffffff'
-        }
+        color: { dark: '#000000', light: '#ffffff' }
       });
-      console.log('🔲 QR generado exitosamente, tamaño:', dataUrl.length);
       setQrDataUrl(dataUrl);
 
-      // Update product in Supabase
-      console.log('💾 Actualizando producto en Supabase...');
-      console.log('📝 Datos a actualizar:', {
-        qr_link: productUrl,
-        qr_status: 'Generado',
-        codificacion: product.codificacion
-      });
-      
+      // Convert to blob and upload to storage
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      let storagePath: string;
+      try {
+        storagePath = await qrStorageService.uploadRawQr(product.codificacion, blob);
+      } catch {
+        // Fallback: store base64 directly if storage upload fails
+        storagePath = dataUrl;
+      }
+
+      // Invalidate any cached labels since QR changed
+      try {
+        await qrStorageService.invalidateLabels(product.codificacion);
+      } catch {
+        // Non-critical - labels will be regenerated on next download
+      }
+
       const { error } = await supabase
         .from('products')
         .update({
           qr_link: productUrl,
-          qr_path: dataUrl,
+          qr_path: storagePath,
           qr_status: 'Generado',
           qr_generated_at: new Date().toISOString(),
+          qr_labels: {},
+          qr_config_hash: null,
           updated_at: new Date().toISOString()
         })
         .eq('codificacion', product.codificacion);
 
-      if (error) {
-        console.error('❌ Error de Supabase:', error);
-        throw error;
-      }
-      
-      console.log('✅ Producto actualizado en Supabase exitosamente');
+      if (error) throw error;
 
-      // Reload effective QR after generation
+      // Optimistic local state update
+      setEffectiveQR({
+        qr_path: storagePath,
+        qr_link: productUrl,
+        qr_status: 'Generado',
+        is_shared: false,
+      });
+
       await loadEffectiveQR();
-
       toast.success('Código QR generado exitosamente');
       setShouldRegenerateQR(false);
       onUpdate();
-      console.log('🎉 Proceso de generación de QR completado');
     } catch (error: any) {
-      console.error('❌ Error completo en generación de QR:', error);
-      console.error('❌ Mensaje de error:', error.message);
-      console.error('❌ Stack trace:', error.stack);
+      console.error('Error en generación de QR:', error);
       toast.error(`Error al generar QR: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsGenerating(false);
-      console.log('🏁 Finalizando proceso de generación de QR');
     }
   };
 
@@ -529,7 +519,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
               </label>
               <div className="inline-block p-2 bg-white rounded border">
                 <img
-                  src={effectiveQR.qr_path}
+                  src={qrStorageService.resolveQrPath(effectiveQR.qr_path) || ''}
                   alt="QR Code Preview"
                   className="w-32 h-32 object-contain"
                 />
@@ -941,6 +931,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
           onClose={() => setShowQRCodeModal(false)}
           qrLink={effectiveQR.qr_link}
           productName={product.producto || 'Producto'}
+          codificacion={product.codificacion}
         />
       )}
     </div>
