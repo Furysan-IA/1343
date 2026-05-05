@@ -27,30 +27,30 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
   const resolutionPresets = {
     baja: {
       label: 'Baja',
-      pixelRatio: 4,
+      pixelRatio: 3,
       description: 'Web y pantalla',
-      pixels: '~376x452 px',
+      pixels: '~282x339 px',
       icon: 'S',
     },
     media: {
       label: 'Media',
-      pixelRatio: 8,
+      pixelRatio: 6,
       description: 'Impresion estandar',
-      pixels: '~752x904 px',
+      pixels: '~564x678 px',
       icon: 'M',
     },
     alta: {
       label: 'Alta',
-      pixelRatio: 16,
+      pixelRatio: 10,
       description: 'Impresion profesional',
-      pixels: '~1504x1808 px',
+      pixels: '~940x1130 px',
       icon: 'L',
     },
     ultra: {
       label: 'Ultra',
-      pixelRatio: 24,
+      pixelRatio: 16,
       description: 'Maxima calidad',
-      pixels: '~2256x2712 px',
+      pixels: '~1504x1808 px',
       icon: 'XL',
     },
   };
@@ -83,46 +83,35 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     }
   };
 
-  const renderAtPixelRatio = async (ratio: number): Promise<string> => {
+  const renderAtPixelRatio = async (ratio: number): Promise<Blob> => {
     if (!labelRef.current) throw new Error('Label ref not available');
-    const w = qrModConfig.labelWidth;
-    const h = qrModConfig.labelHeight;
 
-    // html-to-image needs multiple passes to render web fonts and images correctly
-    // The first pass warms up the cache; subsequent passes produce the correct result
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await toPng(labelRef.current, {
-        width: w,
-        height: h,
-        pixelRatio: ratio,
-        quality: 1,
-        backgroundColor: '#ffffff',
-        canvasWidth: w * ratio,
-        canvasHeight: h * ratio,
-        skipAutoScale: true,
-        style: { transform: 'scale(1)', transformOrigin: 'top left' }
-      });
-    }
+    await document.fonts.ready;
 
-    return toPng(labelRef.current, {
-      width: w,
-      height: h,
+    const opts = {
+      width: qrModConfig.labelWidth,
+      height: qrModConfig.labelHeight,
       pixelRatio: ratio,
       quality: 1,
       backgroundColor: '#ffffff',
-      canvasWidth: w * ratio,
-      canvasHeight: h * ratio,
-      skipAutoScale: true,
-      style: { transform: 'scale(1)', transformOrigin: 'top left' }
-    });
+    };
+
+    // Warmup pass at low resolution to cache fonts/images
+    await toPng(labelRef.current, { ...opts, pixelRatio: 1 });
+
+    // Final render as blob
+    const blob = await toBlob(labelRef.current, opts);
+    if (!blob || blob.size < 2000) {
+      throw new Error('Imagen generada vacia o corrupta');
+    }
+    return blob;
   };
 
-  const renderHighResImage = async (): Promise<string> => {
+  const renderHighResBlob = async (): Promise<Blob> => {
     const selectedPreset = resolutionPresets[outputResolution];
     const targetRatio = selectedPreset.pixelRatio;
 
-    // Try the target ratio directly first; fall back to lower ratios on failure
-    const fallbackRatios = [targetRatio, Math.min(targetRatio, 10), Math.min(targetRatio, 6), 4];
+    const fallbackRatios = [targetRatio, Math.ceil(targetRatio * 0.7), Math.ceil(targetRatio * 0.5), 3];
     const uniqueRatios = [...new Set(fallbackRatios)];
 
     for (const ratio of uniqueRatios) {
@@ -135,14 +124,23 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     throw new Error('No se pudo generar la imagen en ninguna resolución');
   };
 
+  const blobToDataUrl = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const handleDownloadPNG = async () => {
     if (!labelRef.current || isDownloading) return;
     setIsDownloading(true);
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const dataUrl = await renderHighResImage();
-      saveAs(dataUrl, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.png`);
+      const blob = await renderHighResBlob();
+      saveAs(blob, `qr-${productName.toLowerCase().replace(/\s+/g, '-')}-${outputResolution}.png`);
       toast.success(`Etiqueta PNG (${selectedPreset.label}) descargada exitosamente`);
     } catch (error) {
       console.error('Error downloading PNG:', error);
@@ -158,7 +156,8 @@ export function QRCodeModal({ isOpen, onClose, qrLink, productName }: QRCodeModa
     const selectedPreset = resolutionPresets[outputResolution];
 
     try {
-      const dataUrl = await renderHighResImage();
+      const blob = await renderHighResBlob();
+      const dataUrl = await blobToDataUrl(blob);
 
       const pdf = new jsPDF({
         orientation: 'portrait',
