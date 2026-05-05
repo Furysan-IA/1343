@@ -131,42 +131,56 @@ async function saveLabelReference(
   storagePath: string,
   configHash: string
 ): Promise<void> {
-  const { data: product } = await supabase
-    .from('products')
-    .select('qr_labels')
-    .eq('codificacion', codificacion)
-    .maybeSingle();
+  try {
+    const { data: product } = await supabase
+      .from('products')
+      .select('qr_labels')
+      .eq('codificacion', codificacion)
+      .maybeSingle();
 
-  const existingLabels = (product?.qr_labels as QrLabels) || {};
-  const updatedLabels = { ...existingLabels, [resolution]: storagePath };
+    const existingLabels = (product?.qr_labels as QrLabels) || {};
+    const updatedLabels = { ...existingLabels, [resolution]: storagePath };
 
-  await supabase
-    .from('products')
-    .update({
-      qr_labels: updatedLabels,
-      qr_config_hash: configHash,
-    })
-    .eq('codificacion', codificacion);
+    await supabase
+      .from('products')
+      .update({
+        qr_labels: updatedLabels,
+        qr_config_hash: configHash,
+      })
+      .eq('codificacion', codificacion);
+  } catch {
+    // Columns may not exist yet - label still saved in storage
+  }
 }
 
 async function invalidateLabels(codificacion: string): Promise<void> {
-  const { data: product } = await supabase
-    .from('products')
-    .select('qr_labels')
-    .eq('codificacion', codificacion)
-    .maybeSingle();
+  // Try to read existing labels to clean up storage files
+  try {
+    const { data: product } = await supabase
+      .from('products')
+      .select('qr_labels')
+      .eq('codificacion', codificacion)
+      .maybeSingle();
 
-  const labels = (product?.qr_labels as QrLabels) || {};
-  const paths = Object.values(labels).filter(Boolean);
+    const labels = (product?.qr_labels as QrLabels) || {};
+    const paths = Object.values(labels).filter(Boolean);
 
-  if (paths.length > 0) {
-    await supabase.storage.from(BUCKET).remove(paths);
+    if (paths.length > 0) {
+      await supabase.storage.from(BUCKET).remove(paths);
+    }
+  } catch {
+    // qr_labels column may not exist yet
   }
 
-  await supabase
-    .from('products')
-    .update({ qr_labels: {}, qr_config_hash: null })
-    .eq('codificacion', codificacion);
+  // Try to reset the columns (may fail if columns don't exist)
+  try {
+    await supabase
+      .from('products')
+      .update({ qr_labels: {}, qr_config_hash: null })
+      .eq('codificacion', codificacion);
+  } catch {
+    // Columns may not exist yet - this is non-critical
+  }
 }
 
 async function deleteAllForProduct(codificacion: string): Promise<void> {
@@ -206,3 +220,6 @@ export const qrStorageService = {
   getStoragePath,
   getQrRawPath,
 };
+
+
+export { qrStorageService }

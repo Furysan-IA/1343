@@ -199,13 +199,7 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
         storagePath = dataUrl;
       }
 
-      // Invalidate any cached labels since QR changed
-      try {
-        await qrStorageService.invalidateLabels(product.codificacion);
-      } catch {
-        // Non-critical - labels will be regenerated on next download
-      }
-
+      // Core update - only fields guaranteed to exist
       const { error } = await supabase
         .from('products')
         .update({
@@ -213,13 +207,18 @@ export function ProductQRDisplay({ product, onUpdate }: ProductQRDisplayProps) {
           qr_path: storagePath,
           qr_status: 'Generado',
           qr_generated_at: new Date().toISOString(),
-          qr_labels: {},
-          qr_config_hash: null,
           updated_at: new Date().toISOString()
         })
         .eq('codificacion', product.codificacion);
 
       if (error) throw error;
+
+      // Invalidate cached labels (non-critical, columns may not exist yet)
+      try {
+        await qrStorageService.invalidateLabels(product.codificacion);
+      } catch {
+        // Columns qr_labels/qr_config_hash may not exist yet
+      }
 
       // Optimistic local state update
       setEffectiveQR({
