@@ -89,7 +89,7 @@ export function getQRModConfig(): QRModConfig {
     arOffsetX: 0,
     arOffsetY: 0,
     fontSize: 16,
-    fontFamily: 'AR-Monserrat-Arabic',
+    fontFamily: 'Montserrat',
     useImage: false,
     imagePath: '/src/assets/images/AR-Monserrat-arabic.png',
     

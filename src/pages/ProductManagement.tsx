@@ -736,6 +736,10 @@ export function ProductManagement() {
       return { status: 'Pendiente regeneración', color: 'text-orange-600', icon: AlertCircle };
     }
 
+    if (product.qr_link && qrConfigService.needsUpdate(product.qr_link)) {
+      return { status: 'Pendiente regeneración', color: 'text-orange-600', icon: AlertCircle };
+    }
+
     return { status: 'Generado', color: 'text-green-600', icon: CheckCircle };
   };
 
