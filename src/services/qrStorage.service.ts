@@ -220,6 +220,3 @@ export const qrStorageService = {
   getStoragePath,
   getQrRawPath,
 };
-
-
-export { qrStorageService }
